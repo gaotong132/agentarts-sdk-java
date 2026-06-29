@@ -1,0 +1,243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.huaweicloud.agentarts</groupId>
+    <artifactId>agentarts-sdk-bom</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>AgentArts SDK :: BOM</name>
+    <description>Bill of Materials for AgentArts Java SDK - centralized dependency version management</description>
+
+    <properties>
+        <revision>0.1.0-SNAPSHOT</revision>
+        <reactor-bom.version>2025.0.2</reactor-bom.version>
+        <jackson-bom.version>2.21.1</jackson-bom.version>
+        <slf4j.version>2.0.17</slf4j.version>
+        <vertx.version>4.5.14</vertx.version>
+        <huaweicloud-sdk.version>3.1.202</huaweicloud-sdk.version>
+        <agentscope.version>2.0.0-SNAPSHOT</agentscope.version>
+        <picocli.version>4.7.6</picocli.version>
+        <freemarker.version>2.3.34</freemarker.version>
+        <docker-java.version>3.4.1</docker-java.version>
+        <junit-bom.version>6.0.2</junit-bom.version>
+        <mockito-bom.version>5.23.0</mockito-bom.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- ==================== -->
+            <!-- AgentArts SDK modules -->
+            <!-- ==================== -->
+            <dependency>
+                <groupId>com.huaweicloud.agentarts</groupId>
+                <artifactId>agentarts-sdk-core</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.agentarts</groupId>
+                <artifactId>agentarts-sdk-service</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.agentarts</groupId>
+                <artifactId>agentarts-sdk-runtime</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.agentarts</groupId>
+                <artifactId>agentarts-sdk-identity</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.agentarts</groupId>
+                <artifactId>agentarts-sdk-memory</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.agentarts</groupId>
+                <artifactId>agentarts-sdk-tools</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.agentarts</groupId>
+                <artifactId>agentarts-sdk-mcpgateway</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.agentarts</groupId>
+                <artifactId>agentarts-sdk-integration-agentscope</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.agentarts</groupId>
+                <artifactId>agentarts-toolkit-cli</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.agentarts</groupId>
+                <artifactId>agentarts-spring-boot-starter</artifactId>
+                <version>${revision}</version>
+            </dependency>
+
+            <!-- ==================== -->
+            <!-- Reactor (aligned with agentscope-java BOM 2025.0.2) -->
+            <!-- ==================== -->
+            <dependency>
+                <groupId>io.projectreactor</groupId>
+                <artifactId>reactor-bom</artifactId>
+                <version>${reactor-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- ==================== -->
+            <!-- Jackson (aligned with agentscope-java BOM 2.21.1) -->
+            <!-- ==================== -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- ==================== -->
+            <!-- Vert.x (self-managed, not in agentscope BOM) -->
+            <!-- ==================== -->
+            <dependency>
+                <groupId>io.vertx</groupId>
+                <artifactId>vertx-core</artifactId>
+                <version>${vertx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vertx</groupId>
+                <artifactId>vertx-web</artifactId>
+                <version>${vertx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vertx</groupId>
+                <artifactId>vertx-web-client</artifactId>
+                <version>${vertx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vertx</groupId>
+                <artifactId>vertx-rx-java3</artifactId>
+                <version>${vertx.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.vertx</groupId>
+                <artifactId>vertx-junit5</artifactId>
+                <version>${vertx.version}</version>
+                <scope>test</scope>
+            </dependency>
+
+            <!-- ==================== -->
+            <!-- Huawei Cloud SDK v3 -->
+            <!-- ==================== -->
+            <dependency>
+                <groupId>com.huaweicloud.sdk</groupId>
+                <artifactId>huaweicloud-sdk-core</artifactId>
+                <version>${huaweicloud-sdk.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.sdk</groupId>
+                <artifactId>huaweicloud-sdk-agentidentity</artifactId>
+                <version>${huaweicloud-sdk.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.sdk</groupId>
+                <artifactId>huaweicloud-sdk-iam</artifactId>
+                <version>${huaweicloud-sdk.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.huaweicloud.sdk</groupId>
+                <artifactId>huaweicloud-sdk-swr</artifactId>
+                <version>${huaweicloud-sdk.version}</version>
+            </dependency>
+
+            <!-- ==================== -->
+            <!-- agentscope (provided/optional) -->
+            <!-- ==================== -->
+            <dependency>
+                <groupId>io.agentscope</groupId>
+                <artifactId>agentscope-core</artifactId>
+                <version>${agentscope.version}</version>
+            </dependency>
+
+            <!-- ==================== -->
+            <!-- YAML -->
+            <!-- ==================== -->
+            <dependency>
+                <groupId>com.fasterxml.jackson.dataformat</groupId>
+                <artifactId>jackson-dataformat-yaml</artifactId>
+                <version>${jackson-bom.version}</version>
+            </dependency>
+
+            <!-- ==================== -->
+            <!-- CLI -->
+            <!-- ==================== -->
+            <dependency>
+                <groupId>info.picocli</groupId>
+                <artifactId>picocli</artifactId>
+                <version>${picocli.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.freemarker</groupId>
+                <artifactId>freemarker</artifactId>
+                <version>${freemarker.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.docker-java</groupId>
+                <artifactId>docker-java</artifactId>
+                <version>${docker-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.docker-java</groupId>
+                <artifactId>docker-java-transport-httpclient5</artifactId>
+                <version>${docker-java.version}</version>
+            </dependency>
+
+            <!-- ==================== -->
+            <!-- Logging -->
+            <!-- ==================== -->
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-api</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-simple</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+
+            <!-- ==================== -->
+            <!-- Testing -->
+            <!-- ==================== -->
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.mockito</groupId>
+                <artifactId>mockito-bom</artifactId>
+                <version>${mockito-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.projectreactor</groupId>
+                <artifactId>reactor-test</artifactId>
+                <version>3.7.6</version>
+                <scope>test</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

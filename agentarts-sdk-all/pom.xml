@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.huaweicloud.agentarts</groupId>
+        <artifactId>agentarts-sdk-java</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>agentarts-sdk-all</artifactId>
+
+    <name>AgentArts SDK :: All (aggregator)</name>
+    <description>Aggregator dependency pulling in all AgentArts SDK modules</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-service</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-runtime</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-identity</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-memory</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-tools</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-mcpgateway</artifactId>
+        </dependency>
+    </dependencies>
+</project>

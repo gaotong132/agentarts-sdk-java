@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.huaweicloud.agentarts</groupId>
+        <artifactId>agentarts-sdk-java</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>agentarts-spring-boot-starter</artifactId>
+
+    <name>AgentArts :: Spring Boot Starter</name>
+    <description>Optional Spring Boot starter: AutoConfiguration, Properties, HealthIndicator</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-runtime</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-identity</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-memory</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+</project>
