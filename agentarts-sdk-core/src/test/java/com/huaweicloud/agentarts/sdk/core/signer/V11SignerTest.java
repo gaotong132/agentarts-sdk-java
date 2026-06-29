@@ -485,6 +485,82 @@ class V11SignerTest {
     }
 
     // ========================
+    // Cross-language golden vector (generated from Python signer_v11.py)
+    // ========================
+
+    @Nested
+    @DisplayName("Cross-language Golden Vector (Python parity)")
+    class CrossLanguageTests {
+
+        private static final String GOLDEN_AK = "MYTESTAK123456789";
+        private static final String GOLDEN_SK = "MYTESTSK12345678901234567890AB";
+        private static final String GOLDEN_REGION = "cn-southwest-2";
+        private static final String GOLDEN_TS = "20250615T120000Z";
+
+        private final V11Signer goldenSigner = new V11Signer(GOLDEN_AK, GOLDEN_SK, GOLDEN_REGION);
+
+        @Test
+        void credentialScopeMatchesPython() {
+            assertEquals("20250615/cn-southwest-2/apic",
+                    goldenSigner.buildCredentialScope(GOLDEN_TS));
+        }
+
+        @Test
+        void canonicalUriMatchesPython() {
+            assertEquals("/v1/runtimes/", goldenSigner.canonicalUri("/v1/runtimes"));
+        }
+
+        @Test
+        void canonicalQueryStringEmptyMatchesPython() {
+            assertEquals("", goldenSigner.canonicalQueryString(null));
+        }
+
+        @Test
+        void realUseSecretMatchesPython() {
+            String scope = goldenSigner.buildCredentialScope(GOLDEN_TS);
+            String rus = goldenSigner.getRealUseSecret(scope);
+            assertEquals("2d2f54f2ff30f70a1dfd6336f397daabbba3d44b087a1332663ed87c8fdd48c5", rus);
+        }
+
+        @Test
+        void fullSignatureMatchesPython_GET_v1_runtimes() {
+            // Golden vector from Python signer_v11.py:
+            // GET /v1/runtimes, host=agentarts.cn-southwest-2.myhuaweicloud.com, Content-Type=application/json
+            Map<String, String> headers = new java.util.LinkedHashMap<>();
+            headers.put("host", "agentarts.cn-southwest-2.myhuaweicloud.com");
+            headers.put("Content-Type", "application/json");
+            headers.put("x-sdk-date", GOLDEN_TS); // inject fixed timestamp
+
+            goldenSigner.sign("GET", "/v1/runtimes", null, headers);
+
+            String expected = "V11-HMAC-SHA256 Credential=MYTESTAK123456789/20250615/cn-southwest-2/apic, "
+                    + "SignedHeaders=content-type;host;x-sdk-date, "
+                    + "Signature=fbf32d0c26dc2c2abd4d727e90db1e3d9f84b2a890a9588266d4d8ce9f1f0c62";
+            assertEquals(expected, headers.get("Authorization"));
+        }
+
+        @Test
+        void fullSignatureMatchesPython_POST_v1_agents_withQuery() {
+            // Golden vector from Python: POST /v1/agents?limit=10&offset=0&tag=a&tag=b
+            Map<String, String> headers = new java.util.LinkedHashMap<>();
+            headers.put("host", "example.com");
+            headers.put("x-sdk-date", GOLDEN_TS);
+
+            Map<String, List<String>> qp = new java.util.LinkedHashMap<>();
+            qp.put("limit", List.of("10"));
+            qp.put("offset", List.of("0"));
+            qp.put("tag", List.of("b", "a"));
+
+            goldenSigner.sign("POST", "/v1/agents", qp, headers);
+
+            String expected = "V11-HMAC-SHA256 Credential=MYTESTAK123456789/20250615/cn-southwest-2/apic, "
+                    + "SignedHeaders=host;x-sdk-date, "
+                    + "Signature=915a68063debc8ebad479f2174e661c6623cd7a9568e9ccb20ce90c82b7bb8f8";
+            assertEquals(expected, headers.get("Authorization"));
+        }
+    }
+
+    // ========================
     // Bytes/Hex conversion
     // ========================
 

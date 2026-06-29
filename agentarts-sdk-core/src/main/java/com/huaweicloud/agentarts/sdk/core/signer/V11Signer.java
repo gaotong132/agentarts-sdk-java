@@ -93,9 +93,12 @@ public class V11Signer {
     public Map<String, String> sign(String method, String path,
                                      Map<String, List<String>> queryParams,
                                      Map<String, String> headers) {
-        // 1. Generate timestamp
-        String timestamp = getTimestamp();
-        headers.put(HEADER_X_SDK_DATE, timestamp);
+        // 1. Generate timestamp (only if not already set — allows test injection)
+        String timestamp = headers.get(HEADER_X_SDK_DATE);
+        if (timestamp == null || timestamp.isEmpty()) {
+            timestamp = getTimestamp();
+            headers.put(HEADER_X_SDK_DATE, timestamp);
+        }
 
         // 2. Compute signed headers
         List<String> signedHeaders = getSignedHeaders(headers);

@@ -313,4 +313,87 @@ class AgentArtsRuntimeAppTest {
         assertNotNull(ctx.getRequestId());
         assertFalse(ctx.getRequestId().isEmpty());
     }
+
+    // ========================
+    // Empty body → 400
+    // ========================
+
+    @Test
+    @DisplayName("POST /invocations returns 400 for empty body")
+    void invocationReturns400ForEmptyBody() throws Exception {
+        app.setEntrypoint((payload, ctx) -> Map.of("ok", true));
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Integer> statusCode = new AtomicReference<>();
+
+        webClient.post(port, "localhost", "/invocations")
+                .putHeader("Content-Type", "application/json")
+                .sendBuffer(Buffer.buffer(""))
+                .onComplete(ar -> {
+                    statusCode.set(ar.result().statusCode());
+                    latch.countDown();
+                });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertEquals(400, statusCode.get());
+    }
+
+    // ========================
+    // Ping always includes session header
+    // ========================
+
+    @Test
+    @DisplayName("GET /ping always includes session header")
+    void pingAlwaysIncludesSessionHeader() throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<String> sessionHeader = new AtomicReference<>();
+
+        webClient.get(port, "localhost", "/ping")
+                .send()
+                .onComplete(ar -> {
+                    sessionHeader.set(ar.result().getHeader("x-hw-agentarts-session-id"));
+                    latch.countDown();
+                });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        // Match Python: session header is always present (even as empty string)
+        assertNotNull(sessionHeader.get());
+    }
+
+    // ========================
+    // Async task tracking
+    // ========================
+
+    @Test
+    @DisplayName("hasRunningTasks tracks active tasks")
+    void hasRunningTasksTracksTasks() {
+        assertFalse(app.hasRunningTasks());
+
+        long taskId = app.addTask("test-task");
+        assertTrue(app.hasRunningTasks());
+
+        app.completeTask(taskId);
+        assertFalse(app.hasRunningTasks());
+    }
+
+    @Test
+    @DisplayName("Ping returns HealthyBusy when tasks are running")
+    void pingReturnsHealthyBusy() throws Exception {
+        long taskId = app.addTask("background-work");
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<String> responseBody = new AtomicReference<>();
+
+        webClient.get(port, "localhost", "/ping")
+                .send()
+                .onComplete(ar -> {
+                    responseBody.set(ar.result().bodyAsString());
+                    latch.countDown();
+                });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(responseBody.get().contains("\"status\":\"HealthyBusy\""));
+
+        app.completeTask(taskId);
+    }
 }

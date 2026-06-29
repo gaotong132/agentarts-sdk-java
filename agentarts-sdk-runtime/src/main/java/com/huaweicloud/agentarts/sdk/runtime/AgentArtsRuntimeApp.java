@@ -73,6 +73,11 @@ public class AgentArtsRuntimeApp {
     // State
     private final AtomicReference<PingStatus> forcedPingStatus = new AtomicReference<>();
     private final AtomicLong lastStatusUpdateTime = new AtomicLong(System.currentTimeMillis());
+    private final java.util.concurrent.ConcurrentHashMap<Long, String> activeTasks =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong taskCounter = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicInteger activeTaskCount =
+            new java.util.concurrent.atomic.AtomicInteger();
     private volatile HttpServer httpServer;
 
     /**
@@ -150,6 +155,38 @@ public class AgentArtsRuntimeApp {
     }
 
     // ========================
+    // Async task tracking (mirrors Python _active_tasks)
+    // ========================
+
+    /**
+     * Register an active background task.
+     *
+     * @return task ID for later completion
+     */
+    public long addTask(String name) {
+        long taskId = taskCounter.incrementAndGet();
+        activeTasks.put(taskId, name);
+        activeTaskCount.incrementAndGet();
+        return taskId;
+    }
+
+    /**
+     * Mark a background task as complete.
+     */
+    public void completeTask(long taskId) {
+        if (activeTasks.remove(taskId) != null) {
+            activeTaskCount.decrementAndGet();
+        }
+    }
+
+    /**
+     * Check if any background tasks are running.
+     */
+    public boolean hasRunningTasks() {
+        return activeTaskCount.get() > 0;
+    }
+
+    // ========================
     // Server lifecycle
     // ========================
 
@@ -215,7 +252,9 @@ public class AgentArtsRuntimeApp {
         try {
             String body = rc.body().asString();
             if (body == null || body.isEmpty()) {
-                payload = Map.of();
+                // Match Python: empty body → 400 JSONDecodeError
+                sendJsonError(rc, 400, "Invalid JSON payload", "Empty request body");
+                return;
             } else {
                 payload = OBJECT_MAPPER.readValue(body, Map.class);
             }
@@ -234,8 +273,8 @@ public class AgentArtsRuntimeApp {
         try {
             // Concurrency check: if all permits taken, return 503 immediately
             if (!invocationSemaphore.tryAcquire()) {
-                sendJsonError(rc, 503, "Service busy",
-                        "Service busy - maximum concurrency reached");
+                // Match Python: single "error" key with full message
+                sendJsonError(rc, 503, "Service busy - maximum concurrency reached", null);
                 return;
             }
 
@@ -270,19 +309,20 @@ public class AgentArtsRuntimeApp {
                     rc.request().getHeader(name));
 
             PingStatus status = getCurrentPingStatus(ctx);
-            lastStatusUpdateTime.set(System.currentTimeMillis());
 
             Map<String, Object> response = Map.of(
                     "status", status.getValue(),
                     "time_of_last_update", lastStatusUpdateTime.get() / 1000
             );
-            sendJsonResponse(rc, 200, response, null);
+            // Match Python: always include session header (even if empty string)
+            String sessionId = ctx.getSessionId();
+            sendJsonResponse(rc, 200, response, sessionId != null ? sessionId : "");
         } catch (Exception e) {
             Map<String, Object> response = Map.of(
                     "status", PingStatus.UNHEALTHY.getValue(),
                     "time_of_last_update", lastStatusUpdateTime.get() / 1000
             );
-            sendJsonResponse(rc, 200, response, null);
+            sendJsonResponse(rc, 200, response, "");
         }
     }
 
@@ -295,14 +335,24 @@ public class AgentArtsRuntimeApp {
 
         // Priority 2: custom handler
         if (pingHandlerWithCtx != null) {
-            return pingHandlerWithCtx.apply(ctx);
+            PingStatus result = pingHandlerWithCtx.apply(ctx);
+            if (result != null) {
+                lastStatusUpdateTime.set(System.currentTimeMillis());
+                return result;
+            }
         }
         if (pingHandler != null) {
-            return pingHandler.get();
+            PingStatus result = pingHandler.get();
+            if (result != null) {
+                lastStatusUpdateTime.set(System.currentTimeMillis());
+                return result;
+            }
         }
 
         // Priority 3: default — check if any tasks running
-        // (In this simplified version, always HEALTHY)
+        if (activeTaskCount.get() > 0) {
+            return PingStatus.HEALTHY_BUSY;
+        }
         return PingStatus.HEALTHY;
     }
 
@@ -346,6 +396,10 @@ public class AgentArtsRuntimeApp {
 
             if (sessionId != null) {
                 rc.response().putHeader(Constants.SESSION_HEADER, sessionId);
+            }
+            // Match Python: always include session header (even if empty string)
+            if (sessionId == null) {
+                rc.response().putHeader(Constants.SESSION_HEADER, "");
             }
 
             rc.response().end(json);
