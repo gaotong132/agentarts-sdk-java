@@ -1,0 +1,423 @@
+package com.huaweicloud.agentarts.sdk.runtime;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.huaweicloud.agentarts.sdk.core.Constants;
+import com.huaweicloud.agentarts.sdk.core.PingStatus;
+import com.huaweicloud.agentarts.sdk.runtime.context.AgentArtsRuntimeContext;
+import com.huaweicloud.agentarts.sdk.runtime.context.RequestContext;
+import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.HttpServerOptions;
+import io.vertx.core.http.ServerWebSocket;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
+import io.vertx.ext.web.handler.BodyHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import reactor.core.publisher.Flux;
+
+import java.util.Map;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Supplier;
+
+/**
+ * AgentArts Runtime Application — Vert.x-based HTTP server.
+ *
+ * <p>Mirrors Python {@code AgentArtsRuntimeApp} from {@code runtime/app.py}.
+ * Exposes three endpoints:</p>
+ * <ul>
+ *   <li>{@code POST /invocations} — main agent invocation (sync JSON / SSE streaming)</li>
+ *   <li>{@code GET /ping} — health check returning {@link PingStatus}</li>
+ *   <li>{@code WS /ws} — WebSocket endpoint for bidirectional streaming</li>
+ * </ul>
+ *
+ * <h3>Concurrency control:</h3>
+ * <p>A {@link Semaphore} limits concurrent invocations. When all permits are taken,
+ * new requests receive HTTP 503 with {@code {"error": "Service busy - maximum concurrency reached"}}.</p>
+ *
+ * <h3>Usage:</h3>
+ * <pre>{@code
+ * AgentArtsRuntimeApp app = new AgentArtsRuntimeApp();
+ *
+ * app.setEntrypoint((payload, ctx) -> {
+ *     return Map.of("result", "Hello " + payload.get("name"));
+ * });
+ *
+ * app.setPingHandler(() -> PingStatus.HEALTHY);
+ *
+ * app.run(8080);
+ * }</pre>
+ */
+public class AgentArtsRuntimeApp {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AgentArtsRuntimeApp.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
+    private final int maxConcurrency;
+    private final Semaphore invocationSemaphore;
+    private final Vertx vertx;
+    private final boolean ownVertx;
+
+    // Handlers
+    private BiFunction<Map<String, Object>, RequestContext, Object> entrypointHandler;
+    private Function<RequestContext, Object> entrypointWithPayloadOnly;
+    private Supplier<PingStatus> pingHandler;
+    private Function<RequestContext, PingStatus> pingHandlerWithCtx;
+    private BiFunction<ServerWebSocket, RequestContext, Void> wsHandler;
+
+    // State
+    private final AtomicReference<PingStatus> forcedPingStatus = new AtomicReference<>();
+    private final AtomicLong lastStatusUpdateTime = new AtomicLong(System.currentTimeMillis());
+    private volatile HttpServer httpServer;
+
+    /**
+     * Create an AgentArtsRuntimeApp.
+     *
+     * @param maxConcurrency maximum concurrent invocations (default 15)
+     * @param vertx          shared Vert.x instance (nullable, creates own if null)
+     */
+    public AgentArtsRuntimeApp(int maxConcurrency, Vertx vertx) {
+        this.maxConcurrency = maxConcurrency > 0 ? maxConcurrency : Constants.DEFAULT_MAX_CONCURRENCY;
+        this.invocationSemaphore = new Semaphore(this.maxConcurrency);
+        if (vertx != null) {
+            this.vertx = vertx;
+            this.ownVertx = false;
+        } else {
+            this.vertx = Vertx.vertx();
+            this.ownVertx = true;
+        }
+    }
+
+    public AgentArtsRuntimeApp(int maxConcurrency) {
+        this(maxConcurrency, null);
+    }
+
+    public AgentArtsRuntimeApp() {
+        this(Constants.DEFAULT_MAX_CONCURRENCY, null);
+    }
+
+    // ========================
+    // Handler registration
+    // ========================
+
+    /**
+     * Register the main invocation handler.
+     *
+     * @param handler receives (payload, RequestContext) and returns a result.
+     *                Return a {@link Flux} for SSE streaming, or any object for JSON response.
+     */
+    public void setEntrypoint(BiFunction<Map<String, Object>, RequestContext, Object> handler) {
+        this.entrypointHandler = handler;
+    }
+
+    /**
+     * Register a simple entrypoint that only receives payload (no context).
+     */
+    public void setEntrypoint(Function<Map<String, Object>, Object> handler) {
+        this.entrypointWithPayloadOnly = (ctx) -> null; // unused
+        this.entrypointHandler = (payload, ctx) -> handler.apply(payload);
+    }
+
+    /**
+     * Register the health-check ping handler.
+     */
+    public void setPingHandler(Supplier<PingStatus> handler) {
+        this.pingHandler = handler;
+    }
+
+    public void setPingHandler(Function<RequestContext, PingStatus> handler) {
+        this.pingHandlerWithCtx = handler;
+    }
+
+    /**
+     * Register the WebSocket handler.
+     */
+    public void setWebSocketHandler(BiFunction<ServerWebSocket, RequestContext, Void> handler) {
+        this.wsHandler = handler;
+    }
+
+    /**
+     * Force a specific ping status (e.g., for graceful shutdown).
+     */
+    public void forcePingStatus(PingStatus status) {
+        forcedPingStatus.set(status);
+        lastStatusUpdateTime.set(System.currentTimeMillis());
+    }
+
+    // ========================
+    // Server lifecycle
+    // ========================
+
+    /**
+     * Start the HTTP server and block until it's listening.
+     *
+     * @param port the port to listen on (default 8080)
+     */
+    public void run(int port) {
+        Router router = Router.router(vertx);
+        router.route().handler(BodyHandler.create());
+
+        // Routes
+        router.post("/invocations").handler(this::handleInvocation);
+        router.get("/ping").handler(this::handlePing);
+
+        // WebSocket
+        HttpServerOptions options = new HttpServerOptions().setPort(port);
+        httpServer = vertx.createHttpServer(options);
+        httpServer.webSocketHandler(this::handleWebSocket);
+        httpServer.requestHandler(router);
+
+        httpServer.listen(port).onSuccess(server -> {
+            LOG.info("AgentArts Runtime started on port {}", server.actualPort());
+        }).onFailure(err -> {
+            LOG.error("Failed to start AgentArts Runtime: {}", err.getMessage(), err);
+        }).toCompletionStage().toCompletableFuture().join();
+    }
+
+    public void run() {
+        run(Constants.DEFAULT_PORT);
+    }
+
+    /**
+     * Stop the HTTP server.
+     */
+    public void stop() {
+        if (httpServer != null) {
+            httpServer.close().toCompletionStage().toCompletableFuture().join();
+        }
+        if (ownVertx) {
+            vertx.close().toCompletionStage().toCompletableFuture().join();
+        }
+    }
+
+    public int getPort() {
+        return httpServer != null ? httpServer.actualPort() : 0;
+    }
+
+    // ========================
+    // POST /invocations
+    // ========================
+
+    @SuppressWarnings("unchecked")
+    private void handleInvocation(RoutingContext rc) {
+        if (entrypointHandler == null) {
+            sendJsonError(rc, 404, "NotFound", "No entrypoint handler registered");
+            return;
+        }
+
+        // Parse JSON payload
+        Map<String, Object> payload;
+        try {
+            String body = rc.body().asString();
+            if (body == null || body.isEmpty()) {
+                payload = Map.of();
+            } else {
+                payload = OBJECT_MAPPER.readValue(body, Map.class);
+            }
+        } catch (JsonProcessingException e) {
+            sendJsonError(rc, 400, "Invalid JSON payload", e.getMessage());
+            return;
+        }
+
+        // Build request context from headers
+        RequestContext ctx = RequestContext.fromHeaders(name ->
+                rc.request().getHeader(name));
+
+        // Load context into thread-local
+        AgentArtsRuntimeContext.fromRequestContext(ctx);
+
+        try {
+            // Concurrency check: if all permits taken, return 503 immediately
+            if (!invocationSemaphore.tryAcquire()) {
+                sendJsonError(rc, 503, "Service busy",
+                        "Service busy - maximum concurrency reached");
+                return;
+            }
+
+            try {
+                Object result = entrypointHandler.apply(payload, ctx);
+
+                if (result instanceof Flux<?> flux) {
+                    // SSE streaming response
+                    sendSseStream(rc, flux, ctx.getSessionId());
+                } else {
+                    // Regular JSON response
+                    sendJsonResponse(rc, 200, result, ctx.getSessionId());
+                }
+            } finally {
+                invocationSemaphore.release();
+            }
+        } catch (Exception e) {
+            LOG.error("Invocation error: {}", e.getMessage(), e);
+            sendJsonError(rc, 500, e.getClass().getSimpleName(), e.getMessage());
+        } finally {
+            AgentArtsRuntimeContext.clear();
+        }
+    }
+
+    // ========================
+    // GET /ping
+    // ========================
+
+    private void handlePing(RoutingContext rc) {
+        try {
+            RequestContext ctx = RequestContext.fromHeaders(name ->
+                    rc.request().getHeader(name));
+
+            PingStatus status = getCurrentPingStatus(ctx);
+            lastStatusUpdateTime.set(System.currentTimeMillis());
+
+            Map<String, Object> response = Map.of(
+                    "status", status.getValue(),
+                    "time_of_last_update", lastStatusUpdateTime.get() / 1000
+            );
+            sendJsonResponse(rc, 200, response, null);
+        } catch (Exception e) {
+            Map<String, Object> response = Map.of(
+                    "status", PingStatus.UNHEALTHY.getValue(),
+                    "time_of_last_update", lastStatusUpdateTime.get() / 1000
+            );
+            sendJsonResponse(rc, 200, response, null);
+        }
+    }
+
+    private PingStatus getCurrentPingStatus(RequestContext ctx) {
+        // Priority 1: forced status
+        PingStatus forced = forcedPingStatus.get();
+        if (forced != null) {
+            return forced;
+        }
+
+        // Priority 2: custom handler
+        if (pingHandlerWithCtx != null) {
+            return pingHandlerWithCtx.apply(ctx);
+        }
+        if (pingHandler != null) {
+            return pingHandler.get();
+        }
+
+        // Priority 3: default — check if any tasks running
+        // (In this simplified version, always HEALTHY)
+        return PingStatus.HEALTHY;
+    }
+
+    // ========================
+    // WS /ws
+    // ========================
+
+    private void handleWebSocket(ServerWebSocket ws) {
+        if (!"/ws".equals(ws.path())) {
+            ws.reject();
+            return;
+        }
+
+        if (wsHandler == null) {
+            ws.close((short) 1011, "No WebSocket handler registered");
+            return;
+        }
+
+        RequestContext ctx = RequestContext.fromHeaders(name ->
+                ws.headers().get(name));
+        AgentArtsRuntimeContext.fromRequestContext(ctx);
+
+        try {
+            wsHandler.apply(ws, ctx);
+        } catch (Exception e) {
+            LOG.error("WebSocket error: {}", e.getMessage(), e);
+            ws.close((short) 1011, e.getMessage());
+        }
+    }
+
+    // ========================
+    // Response helpers
+    // ========================
+
+    private void sendJsonResponse(RoutingContext rc, int statusCode, Object data, String sessionId) {
+        try {
+            String json = OBJECT_MAPPER.writeValueAsString(data);
+            rc.response()
+                    .setStatusCode(statusCode)
+                    .putHeader("Content-Type", "application/json");
+
+            if (sessionId != null) {
+                rc.response().putHeader(Constants.SESSION_HEADER, sessionId);
+            }
+
+            rc.response().end(json);
+        } catch (JsonProcessingException e) {
+            sendJsonError(rc, 500, "SerializationError", e.getMessage());
+        }
+    }
+
+    private void sendJsonError(RoutingContext rc, int statusCode, String error, String message) {
+        try {
+            Map<String, String> body = Map.of(
+                    "error", error != null ? error : "Unknown",
+                    "message", message != null ? message : ""
+            );
+            String json = OBJECT_MAPPER.writeValueAsString(body);
+            rc.response()
+                    .setStatusCode(statusCode)
+                    .putHeader("Content-Type", "application/json")
+                    .end(json);
+        } catch (JsonProcessingException e) {
+            rc.response()
+                    .setStatusCode(500)
+                    .putHeader("Content-Type", "application/json")
+                    .end("{\"error\":\"InternalError\",\"message\":\"Failed to serialize error\"}");
+        }
+    }
+
+    private void sendSseStream(RoutingContext rc, Flux<?> flux, String sessionId) {
+        rc.response()
+                .setStatusCode(200)
+                .putHeader("Content-Type", "text/event-stream")
+                .putHeader("Cache-Control", "no-cache")
+                .putHeader("Connection", "keep-alive")
+                .setChunked(true);
+
+        if (sessionId != null) {
+            rc.response().putHeader(Constants.SESSION_HEADER, sessionId);
+        }
+
+        flux.subscribe(
+                item -> {
+                    try {
+                        String json = OBJECT_MAPPER.writeValueAsString(item);
+                        rc.response().write("data: " + json + "\n\n");
+                    } catch (JsonProcessingException e) {
+                        String errorJson = "{\"error\":\"SerializationError\",\"message\":\""
+                                + escapeJson(e.getMessage()) + "\"}";
+                        rc.response().write("data: " + errorJson + "\n\n");
+                    }
+                },
+                error -> {
+                    try {
+                        Map<String, String> errorBody = Map.of(
+                                "error", error.getClass().getSimpleName(),
+                                "error_type", error.getClass().getName(),
+                                "message", error.getMessage() != null ? error.getMessage() : ""
+                        );
+                        String json = OBJECT_MAPPER.writeValueAsString(errorBody);
+                        rc.response().write("data: " + json + "\n\n");
+                    } catch (JsonProcessingException ignored) {
+                    }
+                    rc.response().end();
+                },
+                () -> rc.response().end()
+        );
+    }
+
+    private static String escapeJson(String value) {
+        if (value == null) return "";
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
+    }
+}

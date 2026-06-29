@@ -24,6 +24,10 @@
             <groupId>com.huaweicloud.agentarts</groupId>
             <artifactId>agentarts-sdk-service</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-runtime</artifactId>
+        </dependency>
 
         <!-- Reactor -->
         <dependency>
