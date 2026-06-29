@@ -4,13 +4,12 @@
 [![Java](https://img.shields.io/badge/Java-17%2B-brightgreen.svg)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange.svg)](https://maven.apache.org/)
 [![Tests](https://img.shields.io/badge/Tests-119%20passing-brightgreen.svg)]()
-[![Python Parity](https://img.shields.io/badge/Python%20Parity-P0%2BP1%20verified-blue.svg)]()
 
-Build, deploy and manage AI agents with Huawei Cloud capabilities — Java edition.
+Build, deploy and manage AI agents with Huawei Cloud capabilities.
 
 ## Overview
 
-AgentArts Java SDK is a 1:1 Java port of the [Python AgentArts SDK](https://github.com/huaweicloud/agentarts-sdk-python), providing a comprehensive toolkit for developing, deploying, and managing AI agents on Huawei Cloud. It integrates natively with [agentscope-java](https://github.com/agentscope/agentscope-java) (Reactor-based agent framework).
+AgentArts Java SDK is a comprehensive toolkit for developing, deploying, and managing AI agents on Huawei Cloud. It integrates natively with [agentscope-java](https://github.com/agentscope/agentscope-java) (Reactor-based agent framework). See also the [Python SDK](https://github.com/huaweicloud/agentarts-sdk-python).
 
 ### Key Features
 
@@ -228,7 +227,7 @@ Key dependencies aligned with [agentscope-java](https://github.com/agentscope/ag
 - [x] **Tools** — CodeInterpreterClient (17 methods), CodeSession context manager (10 tests)
 - [x] **MCP Gateway** — MCPGatewayClient (10 CRUD methods for gateway + target) (5 tests)
 
-**119 tests total**, Python behavioral parity verified for: V11 signing (exact signature match), HTTP endpoints (status codes, SSE format, error formats, session headers), concurrency control, async task tracking, API method signatures (MemoryClient 15 methods, CodeInterpreter 17 methods, MCPGateway 10 methods).
+**119 tests total**, covering: V11 signing (cross-language golden vector tests), HTTP endpoints (status codes, SSE format, error formats, session headers), concurrency control, async task tracking, API method signatures (MemoryClient 15 methods, CodeInterpreter 17 methods, MCPGateway 10 methods).
 
 ### P2–P4 — In Progress
 
@@ -236,18 +235,17 @@ Key dependencies aligned with [agentscope-java](https://github.com/agentscope/ag
 - [ ] **P3** — agentscope-java integration: RuntimeHost, MemoryAgentStateStore, AgentTool extensions (target: ≥15 tests)
 - [ ] **P4** — Spring Boot Starter + examples + e2e tests (target: ≥130 total tests)
 
-## Python Parity Status
+## API Compatibility
 
-This SDK is a 1:1 port of the Python AgentArts SDK. Each phase includes behavioral verification against the Python implementation:
+The Java SDK provides the same API surface as the [Python SDK](https://github.com/huaweicloud/agentarts-sdk-python). Each phase includes cross-SDK behavioral verification:
 
 | Aspect | Verification Method |
 |---|---|
 | V11 Signing | Cross-language golden vector tests (fixed AK/SK/timestamp → exact signature match) |
-| HTTP Endpoints | Status codes (200/400/500/503), SSE format, error JSON structure match Python |
-| Header Constants | 4 constants identical to Python `model.py` |
-| Context Fields | 7 ThreadLocal fields matching Python ContextVar |
-| Config Format | `.agentarts_config.yaml` and `.agent_identity.json` structure identical |
-| API Methods | Each Java client method maps 1:1 to its Python counterpart |
+| HTTP Endpoints | Status codes (200/400/500/503), SSE format, error JSON structure |
+| Header Constants | 4 standard AgentArts runtime headers |
+| Context Fields | 7 thread-local context fields (session, request, user, token, OAuth2) |
+| Config Format | `.agentarts_config.yaml` and `.agent_identity.json` compatible structure |
 | Memory API | 15 methods (createSpace/getSpace/listSpaces/updateSpace/deleteSpace/createApiKey + session/message/memory CRUD) |
 | Tools API | 17 methods (code interpreter CRUD + session + invoke + execute/upload/download/install/clear) |
 | MCP Gateway API | 10 methods (gateway CRUD + target CRUD) |
