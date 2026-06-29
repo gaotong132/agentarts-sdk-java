@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Java](https://img.shields.io/badge/Java-17%2B-brightgreen.svg)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange.svg)](https://maven.apache.org/)
-[![Tests](https://img.shields.io/badge/Tests-146%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-181%20passing-brightgreen.svg)]()
 
 Build, deploy and manage AI agents with Huawei Cloud capabilities.
 
@@ -256,7 +256,7 @@ Key dependencies aligned with [agentscope-java](https://github.com/agentscope/ag
 - [x] **Tools** — CodeInterpreterClient (17 methods), CodeSession context manager (10 tests)
 - [x] **MCP Gateway** — MCPGatewayClient (10 CRUD methods for gateway + target) (5 tests)
 
-**119 tests total**, covering: V11 signing (cross-language golden vector tests), HTTP endpoints (status codes, SSE format, error formats, session headers), concurrency control, async task tracking, API method signatures (MemoryClient 15 methods, CodeInterpreter 17 methods, MCPGateway 10 methods).
+**181 tests total**, covering: V11 signing (cross-language golden vector tests), HTTP endpoints (status codes, SSE format, error formats, session headers), concurrency control, async task tracking, API method signatures (MemoryClient 15 methods, CodeInterpreter 17 methods, MCPGateway 10 methods), agentscope interface contracts (AgentStateStore 8 methods, AgentTool 6 methods, RuntimeContext bridge, MessageConverter 3 pairs).
 
 ### P2 — CLI Toolkit ✅ Complete
 
@@ -267,10 +267,17 @@ Key dependencies aligned with [agentscope-java](https://github.com/agentscope/ag
 - [x] **Memory subcommands** — create, get, list, update, delete, status
 - [x] **Templates** — basic (Java handler) / agentscope (ReActAgent) / docker (eclipse-temurin:17-jre)
 
-### P3–P4 — In Progress
+### P3 — agentscope-java Integration ✅ Complete
 
-- [ ] **P3** — agentscope-java integration: RuntimeHost, MemoryAgentStateStore, AgentTool extensions (target: ≥15 tests)
-- [ ] **P4** — Spring Boot Starter + examples + e2e tests (target: ≥160 total tests)
+- [x] **MemoryAgentStateStore** — implements AgentStateStore (all 8 methods: save/get/getList/exists/delete/listSessionIds/close) (13 tests)
+- [x] **MCPGatewayTool** — implements AgentTool (6 methods: getName/getDescription/getParameters/getStrict/getOutputSchema/callAsync) (6 tests)
+- [x] **CodeInterpreterTool** — implements AgentTool (same 6 methods) (4 tests)
+- [x] **AgentscopeRuntimeHost** — RequestContext→RuntimeContext bridge (sessionId/userId/requestId/workloadAccessToken) (5 tests)
+- [x] **MessageConverter** — bidirectional conversion (TextMessage↔TextBlock, ToolCallMessage↔ToolUseBlock, ToolResultMessage↔ToolResultBlock) (7 tests)
+
+### P4 — In Progress
+
+- [ ] **P4** — Spring Boot Starter + examples + e2e tests (target: ≥190 total tests)
 
 ## API Compatibility
 
@@ -287,6 +294,7 @@ The Java SDK provides the same API surface as the [Python SDK](https://github.co
 | Tools API | 17 methods (code interpreter CRUD + session + invoke + execute/upload/download/install/clear) |
 | MCP Gateway API | 10 methods (gateway CRUD + target CRUD) |
 | CLI Commands | 9 top-level commands + 8 config subcommands + 6 runtime subcommands + 10 mcp-gateway subcommands + 6 memory subcommands |
+| agentscope Integration | AgentStateStore (8 methods), AgentTool (6 methods × 2 tools), RuntimeContext bridge (4 fields), MessageConverter (3 bidirectional pairs) |
 
 ## License
 
