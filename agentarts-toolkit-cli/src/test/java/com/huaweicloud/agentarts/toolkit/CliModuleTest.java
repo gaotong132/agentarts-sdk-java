@@ -1,0 +1,381 @@
+package com.huaweicloud.agentarts.toolkit;
+
+import com.huaweicloud.agentarts.toolkit.commands.*;
+import com.huaweicloud.agentarts.toolkit.template.TemplateManager;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.io.TempDir;
+import picocli.CommandLine;
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Tests for CLI module: command tree structure, Python parity, templates, config operations.
+ */
+class CliModuleTest {
+
+    private final CommandLine cli = new CommandLine(new AgentArtsCli());
+
+    // ========================
+    // Python Parity: Command tree verification
+    // ========================
+
+    @Nested
+    @DisplayName("Python Parity: Command tree matches Typer CLI")
+    class CommandTreeTests {
+
+        @Test
+        void topLevelCommandsExist() {
+            // Mirrors Python: init, config(alias configure), dev, deploy(alias launch),
+            // invoke, destroy, runtime, mcp-gateway, memory
+            Map<String, CommandLine> subs = cli.getSubcommands();
+            assertNotNull(subs.get("init"), "init command missing");
+            assertNotNull(subs.get("config"), "config command missing");
+            assertNotNull(subs.get("dev"), "dev command missing");
+            assertNotNull(subs.get("deploy"), "deploy command missing");
+            assertNotNull(subs.get("invoke"), "invoke command missing");
+            assertNotNull(subs.get("destroy"), "destroy command missing");
+            assertNotNull(subs.get("runtime"), "runtime command missing");
+            assertNotNull(subs.get("mcp-gateway"), "mcp-gateway command missing");
+            assertNotNull(subs.get("memory"), "memory command missing");
+        }
+
+        @Test
+        void configHasAliasConfigure() {
+            // Python: config (alias: configure)
+            CommandLine configCmd = cli.getSubcommands().get("config");
+            String[] aliases = configCmd.getCommandSpec().aliases();
+            boolean hasConfigure = false;
+            for (String a : aliases) {
+                if ("configure".equals(a)) hasConfigure = true;
+            }
+            assertTrue(hasConfigure, "config should have 'configure' alias");
+        }
+
+        @Test
+        void deployHasAliasLaunch() {
+            // Python: launch (alias: deploy)
+            CommandLine deployCmd = cli.getSubcommands().get("deploy");
+            String[] aliases = deployCmd.getCommandSpec().aliases();
+            boolean hasLaunch = false;
+            for (String a : aliases) {
+                if ("launch".equals(a)) hasLaunch = true;
+            }
+            assertTrue(hasLaunch, "deploy should have 'launch' alias");
+        }
+
+        @Test
+        void configSubcommandsMatchPython() {
+            // Python config subcommands: list, set-default, get, set, remove, set-env, remove-env, list-env
+            CommandLine configCmd = cli.getSubcommands().get("config");
+            Map<String, CommandLine> subs = configCmd.getSubcommands();
+            assertNotNull(subs.get("list"), "config list missing");
+            assertNotNull(subs.get("set-default"), "config set-default missing");
+            assertNotNull(subs.get("get"), "config get missing");
+            assertNotNull(subs.get("set"), "config set missing");
+            assertNotNull(subs.get("remove"), "config remove missing");
+            assertNotNull(subs.get("set-env"), "config set-env missing");
+            assertNotNull(subs.get("remove-env"), "config remove-env missing");
+            assertNotNull(subs.get("list-env"), "config list-env missing");
+        }
+
+        @Test
+        void runtimeSubcommandsMatchPython() {
+            // Python runtime subcommands: invoke, exec-command, upload-files, download-files, start-session, stop-session
+            CommandLine runtimeCmd = cli.getSubcommands().get("runtime");
+            Map<String, CommandLine> subs = runtimeCmd.getSubcommands();
+            assertNotNull(subs.get("invoke"), "runtime invoke missing");
+            assertNotNull(subs.get("exec-command"), "runtime exec-command missing");
+            assertNotNull(subs.get("upload-files"), "runtime upload-files missing");
+            assertNotNull(subs.get("download-files"), "runtime download-files missing");
+            assertNotNull(subs.get("start-session"), "runtime start-session missing");
+            assertNotNull(subs.get("stop-session"), "runtime stop-session missing");
+        }
+
+        @Test
+        void mcpGatewaySubcommandsMatchPython() {
+            // Python mcp-gateway: 10 CRUD commands
+            CommandLine mcpCmd = cli.getSubcommands().get("mcp-gateway");
+            Map<String, CommandLine> subs = mcpCmd.getSubcommands();
+            assertNotNull(subs.get("create-mcp-gateway"));
+            assertNotNull(subs.get("update-mcp-gateway"));
+            assertNotNull(subs.get("delete-mcp-gateway"));
+            assertNotNull(subs.get("get-mcp-gateway"));
+            assertNotNull(subs.get("list-mcp-gateways"));
+            assertNotNull(subs.get("create-mcp-gateway-target"));
+            assertNotNull(subs.get("update-mcp-gateway-target"));
+            assertNotNull(subs.get("delete-mcp-gateway-target"));
+            assertNotNull(subs.get("get-mcp-gateway-target"));
+            assertNotNull(subs.get("list-mcp-gateway-targets"));
+            assertEquals(10, subs.size(), "Expected 10 mcp-gateway subcommands");
+        }
+
+        @Test
+        void memorySubcommandsMatchPython() {
+            // Python memory: create, get, list, update, delete, status
+            CommandLine memCmd = cli.getSubcommands().get("memory");
+            Map<String, CommandLine> subs = memCmd.getSubcommands();
+            assertNotNull(subs.get("create"));
+            assertNotNull(subs.get("get"));
+            assertNotNull(subs.get("list"));
+            assertNotNull(subs.get("update"));
+            assertNotNull(subs.get("delete"));
+            assertNotNull(subs.get("status"));
+        }
+    }
+
+    // ========================
+    // Python Parity: Init command options
+    // ========================
+
+    @Nested
+    @DisplayName("Python Parity: init command options")
+    class InitOptionsTests {
+
+        @Test
+        void initCommandHasExpectedOptions() {
+            // Python init: --name/-n, --template/-t, --path/-p, --region/-r, --swr-org, --swr-repo
+            CommandLine initCmd = cli.getSubcommands().get("init");
+            var spec = initCmd.getCommandSpec();
+            assertNotNull(spec.optionsMap().get("--name"));
+            assertNotNull(spec.optionsMap().get("-n"));
+            assertNotNull(spec.optionsMap().get("--template"));
+            assertNotNull(spec.optionsMap().get("-t"));
+            assertNotNull(spec.optionsMap().get("--path"));
+            assertNotNull(spec.optionsMap().get("-p"));
+            assertNotNull(spec.optionsMap().get("--region"));
+            assertNotNull(spec.optionsMap().get("-r"));
+            assertNotNull(spec.optionsMap().get("--swr-org"));
+            assertNotNull(spec.optionsMap().get("--swr-repo"));
+        }
+
+        @Test
+        void initDefaultPathIsCurrentDir() {
+            // Python: --path default "."
+            CommandLine initCmd = cli.getSubcommands().get("init");
+            var pathOption = initCmd.getCommandSpec().optionsMap().get("--path");
+            assertEquals(".", pathOption.defaultValue());
+        }
+    }
+
+    // ========================
+    // Python Parity: dev command options
+    // ========================
+
+    @Nested
+    @DisplayName("Python Parity: dev command options")
+    class DevOptionsTests {
+
+        @Test
+        void devCommandHasExpectedOptions() {
+            // Python dev: --port/-p(8080), --host/-h("0.0.0.0"), --reload, --config/-c, --env/-e(repeatable)
+            CommandLine devCmd = cli.getSubcommands().get("dev");
+            var spec = devCmd.getCommandSpec();
+            assertNotNull(spec.optionsMap().get("--port"));
+            assertNotNull(spec.optionsMap().get("--host"));
+            assertNotNull(spec.optionsMap().get("--reload"));
+            assertNotNull(spec.optionsMap().get("--config"));
+            assertNotNull(spec.optionsMap().get("--env"));
+        }
+
+        @Test
+        void devDefaultPortIs8080() {
+            CommandLine devCmd = cli.getSubcommands().get("dev");
+            assertEquals("8080", devCmd.getCommandSpec().optionsMap().get("--port").defaultValue());
+        }
+
+        @Test
+        void devDefaultHostIsAllInterfaces() {
+            CommandLine devCmd = cli.getSubcommands().get("dev");
+            assertEquals("0.0.0.0", devCmd.getCommandSpec().optionsMap().get("--host").defaultValue());
+        }
+    }
+
+    // ========================
+    // Python Parity: deploy command options
+    // ========================
+
+    @Nested
+    @DisplayName("Python Parity: deploy command options")
+    class DeployOptionsTests {
+
+        @Test
+        void deployCommandHasExpectedOptions() {
+            // Python deploy: --agent/-a, --mode/-m(cloud), --tag/-t(latest), --local-port/-l,
+            // --swr-org, --swr-repo, --description/-d, --skip-build, --skip-ssl-verification/-k
+            CommandLine deployCmd = cli.getSubcommands().get("deploy");
+            var spec = deployCmd.getCommandSpec();
+            assertNotNull(spec.optionsMap().get("--agent"));
+            assertNotNull(spec.optionsMap().get("--mode"));
+            assertNotNull(spec.optionsMap().get("--tag"));
+            assertNotNull(spec.optionsMap().get("--local-port"));
+            assertNotNull(spec.optionsMap().get("--swr-org"));
+            assertNotNull(spec.optionsMap().get("--swr-repo"));
+            assertNotNull(spec.optionsMap().get("--description"));
+            assertNotNull(spec.optionsMap().get("--skip-build"));
+            assertNotNull(spec.optionsMap().get("--skip-ssl-verification"));
+        }
+
+        @Test
+        void deployDefaultModeIsCloud() {
+            CommandLine deployCmd = cli.getSubcommands().get("deploy");
+            assertEquals("cloud", deployCmd.getCommandSpec().optionsMap().get("--mode").defaultValue());
+        }
+
+        @Test
+        void deployDefaultTagIsLatest() {
+            CommandLine deployCmd = cli.getSubcommands().get("deploy");
+            assertEquals("latest", deployCmd.getCommandSpec().optionsMap().get("--tag").defaultValue());
+        }
+    }
+
+    // ========================
+    // Python Parity: invoke command options
+    // ========================
+
+    @Nested
+    @DisplayName("Python Parity: invoke command options")
+    class InvokeOptionsTests {
+
+        @Test
+        void invokeCommandHasExpectedOptions() {
+            // Python invoke: payload(arg), --agent/-a, --mode/-m(cloud), --region/-r, --port/-p,
+            // --endpoint/-e, --session/-s, --bearer-token/-bt, --timeout(900), --skip-ssl-verification/-k,
+            // --user-id/-u, --custom-path
+            CommandLine invokeCmd = cli.getSubcommands().get("invoke");
+            var spec = invokeCmd.getCommandSpec();
+            assertNotNull(spec.optionsMap().get("--agent"));
+            assertNotNull(spec.optionsMap().get("--mode"));
+            assertNotNull(spec.optionsMap().get("--region"));
+            assertNotNull(spec.optionsMap().get("--port"));
+            assertNotNull(spec.optionsMap().get("--endpoint"));
+            assertNotNull(spec.optionsMap().get("--session"));
+            assertNotNull(spec.optionsMap().get("--bearer-token"));
+            assertNotNull(spec.optionsMap().get("--timeout"));
+            assertNotNull(spec.optionsMap().get("--skip-ssl-verification"));
+            assertNotNull(spec.optionsMap().get("--user-id"));
+            assertNotNull(spec.optionsMap().get("--custom-path"));
+        }
+
+        @Test
+        void invokeDefaultTimeoutIs900() {
+            CommandLine invokeCmd = cli.getSubcommands().get("invoke");
+            assertEquals("900", invokeCmd.getCommandSpec().optionsMap().get("--timeout").defaultValue());
+        }
+    }
+
+    // ========================
+    // Template system
+    // ========================
+
+    @Nested
+    @DisplayName("Template system")
+    class TemplateTests {
+
+        @Test
+        void basicTemplateExists() throws Exception {
+            String content = TemplateManager.loadTemplate("basic/Agent.java.tpl");
+            assertNotNull(content);
+            assertTrue(content.contains("AgentArtsRuntimeApp"));
+            assertTrue(content.contains("{{ name }}"));
+        }
+
+        @Test
+        void agentscopeTemplateExists() throws Exception {
+            String content = TemplateManager.loadTemplate("agentscope/Agent.java.tpl");
+            assertNotNull(content);
+            assertTrue(content.contains("agentscope"));
+        }
+
+        @Test
+        void dockerTemplateExists() throws Exception {
+            String content = TemplateManager.loadTemplate("docker/Dockerfile.tpl");
+            assertNotNull(content);
+            assertTrue(content.contains("eclipse-temurin:17-jre"));
+        }
+
+        @Test
+        void configTemplateExists() throws Exception {
+            String content = TemplateManager.loadTemplate("basic/config.yaml.tpl");
+            assertNotNull(content);
+            assertTrue(content.contains("base:"));
+            assertTrue(content.contains("swr_config:"));
+            assertTrue(content.contains("runtime:"));
+        }
+
+        @Test
+        void templateRendering() {
+            String template = "Hello {{ name }}, welcome to {{ project }}!";
+            String result = TemplateManager.render(template, Map.of("name", "World", "project", "AgentArts"));
+            assertEquals("Hello World, welcome to AgentArts!", result);
+        }
+
+        @Test
+        void templateRenderToFile(@TempDir Path tempDir) throws Exception {
+            Path output = tempDir.resolve("Test.java");
+            TemplateManager.renderToFile("basic/Agent.java.tpl", output, "name", "demo");
+            assertTrue(Files.exists(output));
+            String content = Files.readString(output);
+            assertTrue(content.contains("demoAgent"));
+        }
+    }
+
+    // ========================
+    // Config YAML format (Python parity)
+    // ========================
+
+    @Nested
+    @DisplayName("Config YAML format matches Python")
+    class ConfigFormatTests {
+
+        @Test
+        void configTemplateHasThreeLayers() throws Exception {
+            // Python config has base/swr_config/runtime three-layer structure
+            String content = TemplateManager.loadTemplate("basic/config.yaml.tpl");
+            assertTrue(content.contains("base:"), "Missing 'base' layer");
+            assertTrue(content.contains("swr_config:"), "Missing 'swr_config' layer");
+            assertTrue(content.contains("runtime:"), "Missing 'runtime' layer");
+        }
+
+        @Test
+        void configTemplateHasJavaDefaults() throws Exception {
+            String content = TemplateManager.loadTemplate("basic/config.yaml.tpl");
+            assertTrue(content.contains("language: java17"));
+            assertTrue(content.contains("base_image: eclipse-temurin:17-jre"));
+        }
+    }
+
+    // ========================
+    // CLI help and version
+    // ========================
+
+    @Nested
+    @DisplayName("CLI basics")
+    class CliBasicsTests {
+
+        @Test
+        void helpOutputContainsCommands() {
+            StringWriter sw = new StringWriter();
+            cli.setOut(new PrintWriter(sw));
+            cli.execute("--help");
+            String output = sw.toString();
+            assertTrue(output.contains("init"));
+            assertTrue(output.contains("config"));
+            assertTrue(output.contains("dev"));
+            assertTrue(output.contains("deploy"));
+        }
+
+        @Test
+        void versionOutput() {
+            StringWriter sw = new StringWriter();
+            cli.setOut(new PrintWriter(sw));
+            cli.execute("--version");
+            String output = sw.toString();
+            assertTrue(output.contains("0.1.0"));
+        }
+    }
+}

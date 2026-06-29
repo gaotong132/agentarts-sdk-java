@@ -57,6 +57,12 @@
             <artifactId>jackson-dataformat-yaml</artifactId>
         </dependency>
 
+        <!-- Vert.x WebClient for invoke operation -->
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-web-client</artifactId>
+        </dependency>
+
         <!-- SLF4J simple for CLI output -->
         <dependency>
             <groupId>org.slf4j</groupId>

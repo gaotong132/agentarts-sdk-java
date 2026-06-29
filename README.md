@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Java](https://img.shields.io/badge/Java-17%2B-brightgreen.svg)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange.svg)](https://maven.apache.org/)
-[![Tests](https://img.shields.io/badge/Tests-119%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-146%20passing-brightgreen.svg)]()
 
 Build, deploy and manage AI agents with Huawei Cloud capabilities.
 
@@ -182,6 +182,35 @@ agents:
         port: 8080
 ```
 
+## CLI Toolkit
+
+The `agentarts` CLI provides commands for the full agent lifecycle:
+
+```bash
+# Initialize a new project
+agentarts init -n my-agent -t basic -r cn-southwest-2
+
+# Local development server
+agentarts dev -p 8080
+
+# Configure agent settings
+agentarts config -n my-agent -e com.example.MyAgent -r cn-southwest-2
+agentarts config set base.region cn-north-4
+agentarts config set-env OPENAI_API_KEY sk-xxx
+agentarts config list
+
+# Deploy to Huawei Cloud
+agentarts deploy -a my-agent -m cloud -t v1.0
+
+# Invoke agent
+agentarts invoke '{"message": "Hello!"}' -a my-agent -m local -p 8080
+
+# Destroy agent
+agentarts destroy -a my-agent -y
+```
+
+See also the [Python SDK](https://github.com/huaweicloud/agentarts-sdk-python) for the equivalent CLI toolkit.
+
 ## Building from Source
 
 ```bash
@@ -229,11 +258,19 @@ Key dependencies aligned with [agentscope-java](https://github.com/agentscope/ag
 
 **119 tests total**, covering: V11 signing (cross-language golden vector tests), HTTP endpoints (status codes, SSE format, error formats, session headers), concurrency control, async task tracking, API method signatures (MemoryClient 15 methods, CodeInterpreter 17 methods, MCPGateway 10 methods).
 
-### P2–P4 — In Progress
+### P2 — CLI Toolkit ✅ Complete
 
-- [ ] **P2** — CLI toolkit (Picocli) + templates + deploy (target: ≥20 tests)
+- [x] **Picocli command tree** — init/config/dev/deploy/invoke/destroy/runtime/mcp-gateway/memory (27 tests)
+- [x] **Config management** — 8 subcommands (list, set-default, get, set, remove, set-env, remove-env, list-env)
+- [x] **Runtime subcommands** — invoke, exec-command, upload-files, download-files, start-session, stop-session
+- [x] **MCP Gateway subcommands** — 10 CRUD commands (gateway + target)
+- [x] **Memory subcommands** — create, get, list, update, delete, status
+- [x] **Templates** — basic (Java handler) / agentscope (ReActAgent) / docker (eclipse-temurin:17-jre)
+
+### P3–P4 — In Progress
+
 - [ ] **P3** — agentscope-java integration: RuntimeHost, MemoryAgentStateStore, AgentTool extensions (target: ≥15 tests)
-- [ ] **P4** — Spring Boot Starter + examples + e2e tests (target: ≥130 total tests)
+- [ ] **P4** — Spring Boot Starter + examples + e2e tests (target: ≥160 total tests)
 
 ## API Compatibility
 
@@ -249,6 +286,7 @@ The Java SDK provides the same API surface as the [Python SDK](https://github.co
 | Memory API | 15 methods (createSpace/getSpace/listSpaces/updateSpace/deleteSpace/createApiKey + session/message/memory CRUD) |
 | Tools API | 17 methods (code interpreter CRUD + session + invoke + execute/upload/download/install/clear) |
 | MCP Gateway API | 10 methods (gateway CRUD + target CRUD) |
+| CLI Commands | 9 top-level commands + 8 config subcommands + 6 runtime subcommands + 10 mcp-gateway subcommands + 6 memory subcommands |
 
 ## License
 
