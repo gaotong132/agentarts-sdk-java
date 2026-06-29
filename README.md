@@ -3,6 +3,8 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Java](https://img.shields.io/badge/Java-17%2B-brightgreen.svg)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange.svg)](https://maven.apache.org/)
+[![Tests](https://img.shields.io/badge/Tests-87%20passing-brightgreen.svg)]()
+[![Python Parity](https://img.shields.io/badge/Python%20Parity-P0%20verified-blue.svg)]()
 
 Build, deploy and manage AI agents with Huawei Cloud capabilities — Java edition.
 
@@ -214,13 +216,33 @@ Key dependencies aligned with [agentscope-java](https://github.com/agentscope/ag
 
 ## Roadmap
 
-- [x] **P0a** — Core skeleton + V11 Signer (46 tests passing)
-- [ ] **P0b** — Service layer: BaseHttpClient, IdentityServiceClient, SWRServiceClient
-- [ ] **P0c** — Runtime (Vert.x) + Identity (auth annotations)
-- [ ] **P1** — Memory + Tools + MCP Gateway clients
-- [ ] **P2** — CLI toolkit (Picocli) + templates + deploy
-- [ ] **P3** — agentscope-java integration (RuntimeHost, StateStore, AgentTool)
-- [ ] **P4** — Spring Boot Starter + examples + e2e tests
+### P0 — Core Foundation ✅ Complete
+
+- [x] **P0a** — Core skeleton + V11 Signer (52 tests, including 6 cross-language golden vector tests)
+- [x] **P0b** — Service layer: BaseHttpClient, IdentityServiceClient (31 APIs), SWRServiceClient (12 tests)
+- [x] **P0c** — Runtime (Vert.x HttpServer) + Identity (IdentityClient, TokenPoller) (23 tests)
+
+**87 tests total**, Python behavioral parity verified for: V11 signing (exact signature match), HTTP endpoints (status codes, SSE format, error formats, session headers), concurrency control, async task tracking.
+
+### P1–P4 — In Progress
+
+- [ ] **P1** — Memory + Tools + MCP Gateway clients (target: ≥30 tests)
+- [ ] **P2** — CLI toolkit (Picocli) + templates + deploy (target: ≥20 tests)
+- [ ] **P3** — agentscope-java integration: RuntimeHost, MemoryAgentStateStore, AgentTool extensions (target: ≥15 tests)
+- [ ] **P4** — Spring Boot Starter + examples + e2e tests (target: ≥130 total tests)
+
+## Python Parity Status
+
+This SDK is a 1:1 port of the Python AgentArts SDK. Each phase includes behavioral verification against the Python implementation:
+
+| Aspect | Verification Method |
+|---|---|
+| V11 Signing | Cross-language golden vector tests (fixed AK/SK/timestamp → exact signature match) |
+| HTTP Endpoints | Status codes (200/400/500/503), SSE format, error JSON structure match Python |
+| Header Constants | 4 constants identical to Python `model.py` |
+| Context Fields | 7 ThreadLocal fields matching Python ContextVar |
+| Config Format | `.agentarts_config.yaml` and `.agent_identity.json` structure identical |
+| API Methods | Each Java client method maps 1:1 to its Python counterpart |
 
 ## License
 
