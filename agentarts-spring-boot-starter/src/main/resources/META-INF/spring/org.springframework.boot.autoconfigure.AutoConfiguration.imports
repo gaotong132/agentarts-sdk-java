@@ -1,0 +1,2 @@
+com.huaweicloud.agentarts.spring.AgentArtsAutoConfiguration
+com.huaweicloud.agentarts.spring.AgentArtsHealthIndicatorAutoConfiguration

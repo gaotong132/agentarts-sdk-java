@@ -68,6 +68,9 @@
         <freemarker.version>2.3.34</freemarker.version>
         <docker-java.version>3.4.1</docker-java.version>
 
+        <!-- Spring Boot (optional, for starter) -->
+        <spring-boot.version>3.3.5</spring-boot.version>
+
         <!-- Testing -->
         <junit-bom.version>6.0.2</junit-bom.version>
         <mockito-bom.version>5.23.0</mockito-bom.version>
@@ -258,6 +261,17 @@
                 <groupId>com.github.docker-java</groupId>
                 <artifactId>docker-java-transport-httpclient5</artifactId>
                 <version>${docker-java.version}</version>
+            </dependency>
+
+            <!-- ==================== -->
+            <!-- Spring Boot (optional, for starter) -->
+            <!-- ==================== -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
 
             <!-- ==================== -->

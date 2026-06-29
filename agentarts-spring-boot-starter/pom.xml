@@ -16,6 +16,7 @@
     <description>Optional Spring Boot starter: AutoConfiguration, Properties, HealthIndicator</description>
 
     <dependencies>
+        <!-- AgentArts SDK modules -->
         <dependency>
             <groupId>com.huaweicloud.agentarts</groupId>
             <artifactId>agentarts-sdk-core</artifactId>
@@ -32,6 +33,26 @@
             <groupId>com.huaweicloud.agentarts</groupId>
             <artifactId>agentarts-sdk-memory</artifactId>
             <optional>true</optional>
+        </dependency>
+
+        <!-- Spring Boot -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-actuator</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-actuator-autoconfigure</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
         </dependency>
     </dependencies>
 </project>

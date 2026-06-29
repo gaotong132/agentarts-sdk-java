@@ -16,15 +16,38 @@
     <description>Example projects demonstrating AgentArts Java SDK usage</description>
 
     <dependencies>
+        <!-- AgentArts SDK -->
         <dependency>
             <groupId>com.huaweicloud.agentarts</groupId>
             <artifactId>agentarts-sdk-all</artifactId>
             <version>${revision}</version>
         </dependency>
         <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-integration-agentscope</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
+        <!-- agentscope-core (provided in integration module, must be explicit here) -->
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-core</artifactId>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
             <scope>runtime</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

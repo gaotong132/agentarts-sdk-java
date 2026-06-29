@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Java](https://img.shields.io/badge/Java-17%2B-brightgreen.svg)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange.svg)](https://maven.apache.org/)
-[![Tests](https://img.shields.io/badge/Tests-181%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-212%20passing-brightgreen.svg)]()
 
 Build, deploy and manage AI agents with Huawei Cloud capabilities.
 
@@ -19,6 +19,7 @@ AgentArts Java SDK is a comprehensive toolkit for developing, deploying, and man
 - **Built-in Tools** — Code Interpreter sandbox, Memory management, MCP Gateway client
 - **Cloud Identity** — Workload identity, OAuth2/API Key/STS credential providers via Huawei Cloud AgentIdentity service
 - **CLI Toolkit** — Picocli-based CLI for `init`, `dev`, `deploy`, `invoke`, `destroy`
+- **Spring Boot Starter** — Auto-configuration, properties binding, and health indicator for Spring Boot 3.x
 - **Reactive Architecture** — Project Reactor (`Mono`/`Flux`) throughout, aligned with agentscope-java's reactive model
 
 ## Module Structure
@@ -35,9 +36,9 @@ agentarts-sdk-java/
 ├── agentarts-sdk-mcpgateway/            # MCPGatewayClient, Gateway/Target/ToolCall models
 ├── agentarts-sdk-integration-agentscope/# agentscope bridge: RuntimeHost, MemoryAgentStateStore, AgentTool extensions
 ├── agentarts-toolkit-cli/               # Picocli CLI: init, dev, config, deploy, invoke, destroy, runtime, memory
-├── agentarts-spring-boot-starter/       # (Optional) Spring Boot AutoConfiguration + HealthIndicator
+├── agentarts-spring-boot-starter/       # Spring Boot AutoConfiguration + Properties + HealthIndicator
 ├── agentarts-sdk-all/                   # Aggregator (all modules)
-├── agentarts-sdk-examples/              # Example projects
+├── agentarts-sdk-examples/              # Example projects (basic-runtime, agentscope-integration)
 └── agentarts-sdk-tests/                 # Cross-module integration & e2e tests
 ```
 
@@ -149,6 +150,64 @@ new AgentscopeRuntimeHost(app, agent);
 app.run(8080);
 ```
 
+## Spring Boot Starter
+
+For Spring Boot 3.x applications, use the optional starter for auto-configuration:
+
+```xml
+<dependency>
+    <groupId>com.huaweicloud.agentarts</groupId>
+    <artifactId>agentarts-spring-boot-starter</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
+
+```yaml
+# application.yml
+agentarts:
+  region: cn-southwest-2
+  runtime:
+    port: 8080
+    max-concurrency: 15
+    auto-start: true
+  memory:
+    api-key: ${AGENTARTS_MEMORY_API_KEY}
+    space-id: ${AGENTARTS_MEMORY_SPACE_ID}
+```
+
+The starter auto-configures `AgentArtsRuntimeApp` and provides an Actuator health indicator at `/actuator/health`.
+
+## Examples
+
+The `agentarts-sdk-examples` module contains runnable example applications:
+
+### Basic Runtime Example
+
+A standalone agent using the Vert.x runtime with sync and SSE streaming support:
+
+```bash
+mvn compile exec:java -pl agentarts-sdk-examples \
+  -Dexec.mainClass="com.huaweicloud.agentarts.examples.BasicRuntimeExample"
+
+# Test:
+curl http://localhost:8080/ping
+curl -X POST http://localhost:8080/invocations \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Hello!"}'
+```
+
+### agentscope Integration Example
+
+Bridges AgentArts Runtime with agentscope's agent pattern, using `MemoryAgentStateStore` for state persistence and `MessageConverter` for message conversion:
+
+```bash
+export AGENTARTS_MEMORY_API_KEY=your-api-key
+export AGENTARTS_MEMORY_SPACE_ID=your-space-id
+
+mvn compile exec:java -pl agentarts-sdk-examples \
+  -Dexec.mainClass="com.huaweicloud.agentarts.examples.AgentScopeIntegrationExample"
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -227,6 +286,9 @@ mvn test
 
 # Core module only (includes V11Signer tests)
 mvn test -pl agentarts-sdk-core
+
+# Cross-module integration tests
+mvn test -pl agentarts-sdk-tests
 ```
 
 ## Dependency Versions
@@ -240,6 +302,7 @@ Key dependencies aligned with [agentscope-java](https://github.com/agentscope/ag
 | Vert.x | `4.5.14` | Self-managed (not in agentscope BOM) |
 | Huawei Cloud SDK v3 | `3.1.202` | agentidentity, iam, swr |
 | agentscope-core | `2.0.0-SNAPSHOT` | provided/optional |
+| Spring Boot | `3.3.5` | Optional (for starter) |
 | JUnit | `6.0.2` | Testing |
 
 ## Roadmap
@@ -255,8 +318,6 @@ Key dependencies aligned with [agentscope-java](https://github.com/agentscope/ag
 - [x] **Memory** — MemoryClient (dual-plane: AK/SK + API Key), MemorySession, 15 model classes (17 tests)
 - [x] **Tools** — CodeInterpreterClient (17 methods), CodeSession context manager (10 tests)
 - [x] **MCP Gateway** — MCPGatewayClient (10 CRUD methods for gateway + target) (5 tests)
-
-**181 tests total**, covering: V11 signing (cross-language golden vector tests), HTTP endpoints (status codes, SSE format, error formats, session headers), concurrency control, async task tracking, API method signatures (MemoryClient 15 methods, CodeInterpreter 17 methods, MCPGateway 10 methods), agentscope interface contracts (AgentStateStore 8 methods, AgentTool 6 methods, RuntimeContext bridge, MessageConverter 3 pairs).
 
 ### P2 — CLI Toolkit ✅ Complete
 
@@ -275,9 +336,14 @@ Key dependencies aligned with [agentscope-java](https://github.com/agentscope/ag
 - [x] **AgentscopeRuntimeHost** — RequestContext→RuntimeContext bridge (sessionId/userId/requestId/workloadAccessToken) (5 tests)
 - [x] **MessageConverter** — bidirectional conversion (TextMessage↔TextBlock, ToolCallMessage↔ToolUseBlock, ToolResultMessage↔ToolResultBlock) (7 tests)
 
-### P4 — In Progress
+### P4 — Spring Boot + Examples + Integration Tests ✅ Complete
 
-- [ ] **P4** — Spring Boot Starter + examples + e2e tests (target: ≥190 total tests)
+- [x] **Spring Boot Starter** — AutoConfiguration, ConfigurationProperties, HealthIndicator (16 tests)
+- [x] **SDK All Aggregator** — unified dependency pulling in all modules
+- [x] **Examples** — BasicRuntimeExample (sync + SSE streaming), AgentScopeIntegrationExample (state store + message conversion)
+- [x] **Cross-module Integration Tests** — core+runtime HTTP pipeline, context ThreadLocal propagation, memory+integration state/message roundtrips, constants endpoint chain, agentscope bridge (15 tests)
+
+**212 tests total**, 0 failures across 14 modules.
 
 ## API Compatibility
 
@@ -295,6 +361,8 @@ The Java SDK provides the same API surface as the [Python SDK](https://github.co
 | MCP Gateway API | 10 methods (gateway CRUD + target CRUD) |
 | CLI Commands | 9 top-level commands + 8 config subcommands + 6 runtime subcommands + 10 mcp-gateway subcommands + 6 memory subcommands |
 | agentscope Integration | AgentStateStore (8 methods), AgentTool (6 methods × 2 tools), RuntimeContext bridge (4 fields), MessageConverter (3 bidirectional pairs) |
+| Spring Boot Starter | AutoConfiguration, ConfigurationProperties (region/AK/SK/runtime/memory/identity), HealthIndicator (UP/DOWN/UNKNOWN) |
+| Cross-module Integration | 15 tests: core+runtime HTTP pipeline, context ThreadLocal isolation, memory+agentscope state/message roundtrips, endpoint chain, agentscope bridge |
 
 ## License
 

@@ -238,7 +238,7 @@ MessageConverter 验证：
 README.md Roadmap 更新 P3 状态为 ✅、新增 agentscope 集成示例代码、Python Parity 表新增集成层验证项，或 20 轮后停止
 ```
 
-### P4 — 收尾
+### P4 — 收尾 ✅ Complete (212 tests total)
 
 ```
 /goal agentarts-spring-boot-starter 和 agentarts-sdk-all 模块 mvn compile exit 0，
@@ -248,6 +248,13 @@ agentarts-sdk-tests 跨模块集成测试 mvn test exit 0（≥10 tests），
 README.md 完整更新：Roadmap 全部 ✅、测试 badge 更新、新增 Example 使用说明、
 Python Parity Status 表补充完整覆盖情况，或 15 轮后停止
 ```
+
+**P4 完成内容：**
+- Spring Boot Starter: AutoConfiguration + Properties + HealthIndicator (16 tests)
+- SDK All Aggregator: 统一依赖引入所有模块
+- Examples: BasicRuntimeExample (sync + SSE) + AgentScopeIntegrationExample
+- Cross-module Integration Tests: core+runtime HTTP, context ThreadLocal, memory+integration (15 tests)
+- README 完整更新: 212 tests badge, P4 ✅, Example 使用说明, API Compatibility 表
 
 ## 提交策略（小步提交）
 

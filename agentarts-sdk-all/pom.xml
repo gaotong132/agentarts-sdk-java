@@ -16,6 +16,7 @@
     <description>Aggregator dependency pulling in all AgentArts SDK modules</description>
 
     <dependencies>
+        <!-- Core modules -->
         <dependency>
             <groupId>com.huaweicloud.agentarts</groupId>
             <artifactId>agentarts-sdk-core</artifactId>
@@ -32,6 +33,8 @@
             <groupId>com.huaweicloud.agentarts</groupId>
             <artifactId>agentarts-sdk-identity</artifactId>
         </dependency>
+
+        <!-- Client modules -->
         <dependency>
             <groupId>com.huaweicloud.agentarts</groupId>
             <artifactId>agentarts-sdk-memory</artifactId>
@@ -43,6 +46,20 @@
         <dependency>
             <groupId>com.huaweicloud.agentarts</groupId>
             <artifactId>agentarts-sdk-mcpgateway</artifactId>
+        </dependency>
+
+        <!-- Integration modules (optional) -->
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-integration-agentscope</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Spring Boot Starter (optional) -->
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-spring-boot-starter</artifactId>
+            <optional>true</optional>
         </dependency>
     </dependencies>
 </project>
