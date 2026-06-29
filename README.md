@@ -3,8 +3,8 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Java](https://img.shields.io/badge/Java-17%2B-brightgreen.svg)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange.svg)](https://maven.apache.org/)
-[![Tests](https://img.shields.io/badge/Tests-87%20passing-brightgreen.svg)]()
-[![Python Parity](https://img.shields.io/badge/Python%20Parity-P0%20verified-blue.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-119%20passing-brightgreen.svg)]()
+[![Python Parity](https://img.shields.io/badge/Python%20Parity-P0%2BP1%20verified-blue.svg)]()
 
 Build, deploy and manage AI agents with Huawei Cloud capabilities — Java edition.
 
@@ -222,11 +222,16 @@ Key dependencies aligned with [agentscope-java](https://github.com/agentscope/ag
 - [x] **P0b** — Service layer: BaseHttpClient, IdentityServiceClient (31 APIs), SWRServiceClient (12 tests)
 - [x] **P0c** — Runtime (Vert.x HttpServer) + Identity (IdentityClient, TokenPoller) (23 tests)
 
-**87 tests total**, Python behavioral parity verified for: V11 signing (exact signature match), HTTP endpoints (status codes, SSE format, error formats, session headers), concurrency control, async task tracking.
+### P1 — Client Modules ✅ Complete
 
-### P1–P4 — In Progress
+- [x] **Memory** — MemoryClient (dual-plane: AK/SK + API Key), MemorySession, 15 model classes (17 tests)
+- [x] **Tools** — CodeInterpreterClient (17 methods), CodeSession context manager (10 tests)
+- [x] **MCP Gateway** — MCPGatewayClient (10 CRUD methods for gateway + target) (5 tests)
 
-- [ ] **P1** — Memory + Tools + MCP Gateway clients (target: ≥30 tests)
+**119 tests total**, Python behavioral parity verified for: V11 signing (exact signature match), HTTP endpoints (status codes, SSE format, error formats, session headers), concurrency control, async task tracking, API method signatures (MemoryClient 15 methods, CodeInterpreter 17 methods, MCPGateway 10 methods).
+
+### P2–P4 — In Progress
+
 - [ ] **P2** — CLI toolkit (Picocli) + templates + deploy (target: ≥20 tests)
 - [ ] **P3** — agentscope-java integration: RuntimeHost, MemoryAgentStateStore, AgentTool extensions (target: ≥15 tests)
 - [ ] **P4** — Spring Boot Starter + examples + e2e tests (target: ≥130 total tests)
@@ -243,6 +248,9 @@ This SDK is a 1:1 port of the Python AgentArts SDK. Each phase includes behavior
 | Context Fields | 7 ThreadLocal fields matching Python ContextVar |
 | Config Format | `.agentarts_config.yaml` and `.agent_identity.json` structure identical |
 | API Methods | Each Java client method maps 1:1 to its Python counterpart |
+| Memory API | 15 methods (createSpace/getSpace/listSpaces/updateSpace/deleteSpace/createApiKey + session/message/memory CRUD) |
+| Tools API | 17 methods (code interpreter CRUD + session + invoke + execute/upload/download/install/clear) |
+| MCP Gateway API | 10 methods (gateway CRUD + target CRUD) |
 
 ## License
 
