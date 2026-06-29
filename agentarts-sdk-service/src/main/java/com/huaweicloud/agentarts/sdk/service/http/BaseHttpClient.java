@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -44,7 +45,7 @@ import java.util.concurrent.CompletableFuture;
 public class BaseHttpClient implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(BaseHttpClient.class);
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER;
     private static final String STREAM_SSE = "text/event-stream";
     private static final String STREAM_NDJSON = "application/x-ndjson";
 
@@ -56,9 +57,9 @@ public class BaseHttpClient implements AutoCloseable {
     private final Vertx vertx;
     private final boolean ownVertx;
 
-    // Mutable state
-    private final Map<String, String> defaultHeaders = new HashMap<>();
-    private String authHeader;
+    // Mutable state (thread-safe)
+    private final Map<String, String> defaultHeaders = new ConcurrentHashMap<>();
+    private volatile String authHeader;
 
     /**
      * Create a BaseHttpClient with a shared Vert.x instance.

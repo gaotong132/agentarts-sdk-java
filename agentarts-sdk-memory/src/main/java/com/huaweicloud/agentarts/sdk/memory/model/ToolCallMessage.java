@@ -1,15 +1,21 @@
 package com.huaweicloud.agentarts.sdk.memory.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-/** Tool call message for add_messages. Mirrors Python ToolCallMessage. */
+/**
+ * Tool call message for add_messages. Mirrors Python ToolCallMessage.
+ *
+ * <p>Serializes to OpenAPI "parts" format matching Python:
+ * {@code {"role":"tool", "parts":[{"type":"tool_call", "tool_call":{id,name,arguments}}]}}</p>
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ToolCallMessage {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    @JsonProperty("type") private String type = "tool_call";
     @JsonProperty("id") private String id = "";
     @JsonProperty("name") private String name = "";
     @JsonProperty("arguments") private String arguments = "";
@@ -23,7 +29,7 @@ public class ToolCallMessage {
             this.arguments = (String) arguments;
         } else {
             try {
-                this.arguments = MAPPER.writeValueAsString(arguments);
+                this.arguments = JsonUtils.MAPPER.writeValueAsString(arguments);
             } catch (Exception e) {
                 this.arguments = String.valueOf(arguments);
             }
@@ -36,14 +42,27 @@ public class ToolCallMessage {
     public void setName(String name) { this.name = name; }
     public String getArguments() { return arguments; }
     public void setArguments(String arguments) { this.arguments = arguments; }
+    public String getMeta() { return meta; }
+    public void setMeta(String meta) { this.meta = meta; }
 
+    /**
+     * Convert to OpenAPI format matching Python to_dict():
+     * {@code {"role":"tool", "parts":[{"type":"tool_call", "tool_call":{...}}]}}
+     */
     public Map<String, Object> toDict() {
-        Map<String, Object> m = new HashMap<>();
-        m.put("type", type);
-        m.put("id", id);
-        m.put("name", name);
-        m.put("arguments", arguments);
-        if (meta != null) m.put("meta", meta);
-        return m;
+        Map<String, Object> toolCall = new HashMap<>();
+        toolCall.put("id", id);
+        toolCall.put("name", name);
+        toolCall.put("arguments", arguments);
+
+        Map<String, Object> part = new HashMap<>();
+        part.put("type", "tool_call");
+        part.put("tool_call", toolCall);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("role", "tool");
+        result.put("parts", List.of(part));
+        if (meta != null) result.put("meta", meta);
+        return result;
     }
 }

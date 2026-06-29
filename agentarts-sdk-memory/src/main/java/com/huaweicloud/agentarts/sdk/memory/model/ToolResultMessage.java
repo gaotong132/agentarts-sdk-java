@@ -1,14 +1,22 @@
 package com.huaweicloud.agentarts.sdk.memory.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-/** Tool result message for add_messages. Mirrors Python ToolResultMessage. */
+/**
+ * Tool result message for add_messages. Mirrors Python ToolResultMessage.
+ *
+ * <p>Serializes to OpenAPI "parts" format matching Python:
+ * {@code {"role":"tool", "parts":[{"type":"tool_result", "tool_result":{tool_call_id,content,asset_ref}}]}}</p>
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ToolResultMessage {
-    @JsonProperty("type") private String type = "tool_result";
     @JsonProperty("tool_call_id") private String toolCallId = "";
     @JsonProperty("content") private String content = "";
+    @JsonProperty("asset_ref") private Object assetRef;
     @JsonProperty("meta") private String meta;
 
     public ToolResultMessage() {}
@@ -21,13 +29,29 @@ public class ToolResultMessage {
     public void setToolCallId(String id) { this.toolCallId = id; }
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+    public Object getAssetRef() { return assetRef; }
+    public void setAssetRef(Object assetRef) { this.assetRef = assetRef; }
+    public String getMeta() { return meta; }
+    public void setMeta(String meta) { this.meta = meta; }
 
+    /**
+     * Convert to OpenAPI format matching Python to_dict():
+     * {@code {"role":"tool", "parts":[{"type":"tool_result", "tool_result":{...}}]}}
+     */
     public Map<String, Object> toDict() {
-        Map<String, Object> m = new HashMap<>();
-        m.put("type", type);
-        m.put("tool_call_id", toolCallId);
-        m.put("content", content);
-        if (meta != null) m.put("meta", meta);
-        return m;
+        Map<String, Object> toolResult = new HashMap<>();
+        toolResult.put("tool_call_id", toolCallId);
+        toolResult.put("content", content);
+        toolResult.put("asset_ref", assetRef);
+
+        Map<String, Object> part = new HashMap<>();
+        part.put("type", "tool_result");
+        part.put("tool_result", toolResult);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("role", "tool");
+        result.put("parts", List.of(part));
+        if (meta != null) result.put("meta", meta);
+        return result;
     }
 }

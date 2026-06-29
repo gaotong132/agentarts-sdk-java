@@ -56,7 +56,7 @@ public class MCPGatewayClient implements AutoCloseable {
         body.put("protocol_type", protocolType != null ? protocolType : "mcp");
         body.put("authorizer_type", authorizerType != null ? authorizerType : "iam");
         if (agencyName != null) body.put("agency_name", agencyName);
-        return httpClient.post("/mcp-gateways", null, body).block();
+        return httpClient.post("/gateways", null, body).block();
     }
 
     public RequestResult createMcpGateway(String name, String description) {
@@ -66,19 +66,19 @@ public class MCPGatewayClient implements AutoCloseable {
     public RequestResult updateMcpGateway(String gatewayId, String description) {
         Map<String, Object> body = new HashMap<>();
         if (description != null) body.put("description", description);
-        return httpClient.put("/mcp-gateways/" + gatewayId, null, body).block();
+        return httpClient.put("/gateways/" + gatewayId, null, body).block();
     }
 
     public RequestResult deleteMcpGateway(String gatewayId) {
-        return httpClient.delete("/mcp-gateways/" + gatewayId).block();
+        return httpClient.delete("/gateways/" + gatewayId).block();
     }
 
     public RequestResult getMcpGateway(String gatewayId) {
-        return httpClient.get("/mcp-gateways/" + gatewayId).block();
+        return httpClient.get("/gateways/" + gatewayId).block();
     }
 
     public RequestResult listMcpGateways(String name, Integer limit, Integer offset) {
-        StringBuilder url = new StringBuilder("/mcp-gateways?");
+        StringBuilder url = new StringBuilder("/gateways?");
         if (name != null) url.append("name=").append(name).append("&");
         if (limit != null) url.append("limit=").append(limit).append("&");
         if (offset != null) url.append("offset=").append(offset).append("&");
@@ -104,7 +104,7 @@ public class MCPGatewayClient implements AutoCloseable {
         if (credentialProviderConfiguration != null) {
             body.put("credential_provider_configuration", credentialProviderConfiguration);
         }
-        return httpClient.post("/mcp-gateways/" + gatewayId + "/targets", null, body).block();
+        return httpClient.post("/gateways/" + gatewayId + "/targets", null, body).block();
     }
 
     public RequestResult createMcpGatewayTarget(String gatewayId, String name, String description) {
@@ -122,19 +122,19 @@ public class MCPGatewayClient implements AutoCloseable {
         if (credentialProviderConfiguration != null) {
             body.put("credential_provider_configuration", credentialProviderConfiguration);
         }
-        return httpClient.put("/mcp-gateways/" + gatewayId + "/targets/" + targetId, null, body).block();
+        return httpClient.put("/gateways/" + gatewayId + "/targets/" + targetId, null, body).block();
     }
 
     public RequestResult deleteMcpGatewayTarget(String gatewayId, String targetId) {
-        return httpClient.delete("/mcp-gateways/" + gatewayId + "/targets/" + targetId).block();
+        return httpClient.delete("/gateways/" + gatewayId + "/targets/" + targetId).block();
     }
 
     public RequestResult getMcpGatewayTarget(String gatewayId, String targetId) {
-        return httpClient.get("/mcp-gateways/" + gatewayId + "/targets/" + targetId).block();
+        return httpClient.get("/gateways/" + gatewayId + "/targets/" + targetId).block();
     }
 
     public RequestResult listMcpGatewayTargets(String gatewayId, Integer limit, Integer offset) {
-        StringBuilder url = new StringBuilder("/mcp-gateways/" + gatewayId + "/targets?");
+        StringBuilder url = new StringBuilder("/gateways/" + gatewayId + "/targets?");
         if (limit != null) url.append("limit=").append(limit).append("&");
         if (offset != null) url.append("offset=").append(offset).append("&");
         return httpClient.get(url.toString()).block();

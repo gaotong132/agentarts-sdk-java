@@ -1,5 +1,6 @@
 package com.huaweicloud.agentarts.sdk.integration.agentscope.message;
 
+import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.memory.model.TextMessage;
 import com.huaweicloud.agentarts.sdk.memory.model.ToolCallMessage;
 import com.huaweicloud.agentarts.sdk.memory.model.ToolResultMessage;
@@ -42,7 +43,7 @@ public class MessageConverter {
             String args = msg.getArguments();
             if (args != null && !args.isEmpty()) {
                 @SuppressWarnings("unchecked")
-                Map<String, Object> parsed = new com.fasterxml.jackson.databind.ObjectMapper()
+                Map<String, Object> parsed = JsonUtils.MAPPER
                         .readValue(args, Map.class);
                 input = parsed;
             } else {
@@ -85,7 +86,7 @@ public class MessageConverter {
     public static ToolCallMessage toToolCallMessage(ToolUseBlock block) {
         String args;
         try {
-            args = new com.fasterxml.jackson.databind.ObjectMapper()
+            args = JsonUtils.MAPPER
                     .writeValueAsString(block.getInput());
         } catch (Exception e) {
             args = "{}";

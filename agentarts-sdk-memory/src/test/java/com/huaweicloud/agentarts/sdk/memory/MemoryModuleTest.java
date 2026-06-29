@@ -85,27 +85,44 @@ class MemoryModuleTest {
         void textMessageToDict() {
             TextMessage msg = new TextMessage("user", "Hello!");
             Map<String, Object> dict = msg.toDict();
-            assertEquals("text", dict.get("type"));
+            // Python parity: {role, parts:[{type:"text", text:content}]}
             assertEquals("user", dict.get("role"));
-            assertEquals("Hello!", dict.get("content"));
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> parts = (List<Map<String, Object>>) dict.get("parts");
+            assertEquals(1, parts.size());
+            assertEquals("text", parts.get(0).get("type"));
+            assertEquals("Hello!", parts.get(0).get("text"));
         }
 
         @Test
-        void textMessageWithActorId() {
+        void textMessageEmptyContentThrows() {
+            TextMessage msg = new TextMessage("user", "");
+            assertThrows(IllegalArgumentException.class, msg::toDict);
+        }
+
+        @Test
+        void textMessageWithMeta() {
             TextMessage msg = new TextMessage("assistant", "Hi");
-            msg.setActorId("actor-1");
+            msg.setMeta("some-meta");
             Map<String, Object> dict = msg.toDict();
-            assertEquals("actor-1", dict.get("actor_id"));
+            assertEquals("some-meta", dict.get("meta"));
         }
 
         @Test
         void toolCallMessageToDict() {
             ToolCallMessage msg = new ToolCallMessage("call-1", "search", Map.of("query", "test"));
             Map<String, Object> dict = msg.toDict();
-            assertEquals("tool_call", dict.get("type"));
-            assertEquals("call-1", dict.get("id"));
-            assertEquals("search", dict.get("name"));
-            assertTrue(dict.get("arguments").toString().contains("query"));
+            // Python parity: {role:"tool", parts:[{type:"tool_call", tool_call:{id,name,arguments}}]}
+            assertEquals("tool", dict.get("role"));
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> parts = (List<Map<String, Object>>) dict.get("parts");
+            assertEquals(1, parts.size());
+            assertEquals("tool_call", parts.get(0).get("type"));
+            @SuppressWarnings("unchecked")
+            Map<String, Object> toolCall = (Map<String, Object>) parts.get(0).get("tool_call");
+            assertEquals("call-1", toolCall.get("id"));
+            assertEquals("search", toolCall.get("name"));
+            assertTrue(toolCall.get("arguments").toString().contains("query"));
         }
 
         @Test
@@ -118,9 +135,28 @@ class MemoryModuleTest {
         void toolResultMessageToDict() {
             ToolResultMessage msg = new ToolResultMessage("call-1", "result data");
             Map<String, Object> dict = msg.toDict();
-            assertEquals("tool_result", dict.get("type"));
-            assertEquals("call-1", dict.get("tool_call_id"));
-            assertEquals("result data", dict.get("content"));
+            // Python parity: {role:"tool", parts:[{type:"tool_result", tool_result:{tool_call_id,content,asset_ref}}]}
+            assertEquals("tool", dict.get("role"));
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> parts = (List<Map<String, Object>>) dict.get("parts");
+            assertEquals(1, parts.size());
+            assertEquals("tool_result", parts.get(0).get("type"));
+            @SuppressWarnings("unchecked")
+            Map<String, Object> toolResult = (Map<String, Object>) parts.get(0).get("tool_result");
+            assertEquals("call-1", toolResult.get("tool_call_id"));
+            assertEquals("result data", toolResult.get("content"));
+        }
+
+        @Test
+        void toolResultMessageWithAssetRef() {
+            ToolResultMessage msg = new ToolResultMessage("call-1", "data");
+            msg.setAssetRef(Map.of("file_id", "f-123"));
+            Map<String, Object> dict = msg.toDict();
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> parts = (List<Map<String, Object>>) dict.get("parts");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> toolResult = (Map<String, Object>) parts.get(0).get("tool_result");
+            assertNotNull(toolResult.get("asset_ref"));
         }
 
         @Test

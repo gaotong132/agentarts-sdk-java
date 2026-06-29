@@ -23,7 +23,7 @@ public class InvokeConfig {
     private Map<String, Object> fileTransferConfig;
 
     @JsonProperty("url_match_type")
-    private String urlMatchType;
+    private String urlMatchType = "ACCURATE_MATCH";
 
     public String getProtocol() { return protocol; }
     public void setProtocol(String protocol) { this.protocol = protocol; }

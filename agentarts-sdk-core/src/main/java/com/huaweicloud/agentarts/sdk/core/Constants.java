@@ -1,5 +1,7 @@
 package com.huaweicloud.agentarts.sdk.core;
 
+import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
+
 /**
  * Centralized constants and environment variable accessors for AgentArts SDK.
  *
@@ -79,15 +81,15 @@ public final class Constants {
      */
     public static String getRegion() {
         String region = getEnv(ENV_HUAWEICLOUD_SDK_REGION);
-        if (region != null && !region.isEmpty()) {
+        if (JsonUtils.isNotBlank(region)) {
             return region;
         }
         region = getEnv(ENV_HUAWEICLOUD_REGION);
-        if (region != null && !region.isEmpty()) {
+        if (JsonUtils.isNotBlank(region)) {
             return region;
         }
         region = getEnv(ENV_OS_REGION_NAME);
-        if (region != null && !region.isEmpty()) {
+        if (JsonUtils.isNotBlank(region)) {
             return region;
         }
         return DEFAULT_REGION;
@@ -128,10 +130,10 @@ public final class Constants {
      */
     public static String getControlPlaneEndpoint(String region) {
         String endpoint = getEnv(ENV_AGENTARTS_CONTROL_ENDPOINT);
-        if (endpoint != null && !endpoint.isEmpty()) {
+        if (JsonUtils.isNotBlank(endpoint)) {
             return ensureHttps(endpoint);
         }
-        String r = (region != null && !region.isEmpty()) ? region : getRegion();
+        String r = JsonUtils.isNotBlank(region) ? region : getRegion();
         return "https://agentarts." + r + ".myhuaweicloud.com";
     }
 
@@ -152,10 +154,10 @@ public final class Constants {
      */
     public static String getCodeInterpreterDataPlaneEndpoint(String endpoint) {
         String codeEndpoint = getEnv(ENV_AGENTARTS_CODEINTERPRETER_DATA_ENDPOINT);
-        if (codeEndpoint != null && !codeEndpoint.isEmpty()) {
+        if (JsonUtils.isNotBlank(codeEndpoint)) {
             return ensureHttps(codeEndpoint);
         }
-        if (endpoint != null && !endpoint.isEmpty()) {
+        if (JsonUtils.isNotBlank(endpoint)) {
             return ensureHttps(endpoint);
         }
         String runtimeEndpoint = getEnvOrDefault(ENV_AGENTARTS_RUNTIME_DATA_ENDPOINT, "");
@@ -178,10 +180,10 @@ public final class Constants {
         }
         if ("data".equals(endpointType)) {
             String memoryEndpoint = getEnv(ENV_AGENTARTS_MEMORY_DATA_ENDPOINT);
-            if (memoryEndpoint != null && !memoryEndpoint.isEmpty()) {
+            if (JsonUtils.isNotBlank(memoryEndpoint)) {
                 return ensureHttps(memoryEndpoint);
             }
-            String r = (region != null && !region.isEmpty()) ? region : getRegion();
+            String r = JsonUtils.isNotBlank(region) ? region : getRegion();
             return "https://memory." + r + ".huaweicloud-agentarts.com";
         }
         throw new IllegalArgumentException("Invalid endpoint type: " + endpointType);
@@ -198,10 +200,10 @@ public final class Constants {
      */
     public static String getIamEndpoint(String region) {
         String endpoint = getEnv(ENV_HUAWEICLOUD_SDK_IAM_ENDPOINT);
-        if (endpoint != null && !endpoint.isEmpty()) {
+        if (JsonUtils.isNotBlank(endpoint)) {
             return ensureHttps(endpoint);
         }
-        String r = (region != null && !region.isEmpty()) ? region : getRegion();
+        String r = JsonUtils.isNotBlank(region) ? region : getRegion();
         return "https://iam." + r + ".myhuaweicloud.com";
     }
 
@@ -216,10 +218,10 @@ public final class Constants {
      */
     public static String getSwrEndpoint(String region) {
         String endpoint = getEnv(ENV_HUAWEICLOUD_SDK_SWR_ENDPOINT);
-        if (endpoint != null && !endpoint.isEmpty()) {
+        if (JsonUtils.isNotBlank(endpoint)) {
             return ensureHttps(endpoint);
         }
-        String r = (region != null && !region.isEmpty()) ? region : getRegion();
+        String r = JsonUtils.isNotBlank(region) ? region : getRegion();
         return "https://swr-api." + r + ".myhuaweicloud.com";
     }
 
@@ -234,10 +236,10 @@ public final class Constants {
      */
     public static String getIdentityEndpoint(String region) {
         String endpoint = getEnv(ENV_HUAWEICLOUD_SDK_AGENTIDENTITY_ENDPOINT);
-        if (endpoint != null && !endpoint.isEmpty()) {
+        if (JsonUtils.isNotBlank(endpoint)) {
             return ensureHttps(endpoint);
         }
-        String r = (region != null && !region.isEmpty()) ? region : getRegion();
+        String r = JsonUtils.isNotBlank(region) ? region : getRegion();
         return "https://agent-identity." + r + ".myhuaweicloud.com";
     }
 
@@ -253,8 +255,8 @@ public final class Constants {
      * Ensure endpoint has https:// prefix.
      */
     static String ensureHttps(String endpoint) {
-        if (endpoint == null || endpoint.isEmpty()) {
-            return endpoint;
+        if (JsonUtils.isBlank(endpoint)) {
+            return "";
         }
         if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
             return "https://" + endpoint;
@@ -268,6 +270,6 @@ public final class Constants {
 
     private static String getEnvOrDefault(String name, String defaultValue) {
         String value = System.getenv(name);
-        return (value != null && !value.isEmpty()) ? value : defaultValue;
+        return JsonUtils.isNotBlank(value) ? value : defaultValue;
     }
 }

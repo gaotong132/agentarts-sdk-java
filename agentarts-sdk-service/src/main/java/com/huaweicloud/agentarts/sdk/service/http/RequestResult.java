@@ -1,7 +1,6 @@
 package com.huaweicloud.agentarts.sdk.service.http;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import reactor.core.publisher.Flux;
 
 import java.util.Collections;
@@ -20,8 +19,6 @@ import java.util.Map;
  * {@link #iterLines()} or {@link #iterBytes()}.</p>
  */
 public class RequestResult {
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final boolean success;
     private final int statusCode;

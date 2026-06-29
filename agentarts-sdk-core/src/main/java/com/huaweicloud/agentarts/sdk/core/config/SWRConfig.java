@@ -18,10 +18,10 @@ public class SWRConfig {
     private String repository;
 
     @JsonProperty("organization_auto_create")
-    private boolean organizationAutoCreate = true;
+    private boolean organizationAutoCreate = false;
 
     @JsonProperty("repository_auto_create")
-    private boolean repositoryAutoCreate = true;
+    private boolean repositoryAutoCreate = false;
 
     public String getOrganization() { return organization; }
     public void setOrganization(String organization) { this.organization = organization; }

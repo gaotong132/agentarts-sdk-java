@@ -93,6 +93,16 @@ public class V11Signer {
     public Map<String, String> sign(String method, String path,
                                      Map<String, List<String>> queryParams,
                                      Map<String, String> headers) {
+        if (method == null || method.isEmpty()) {
+            throw new IllegalArgumentException("HTTP method must not be null or empty");
+        }
+        if (path == null) {
+            throw new IllegalArgumentException("URL path must not be null");
+        }
+        if (headers == null) {
+            throw new IllegalArgumentException("Headers map must not be null");
+        }
+
         // 1. Generate timestamp (only if not already set — allows test injection)
         String timestamp = headers.get(HEADER_X_SDK_DATE);
         if (timestamp == null || timestamp.isEmpty()) {
@@ -487,12 +497,16 @@ public class V11Signer {
     // Byte/Hex conversion
     // ========================
 
+    private static final char[] HEX_CHARS = "0123456789abcdef".toCharArray();
+
     static String bytesToHex(byte[] bytes) {
-        StringBuilder sb = new StringBuilder(bytes.length * 2);
-        for (byte b : bytes) {
-            sb.append(String.format("%02x", b & 0xff));
+        char[] hex = new char[bytes.length * 2];
+        for (int i = 0; i < bytes.length; i++) {
+            int v = bytes[i] & 0xff;
+            hex[i * 2] = HEX_CHARS[v >>> 4];
+            hex[i * 2 + 1] = HEX_CHARS[v & 0x0f];
         }
-        return sb.toString();
+        return new String(hex);
     }
 
     // ========================
