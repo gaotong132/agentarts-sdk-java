@@ -87,7 +87,7 @@ public class MemoryClient implements AutoCloseable {
             if (key == null || key.isEmpty()) {
                 key = System.getenv("HUAWEICLOUD_SDK_MEMORY_API_KEY");
             }
-            if (key != null && !key.isEmpty()) {
+            if (com.huaweicloud.agentarts.sdk.core.util.JsonUtils.isNotBlank(key)) {
                 dataPlaneClient.setAuthToken("Bearer", key);
             }
         }

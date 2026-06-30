@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class CrossModuleIntegrationTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER;
 
     // ========================
     // Core + Runtime: Full HTTP pipeline

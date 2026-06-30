@@ -82,7 +82,7 @@ public class CodeInterpreterClient implements AutoCloseable {
             dataClient = new BaseHttpClient(config, useAkSk, SignMode.SDK_HMAC_SHA256, region);
             if (!useAkSk) {
                 String key = System.getenv("HUAWEICLOUD_SDK_CODE_INTERPRETER_API_KEY");
-                if (key != null && !key.isEmpty()) {
+                if (com.huaweicloud.agentarts.sdk.core.util.JsonUtils.isNotBlank(key)) {
                     dataClient.setAuthToken("Bearer", key);
                 }
             }

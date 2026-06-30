@@ -41,7 +41,7 @@ public class MessageConverter {
         Map<String, Object> input;
         try {
             String args = msg.getArguments();
-            if (args != null && !args.isEmpty()) {
+            if (JsonUtils.isNotBlank(args)) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> parsed = JsonUtils.MAPPER
                         .readValue(args, Map.class);
