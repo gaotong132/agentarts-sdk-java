@@ -104,7 +104,7 @@ public class AgentArtsProperties {
      * Resolve the effective region: property → env → default.
      */
     public String resolveRegion() {
-        if (region != null && !region.isEmpty()) {
+        if (com.huaweicloud.agentarts.sdk.core.util.JsonUtils.isNotBlank(region)) {
             return region;
         }
         return com.huaweicloud.agentarts.sdk.core.Constants.getRegion();
@@ -114,7 +114,7 @@ public class AgentArtsProperties {
      * Resolve the effective AK: property → env → empty.
      */
     public String resolveAccessKey() {
-        if (accessKey != null && !accessKey.isEmpty()) {
+        if (com.huaweicloud.agentarts.sdk.core.util.JsonUtils.isNotBlank(accessKey)) {
             return accessKey;
         }
         return com.huaweicloud.agentarts.sdk.core.Constants.getAk();
@@ -124,7 +124,7 @@ public class AgentArtsProperties {
      * Resolve the effective SK: property → env → empty.
      */
     public String resolveSecretKey() {
-        if (secretKey != null && !secretKey.isEmpty()) {
+        if (com.huaweicloud.agentarts.sdk.core.util.JsonUtils.isNotBlank(secretKey)) {
             return secretKey;
         }
         return com.huaweicloud.agentarts.sdk.core.Constants.getSk();

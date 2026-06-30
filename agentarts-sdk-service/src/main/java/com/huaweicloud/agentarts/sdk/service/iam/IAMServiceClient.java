@@ -1,22 +1,30 @@
 package com.huaweicloud.agentarts.sdk.service.iam;
 
-import com.huaweicloud.sdk.iam.v3.IamClient;
-import com.huaweicloud.sdk.iam.v3.IamAsyncClient;
-import com.huaweicloud.sdk.iam.v3.model.*;
+import com.huaweicloud.sdk.iam.v5.IamClient;
+import com.huaweicloud.sdk.iam.v5.IamAsyncClient;
+import com.huaweicloud.sdk.iam.v5.model.CreateAgencyReqBody;
+import com.huaweicloud.sdk.iam.v5.model.CreateAgencyV5Request;
+import com.huaweicloud.sdk.iam.v5.model.CreateAgencyV5Response;
 import com.huaweicloud.sdk.core.auth.GlobalCredentials;
 import com.huaweicloud.sdk.core.http.HttpConfig;
 import com.huaweicloud.sdk.core.ClientBuilder;
 import com.huaweicloud.agentarts.sdk.core.Constants;
+import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Service client wrapping Huawei Cloud {@link IamClient} for IAM operations.
+ * Service client wrapping Huawei Cloud IAM v5 for agency management.
  *
  * <p>Mirrors Python {@code IAMClient} from {@code service/iam_client.py}.
- * Provides agency creation and token management for AgentArts services.</p>
+ * Uses IAM v5 (not v3) for agency creation, matching the Python SDK.</p>
+ *
+ * <h3>APIs:</h3>
+ * <ul>
+ *   <li>{@link #createAgency} — creates an IAM agency (v5 API)</li>
+ * </ul>
  */
 public class IAMServiceClient {
 
@@ -39,7 +47,7 @@ public class IAMServiceClient {
                 .withSk(Constants.getSk());
 
         String securityToken = Constants.getSecurityToken();
-        if (securityToken != null && !securityToken.isEmpty()) {
+        if (JsonUtils.isNotBlank(securityToken)) {
             credentials.withSecurityToken(securityToken);
         }
 
@@ -65,20 +73,74 @@ public class IAMServiceClient {
     }
 
     // ========================
-    // Agency management
+    // Agency management (IAM v5)
     // ========================
 
     /**
      * Create an IAM agency for delegated access.
      *
-     * <p>Used by MCP Gateway to create the AgentArtsCoreGateway agency.</p>
+     * <p>Mirrors Python {@code IAMClient.create_agency(agency_name, trust_policy, ...)}
+     * using IAM v5 API.</p>
+     *
+     * @param agencyName          name of the agency to create
+     * @param trustPolicy         trust policy JSON string
+     * @param path                agency path (nullable, default null)
+     * @param maxSessionDuration  max session duration in seconds (nullable)
+     * @param description         agency description (nullable)
+     * @return the created agency response
      */
-    public KeystoneCreateAgencyTokenResponse createAgencyToken(KeystoneCreateAgencyTokenRequest request) {
-        return syncClient.keystoneCreateAgencyToken(request);
+    public CreateAgencyV5Response createAgency(String agencyName, String trustPolicy,
+                                                 String path, Integer maxSessionDuration,
+                                                 String description) {
+        CreateAgencyReqBody body = new CreateAgencyReqBody()
+                .withAgencyName(agencyName)
+                .withTrustPolicy(trustPolicy);
+
+        if (JsonUtils.isNotBlank(path)) {
+            body.withPath(path);
+        }
+        if (maxSessionDuration != null) {
+            body.withMaxSessionDuration(maxSessionDuration);
+        }
+        if (JsonUtils.isNotBlank(description)) {
+            body.withDescription(description);
+        }
+
+        CreateAgencyV5Request request = new CreateAgencyV5Request().withBody(body);
+        LOG.info("Creating IAM agency: {}", agencyName);
+        return syncClient.createAgencyV5(request);
     }
 
-    public CompletableFuture<KeystoneCreateAgencyTokenResponse> createAgencyTokenAsync(KeystoneCreateAgencyTokenRequest request) {
-        return asyncClient.keystoneCreateAgencyTokenAsync(request);
+    /**
+     * Convenience overload with required parameters only.
+     */
+    public CreateAgencyV5Response createAgency(String agencyName, String trustPolicy) {
+        return createAgency(agencyName, trustPolicy, null, null, null);
+    }
+
+    /**
+     * Async version of {@link #createAgency}.
+     */
+    public CompletableFuture<CreateAgencyV5Response> createAgencyAsync(
+            String agencyName, String trustPolicy,
+            String path, Integer maxSessionDuration, String description) {
+
+        CreateAgencyReqBody body = new CreateAgencyReqBody()
+                .withAgencyName(agencyName)
+                .withTrustPolicy(trustPolicy);
+
+        if (JsonUtils.isNotBlank(path)) {
+            body.withPath(path);
+        }
+        if (maxSessionDuration != null) {
+            body.withMaxSessionDuration(maxSessionDuration);
+        }
+        if (JsonUtils.isNotBlank(description)) {
+            body.withDescription(description);
+        }
+
+        CreateAgencyV5Request request = new CreateAgencyV5Request().withBody(body);
+        return asyncClient.createAgencyV5Async(request);
     }
 
     // ========================

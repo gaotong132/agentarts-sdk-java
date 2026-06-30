@@ -53,7 +53,7 @@ public class IdentityServiceClient {
                 .withSk(Constants.getSk());
 
         String securityToken = Constants.getSecurityToken();
-        if (securityToken != null && !securityToken.isEmpty()) {
+        if (com.huaweicloud.agentarts.sdk.core.util.JsonUtils.isNotBlank(securityToken)) {
             credentials.withSecurityToken(securityToken);
         }
 
