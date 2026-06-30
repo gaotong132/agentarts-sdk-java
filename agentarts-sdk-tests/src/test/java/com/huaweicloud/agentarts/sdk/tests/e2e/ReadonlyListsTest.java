@@ -1,0 +1,69 @@
+package com.huaweicloud.agentarts.sdk.tests.e2e;
+
+import com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient;
+import com.huaweicloud.agentarts.sdk.memory.MemoryClient;
+import com.huaweicloud.agentarts.sdk.tools.CodeInterpreterClient;
+import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
+import org.junit.jupiter.api.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+/**
+ * Read-only list tests — mirrors Python test_readonly_lists.py (4 tests).
+ */
+@Tag("e2e")
+@DisplayName("Read-Only List Tests")
+class ReadonlyListsTest {
+
+    @BeforeAll
+    static void checkCredentials() {
+        assumeTrue(E2EConfig.hasCloudCredentials(),
+                "Set HUAWEICLOUD_SDK_AK and HUAWEICLOUD_SDK_SK to run cloud tests");
+    }
+
+    // 1. test_list_spaces
+    @Test
+    @DisplayName("list_spaces returns items list")
+    void testListSpaces() {
+        try (MemoryClient client = new MemoryClient(E2EConfig.getRegion(), null)) {
+            var result = client.listSpaces(1, 0);
+            assertNotNull(result);
+            assertNotNull(result.getItems(), "items should be a list");
+        }
+    }
+
+    // 2. test_list_mcp_gateways
+    @Test
+    @DisplayName("list_mcp_gateways succeeds")
+    void testListMcpGateways() {
+        try (MCPGatewayClient client = new MCPGatewayClient()) {
+            RequestResult result = client.listMcpGateways(null, 1, null);
+            // May fail with 403 if tenant hasn't enabled MCP Gateway service
+            // In Python this is: assert result.success, result.error
+            if (!result.isSuccess() && result.getStatusCode() == 403) {
+                System.err.println("MCP Gateway service not enabled for tenant: " + result.getError());
+                assumeTrue(false, "MCP Gateway service not enabled for this tenant");
+            }
+            assertTrue(result.isSuccess(), result.getError());
+        }
+    }
+
+    // 3. test_list_runtime_agents
+    @Test
+    @DisplayName("list_runtime_agents returns a list")
+    void testListRuntimeAgents() {
+        // Java SDK doesn't have RuntimeClient yet — skip with assumption
+        assumeTrue(false, "RuntimeClient not yet implemented in Java SDK");
+    }
+
+    // 4. test_list_code_interpreters
+    @Test
+    @DisplayName("list_code_interpreters returns a dict")
+    void testListCodeInterpreters() {
+        try (CodeInterpreterClient client = new CodeInterpreterClient(E2EConfig.getRegion())) {
+            var result = client.listCodeInterpreters(null, 1, 0);
+            assertNotNull(result, "result should be a dict");
+        }
+    }
+}
