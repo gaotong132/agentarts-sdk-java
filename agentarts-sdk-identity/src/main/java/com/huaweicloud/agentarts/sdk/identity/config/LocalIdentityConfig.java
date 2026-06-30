@@ -20,7 +20,7 @@ import java.nio.file.Path;
 public class LocalIdentityConfig {
 
     private static final Logger LOG = LoggerFactory.getLogger(LocalIdentityConfig.class);
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER;
     private static final String DEFAULT_FILENAME = ".agent_identity.json";
 
     @JsonProperty("workload_identity_name")

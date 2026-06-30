@@ -121,7 +121,7 @@ public class AuthInterceptor implements InvocationHandler {
     private String getWorkloadAccessToken() {
         // Try runtime context first
         String token = AgentArtsRuntimeContext.getWorkloadAccessToken();
-        if (token != null && !token.isEmpty()) {
+        if (com.huaweicloud.agentarts.sdk.core.util.JsonUtils.isNotBlank(token)) {
             return token;
         }
 

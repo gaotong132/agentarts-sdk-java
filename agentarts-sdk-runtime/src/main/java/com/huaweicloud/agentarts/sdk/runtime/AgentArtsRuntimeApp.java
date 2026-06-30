@@ -56,7 +56,7 @@ import java.util.function.Supplier;
 public class AgentArtsRuntimeApp {
 
     private static final Logger LOG = LoggerFactory.getLogger(AgentArtsRuntimeApp.class);
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER;
 
     private final int maxConcurrency;
     private final Semaphore invocationSemaphore;
@@ -380,6 +380,8 @@ public class AgentArtsRuntimeApp {
         } catch (Exception e) {
             LOG.error("WebSocket error: {}", e.getMessage(), e);
             ws.close((short) 1011, e.getMessage());
+        } finally {
+            AgentArtsRuntimeContext.clear();
         }
     }
 
@@ -394,13 +396,8 @@ public class AgentArtsRuntimeApp {
                     .setStatusCode(statusCode)
                     .putHeader("Content-Type", "application/json");
 
-            if (sessionId != null) {
-                rc.response().putHeader(Constants.SESSION_HEADER, sessionId);
-            }
             // Match Python: always include session header (even if empty string)
-            if (sessionId == null) {
-                rc.response().putHeader(Constants.SESSION_HEADER, "");
-            }
+            rc.response().putHeader(Constants.SESSION_HEADER, sessionId != null ? sessionId : "");
 
             rc.response().end(json);
         } catch (JsonProcessingException e) {
