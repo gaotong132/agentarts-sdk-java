@@ -14,6 +14,22 @@ import java.util.concurrent.TimeUnit;
  */
 public class InvokeOperation {
 
+    /**
+     * Invoke an agent with a JSON payload (local or cloud).
+     *
+     * @param payload      JSON payload string
+     * @param agentName    agent name (for cloud mode)
+     * @param mode         invocation mode: "local" or "cloud"
+     * @param region       Huawei Cloud region (for cloud mode)
+     * @param port         local server port (for local mode, default 8080)
+     * @param endpoint     custom endpoint URL (for cloud mode, nullable)
+     * @param sessionId    session ID for context continuity (nullable)
+     * @param bearerToken  Bearer token for cloud auth (nullable)
+     * @param timeout      request timeout in seconds
+     * @param skipSsl      skip SSL verification
+     * @param userId       user ID header (nullable)
+     * @param customPath   custom invocation path (nullable)
+     */
     public static void invokeAgent(String payload, String agentName, String mode,
                                     String region, Integer port, String endpoint,
                                     String sessionId, String bearerToken, int timeout,

@@ -44,16 +44,25 @@ public class MemoryClient implements AutoCloseable {
     private BaseHttpClient controlPlaneClient;
     private BaseHttpClient dataPlaneClient;
 
+    /**
+     * Create a MemoryClient with full configuration.
+     *
+     * @param regionName Huawei Cloud region (nullable, auto-detected if null)
+     * @param apiKey     data plane API key for Bearer auth (nullable, falls back to env)
+     * @param verifySsl  whether to verify SSL certificates
+     */
     public MemoryClient(String regionName, String apiKey, boolean verifySsl) {
         this.regionName = regionName != null ? regionName : Constants.getRegion();
         this.apiKey = apiKey;
         this.verifySsl = verifySsl;
     }
 
+    /** Create a MemoryClient with SSL verification enabled. */
     public MemoryClient(String regionName, String apiKey) {
         this(regionName, apiKey, true);
     }
 
+    /** Create a MemoryClient with default region and SSL settings. */
     public MemoryClient() {
         this(null, null, true);
     }
@@ -98,6 +107,14 @@ public class MemoryClient implements AutoCloseable {
     // Control Plane: Space management
     // ========================
 
+    /**
+     * Create a memory space (Control Plane, AK/SK signed).
+     *
+     * @param name             space name
+     * @param messageTtlHours  message TTL in hours (default 168 = 7 days)
+     * @param description      optional description
+     * @return created space info
+     */
     public SpaceInfo createSpace(String name, int messageTtlHours, String description) {
         Map<String, Object> body = new HashMap<>();
         body.put("name", name);
@@ -109,26 +126,31 @@ public class MemoryClient implements AutoCloseable {
         return parseResult(result, SpaceInfo.class);
     }
 
+    /** Create a memory space with default TTL (168 hours). */
     public SpaceInfo createSpace(String name) {
         return createSpace(name, 168, null);
     }
 
+    /** Get a memory space by ID (Control Plane). */
     public SpaceInfo getSpace(String spaceId) {
         RequestResult result = getControlPlaneClient()
                 .get("/v1/spaces/" + spaceId).block();
         return parseResult(result, SpaceInfo.class);
     }
 
+    /** List memory spaces with pagination (Control Plane). */
     public SpaceListResponse listSpaces(int limit, int offset) {
         String url = "/v1/spaces?limit=" + limit + "&offset=" + offset;
         RequestResult result = getControlPlaneClient().get(url).block();
         return parseResult(result, SpaceListResponse.class);
     }
 
+    /** List memory spaces with default pagination (limit=20, offset=0). */
     public SpaceListResponse listSpaces() {
         return listSpaces(20, 0);
     }
 
+    /** Update a memory space (Control Plane). Null fields are not updated. */
     public SpaceInfo updateSpace(String spaceId, String name, String description, Integer messageTtlHours) {
         Map<String, Object> body = new HashMap<>();
         if (name != null) body.put("name", name);
@@ -140,10 +162,12 @@ public class MemoryClient implements AutoCloseable {
         return parseResult(result, SpaceInfo.class);
     }
 
+    /** Delete a memory space (Control Plane). */
     public void deleteSpace(String spaceId) {
         getControlPlaneClient().delete("/v1/spaces/" + spaceId).block();
     }
 
+    /** Create an API key for data plane access (Control Plane). */
     public Map<String, Object> createApiKey() {
         RequestResult result = getControlPlaneClient()
                 .post("/v1/api-keys", null, Map.of()).block();
@@ -154,6 +178,15 @@ public class MemoryClient implements AutoCloseable {
     // Data Plane: Session management
     // ========================
 
+    /**
+     * Create a memory session (Data Plane, API Key auth).
+     *
+     * @param spaceId     space ID
+     * @param id          optional session ID (auto-generated if null)
+     * @param actorId     optional actor identifier
+     * @param assistantId optional assistant identifier
+     * @return created session info
+     */
     public SessionInfo createMemorySession(String spaceId, String id, String actorId, String assistantId) {
         Map<String, Object> body = new HashMap<>();
         if (id != null) body.put("id", id);
@@ -165,6 +198,7 @@ public class MemoryClient implements AutoCloseable {
         return parseResult(result, SessionInfo.class);
     }
 
+    /** Create a memory session with auto-generated ID (Data Plane). */
     public SessionInfo createMemorySession(String spaceId) {
         return createMemorySession(spaceId, null, null, null);
     }
@@ -173,6 +207,17 @@ public class MemoryClient implements AutoCloseable {
     // Data Plane: Messages
     // ========================
 
+    /**
+     * Add messages to a session (Data Plane).
+     *
+     * @param spaceId          space ID
+     * @param sessionId        session ID
+     * @param messages         list of TextMessage, ToolCallMessage, or ToolResultMessage
+     * @param timestamp        optional message timestamp
+     * @param idempotencyKey   optional idempotency key
+     * @param isForceExtract   whether to force memory extraction
+     * @return batch response with added messages
+     */
     public MessageBatchResponse addMessages(String spaceId, String sessionId,
                                              List<?> messages,
                                              Long timestamp, String idempotencyKey,
@@ -203,22 +248,26 @@ public class MemoryClient implements AutoCloseable {
         return parseResult(result, MessageBatchResponse.class);
     }
 
+    /** Add messages with default options (Data Plane). */
     public MessageBatchResponse addMessages(String spaceId, String sessionId, List<?> messages) {
         return addMessages(spaceId, sessionId, messages, null, null, false);
     }
 
+    /** Get the last K messages from a session (Data Plane). */
     public List<MessageInfo> getLastKMessages(String sessionId, int k, String spaceId) {
         String url = "/v1/spaces/" + spaceId + "/sessions/" + sessionId + "/messages/last-k?k=" + k;
         RequestResult result = getDataPlaneClient().get(url).block();
         return parseResultAsList(result, MessageInfo.class);
     }
 
+    /** Get a single message by ID (Data Plane). */
     public MessageInfo getMessage(String messageId, String spaceId, String sessionId) {
         String url = "/v1/spaces/" + spaceId + "/sessions/" + sessionId + "/messages/" + messageId;
         RequestResult result = getDataPlaneClient().get(url).block();
         return parseResult(result, MessageInfo.class);
     }
 
+    /** List messages with pagination (Data Plane). */
     public MessageListResponse listMessages(String spaceId, String sessionId, int limit, int offset) {
         String url = "/v1/spaces/" + spaceId + "/messages?limit=" + limit + "&offset=" + offset;
         if (sessionId != null) url += "&session_id=" + sessionId;
@@ -226,6 +275,7 @@ public class MemoryClient implements AutoCloseable {
         return parseResult(result, MessageListResponse.class);
     }
 
+    /** List messages with default pagination (Data Plane). */
     public MessageListResponse listMessages(String spaceId) {
         return listMessages(spaceId, null, 10, 0);
     }
@@ -234,6 +284,7 @@ public class MemoryClient implements AutoCloseable {
     // Data Plane: Memories
     // ========================
 
+    /** Search memories with optional filters (Data Plane). */
     public MemorySearchResponse searchMemories(String spaceId, MemorySearchFilter filters) {
         Map<String, Object> body = filters != null ? filters.toDict() : Map.of();
         String url = "/v1/spaces/" + spaceId + "/memories/search";
@@ -241,10 +292,12 @@ public class MemoryClient implements AutoCloseable {
         return parseResult(result, MemorySearchResponse.class);
     }
 
+    /** Search memories without filters (Data Plane). */
     public MemorySearchResponse searchMemories(String spaceId) {
         return searchMemories(spaceId, null);
     }
 
+    /** List memories with pagination and optional filters (Data Plane). */
     public MemoryListResponse listMemories(String spaceId, int limit, int offset, MemoryListFilter filters) {
         StringBuilder url = new StringBuilder("/v1/spaces/" + spaceId + "/memories?limit=" + limit + "&offset=" + offset);
         if (filters != null) {
@@ -257,16 +310,19 @@ public class MemoryClient implements AutoCloseable {
         return parseResult(result, MemoryListResponse.class);
     }
 
+    /** List memories with default pagination (Data Plane). */
     public MemoryListResponse listMemories(String spaceId) {
         return listMemories(spaceId, 10, 0, null);
     }
 
+    /** Get a memory by ID (Data Plane). */
     public MemoryInfo getMemory(String spaceId, String memoryId) {
         String url = "/v1/spaces/" + spaceId + "/memories/" + memoryId;
         RequestResult result = getDataPlaneClient().get(url).block();
         return parseResult(result, MemoryInfo.class);
     }
 
+    /** Delete a memory by ID (Data Plane). */
     public void deleteMemory(String spaceId, String memoryId) {
         String url = "/v1/spaces/" + spaceId + "/memories/" + memoryId;
         getDataPlaneClient().delete(url).block();

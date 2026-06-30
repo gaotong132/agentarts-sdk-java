@@ -5,6 +5,15 @@ package com.huaweicloud.agentarts.toolkit.operations;
  * Mirrors Python operations/runtime/dev.py.
  */
 public class DevOperation {
+    /**
+     * Start a local development server for the agent.
+     *
+     * @param port       server port (default 8080)
+     * @param host       bind host (default localhost)
+     * @param reload     whether to enable hot-reload
+     * @param configPath path to config file (nullable)
+     * @param envVars    additional environment variables in KEY=VALUE format
+     */
     public static void runDevServer(int port, String host, boolean reload,
                                      String configPath, String[] envVars) throws Exception {
         // Apply environment variables from --env flags

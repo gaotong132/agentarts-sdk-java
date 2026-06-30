@@ -23,6 +23,12 @@ public class ConfigOperation {
     private static final ObjectMapper YAML_MAPPER = new ObjectMapper(
             new YAMLFactory().disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER));
 
+    /**
+     * Load agent configuration from {@code .agentarts_config.yaml}.
+     * Creates a default config file if it does not exist.
+     *
+     * @return the loaded or newly created config list
+     */
     public static AgentArtsConfigList loadConfig() {
         File file = new File(CONFIG_FILE);
         if (!file.exists()) {
@@ -38,6 +44,7 @@ public class ConfigOperation {
         }
     }
 
+    /** Save agent configuration to {@code .agentarts_config.yaml}. */
     public static void saveConfig(AgentArtsConfigList config) {
         try {
             YAML_MAPPER.writerWithDefaultPrettyPrinter().writeValue(new File(CONFIG_FILE), config);
@@ -46,6 +53,16 @@ public class ConfigOperation {
         }
     }
 
+    /**
+     * Add a new agent to the configuration and set it as default.
+     *
+     * @param name           agent name
+     * @param entrypoint     Java entrypoint class (nullable, auto-generated if null)
+     * @param region         Huawei Cloud region (nullable, defaults to cn-southwest-2)
+     * @param dependencyFile build file path (nullable, defaults to pom.xml)
+     * @param swrOrg         SWR organization (nullable, defaults to agent name)
+     * @param swrRepo        SWR repository (nullable, defaults to agent name)
+     */
     public static void addAgent(String name, String entrypoint, String region,
                                  String dependencyFile, String swrOrg, String swrRepo) {
         AgentArtsConfigList config = loadConfig();
@@ -69,6 +86,7 @@ public class ConfigOperation {
         System.out.println("Agent '" + name + "' added and set as default.");
     }
 
+    /** Print all configured agents to stdout, marking the default with {@code *}. */
     public static void printConfigList() {
         AgentArtsConfigList config = loadConfig();
         if (config.getAgents().isEmpty()) {
@@ -81,6 +99,7 @@ public class ConfigOperation {
         }
     }
 
+    /** Set the default agent by name. */
     public static void setDefaultAgent(String name) {
         AgentArtsConfigList config = loadConfig();
         if (config.getAgent(name) == null) {
@@ -92,6 +111,7 @@ public class ConfigOperation {
         System.out.println("Default agent set to '" + name + "'.");
     }
 
+    /** Print detailed YAML configuration for a specific agent (or the default). */
     public static void printAgentDetail(String agentName) {
         AgentArtsConfigList config = loadConfig();
         String name = agentName != null ? agentName : config.getDefaultAgent();
@@ -107,6 +127,7 @@ public class ConfigOperation {
         }
     }
 
+    /** Get a configuration value by dot-notation key (e.g. {@code base.region}). */
     public static void getConfigValue(String key, String agentName) {
         AgentArtsConfigList config = loadConfig();
         String name = agentName != null ? agentName : config.getDefaultAgent();
@@ -127,6 +148,7 @@ public class ConfigOperation {
         System.err.println("Unknown key: " + key);
     }
 
+    /** Set a configuration value by dot-notation key (e.g. {@code base.region}). */
     public static void setConfigValue(String key, String value, String agentName) {
         AgentArtsConfigList config = loadConfig();
         String name = agentName != null ? agentName : config.getDefaultAgent();
@@ -148,6 +170,7 @@ public class ConfigOperation {
         System.out.println("Set " + key + " = " + value);
     }
 
+    /** Remove an agent from the configuration. */
     public static void removeAgent(String name) {
         AgentArtsConfigList config = loadConfig();
         if (config.getAgent(name) == null) {
@@ -159,6 +182,7 @@ public class ConfigOperation {
         System.out.println("Agent '" + name + "' removed.");
     }
 
+    /** Set an environment variable for an agent's runtime configuration. */
     public static void setEnv(String key, String value, String agentName) {
         AgentArtsConfigList config = loadConfig();
         String name = agentName != null ? agentName : config.getDefaultAgent();
@@ -175,6 +199,7 @@ public class ConfigOperation {
         System.out.println("Set env " + key + "=" + value + " for agent '" + name + "'.");
     }
 
+    /** Remove an environment variable from an agent's runtime configuration. */
     public static void removeEnv(String key, String agentName) {
         AgentArtsConfigList config = loadConfig();
         String name = agentName != null ? agentName : config.getDefaultAgent();
@@ -185,6 +210,7 @@ public class ConfigOperation {
         System.out.println("Removed env " + key + " for agent '" + name + "'.");
     }
 
+    /** List all environment variables for an agent's runtime configuration. */
     public static void listEnv(String agentName) {
         AgentArtsConfigList config = loadConfig();
         String name = agentName != null ? agentName : config.getDefaultAgent();

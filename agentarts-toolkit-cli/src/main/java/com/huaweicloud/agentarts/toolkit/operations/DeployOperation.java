@@ -6,6 +6,19 @@ package com.huaweicloud.agentarts.toolkit.operations;
  * Flow: docker build → SWR createNamespace/createRepo → createAuthorizationToken → runtime create (V11 signed).
  */
 public class DeployOperation {
+    /**
+     * Deploy an agent to Huawei Cloud or run locally.
+     *
+     * @param agentName   agent name to deploy
+     * @param mode        deployment mode: "cloud" or "local"
+     * @param imageTag    Docker image tag (default "latest")
+     * @param localPort   port for local mode (nullable)
+     * @param swrOrg      SWR organization (nullable)
+     * @param swrRepo     SWR repository (nullable)
+     * @param description agent description (nullable)
+     * @param skipBuild   skip Docker build step
+     * @param skipSsl     skip SSL verification
+     */
     public static void deployProject(String agentName, String mode, String imageTag,
                                       Integer localPort, String swrOrg, String swrRepo,
                                       String description, boolean skipBuild, boolean skipSsl) throws Exception {
