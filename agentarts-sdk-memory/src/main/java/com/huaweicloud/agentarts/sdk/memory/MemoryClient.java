@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
  */
 public class MemoryClient implements AutoCloseable {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER;
 
     private final String regionName;
     private final String apiKey;
@@ -62,7 +62,7 @@ public class MemoryClient implements AutoCloseable {
     // Lazy client initialization
     // ========================
 
-    private BaseHttpClient getControlPlaneClient() {
+    private synchronized BaseHttpClient getControlPlaneClient() {
         if (controlPlaneClient == null) {
             String endpoint = Constants.getMemoryEndpoint("control", regionName);
             RequestConfig config = RequestConfig.builder()
@@ -74,7 +74,7 @@ public class MemoryClient implements AutoCloseable {
         return controlPlaneClient;
     }
 
-    private BaseHttpClient getDataPlaneClient() {
+    private synchronized BaseHttpClient getDataPlaneClient() {
         if (dataPlaneClient == null) {
             String endpoint = Constants.getMemoryEndpoint("data", regionName);
             RequestConfig config = RequestConfig.builder()

@@ -63,12 +63,12 @@ public class AgentArtsRuntimeApp {
     private final Vertx vertx;
     private final boolean ownVertx;
 
-    // Handlers
-    private BiFunction<Map<String, Object>, RequestContext, Object> entrypointHandler;
-    private Function<RequestContext, Object> entrypointWithPayloadOnly;
-    private Supplier<PingStatus> pingHandler;
-    private Function<RequestContext, PingStatus> pingHandlerWithCtx;
-    private BiFunction<ServerWebSocket, RequestContext, Void> wsHandler;
+    // Handlers (volatile: set on user thread, read on Vert.x event-loop thread)
+    private volatile BiFunction<Map<String, Object>, RequestContext, Object> entrypointHandler;
+    private volatile Function<RequestContext, Object> entrypointWithPayloadOnly;
+    private volatile Supplier<PingStatus> pingHandler;
+    private volatile Function<RequestContext, PingStatus> pingHandlerWithCtx;
+    private volatile BiFunction<ServerWebSocket, RequestContext, Void> wsHandler;
 
     // State
     private final AtomicReference<PingStatus> forcedPingStatus = new AtomicReference<>();

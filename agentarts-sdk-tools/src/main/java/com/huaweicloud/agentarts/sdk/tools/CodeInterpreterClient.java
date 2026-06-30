@@ -25,7 +25,7 @@ import java.util.*;
  */
 public class CodeInterpreterClient implements AutoCloseable {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER;
 
     private final String region;
     private final String dataEndpoint;
@@ -65,7 +65,7 @@ public class CodeInterpreterClient implements AutoCloseable {
     // Lazy clients
     // ========================
 
-    private BaseHttpClient getControlClient() {
+    private synchronized BaseHttpClient getControlClient() {
         if (controlClient == null) {
             String endpoint = Constants.getControlPlaneEndpoint(region);
             RequestConfig config = RequestConfig.builder().baseUrl(endpoint).verifySsl(verifySsl).build();
@@ -74,13 +74,12 @@ public class CodeInterpreterClient implements AutoCloseable {
         return controlClient;
     }
 
-    private BaseHttpClient getDataClient() {
+    private synchronized BaseHttpClient getDataClient() {
         if (dataClient == null) {
             String endpoint = Constants.getCodeInterpreterDataPlaneEndpoint(dataEndpoint);
             boolean useAkSk = "IAM".equals(authType);
             RequestConfig config = RequestConfig.builder().baseUrl(endpoint).verifySsl(verifySsl).build();
-            dataClient = new BaseHttpClient(config, useAkSk,
-                    useAkSk ? SignMode.SDK_HMAC_SHA256 : SignMode.SDK_HMAC_SHA256, region);
+            dataClient = new BaseHttpClient(config, useAkSk, SignMode.SDK_HMAC_SHA256, region);
             if (!useAkSk) {
                 String key = System.getenv("HUAWEICLOUD_SDK_CODE_INTERPRETER_API_KEY");
                 if (key != null && !key.isEmpty()) {

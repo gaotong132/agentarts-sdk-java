@@ -381,64 +381,27 @@ public class BaseHttpClient implements AutoCloseable {
 
             headers.put("Host", host);
 
-            if (signMode == SignMode.V11_HMAC_SHA256) {
-                signRequestV11(method, path, headers, queryParams);
-            } else {
-                signRequestSdk(method, fullUrl, headers, body, queryParams);
+            String ak = Constants.getAk();
+            String sk = Constants.getSk();
+
+            if (ak.isEmpty() || sk.isEmpty()) {
+                LOG.warn("AK/SK not configured, skipping {} signing", signMode);
+                return;
             }
+
+            headers.put("x-sdk-content-sha256", "UNSIGNED-PAYLOAD");
+
+            // Add security token if present
+            String securityToken = Constants.getSecurityToken();
+            if (!securityToken.isEmpty()) {
+                headers.put("X-Security-Token", securityToken);
+            }
+
+            V11Signer signer = new V11Signer(ak, sk, regionId);
+            signer.sign(method, path, queryParams, headers);
         } catch (Exception e) {
             LOG.warn("Failed to sign request: {}", e.getMessage());
         }
-    }
-
-    private void signRequestV11(String method, String path, Map<String, String> headers,
-                                 Map<String, List<String>> queryParams) {
-        String ak = Constants.getAk();
-        String sk = Constants.getSk();
-
-        if (ak.isEmpty() || sk.isEmpty()) {
-            LOG.warn("AK/SK not configured, skipping V11 signing");
-            return;
-        }
-
-        headers.put("x-sdk-content-sha256", "UNSIGNED-PAYLOAD");
-
-        // Add security token if present
-        String securityToken = Constants.getSecurityToken();
-        if (!securityToken.isEmpty()) {
-            headers.put("X-Security-Token", securityToken);
-        }
-
-        V11Signer signer = new V11Signer(ak, sk, regionId);
-        signer.sign(method, path, queryParams, headers);
-    }
-
-    private void signRequestSdk(String method, String fullUrl, Map<String, String> headers,
-                                 Object body, Map<String, List<String>> queryParams) {
-        // SDK-HMAC-SHA256 signing via Huawei Cloud SDK core
-        // This delegates to the SDK's built-in signing mechanism
-        // For now, we use V11 as a fallback — in a full implementation,
-        // this would use huaweicloudsdkcore's AKSKSigner
-        String ak = Constants.getAk();
-        String sk = Constants.getSk();
-
-        if (ak.isEmpty() || sk.isEmpty()) {
-            LOG.warn("AK/SK not configured, skipping SDK signing");
-            return;
-        }
-
-        headers.put("x-sdk-content-sha256", "UNSIGNED-PAYLOAD");
-
-        String securityToken = Constants.getSecurityToken();
-        if (!securityToken.isEmpty()) {
-            headers.put("X-Security-Token", securityToken);
-        }
-
-        // Use V11Signer as the signing implementation
-        URI uri = URI.create(fullUrl);
-        String path = uri.getRawPath();
-        V11Signer signer = new V11Signer(ak, sk, regionId);
-        signer.sign(method, path, queryParams, headers);
     }
 
     // ========================
