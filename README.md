@@ -23,25 +23,6 @@ AgentArts Java SDK is a comprehensive toolkit for developing, deploying, and man
 - **E2E Test Suite** — 69 end-to-end tests covering Identity, Memory, MCP Gateway, Code Interpreter, Runtime, and Auth decorators
 - **Reactive Architecture** — Project Reactor (`Mono`/`Flux`) throughout, aligned with agentscope-java's reactive model
 
-### Python SDK Reference
-
-This Java SDK maintains API compatibility with the [Python AgentArts SDK](https://github.com/huaweicloud/agentarts-sdk-python). When the Python SDK updates, the Java SDK should be synchronized accordingly.
-
-| Item | Value |
-|---|---|
-| Python SDK Repository | https://github.com/huaweicloud/agentarts-sdk-python |
-| Pinned Commit | [`2f64a4b`](https://github.com/huaweicloud/agentarts-sdk-python/commit/2f64a4b) (feature/test) |
-| Branch | `feature/test` |
-| Last Synced | 2026-07-01 |
-
-To check for Python SDK changes since last sync:
-
-```bash
-cd agentarts-sdk-python
-git fetch origin
-git log 2f64a4b..origin/feature/test --oneline
-```
-
 ## Module Structure
 
 ```
@@ -365,6 +346,25 @@ The Java SDK provides the same API surface as the [Python SDK](https://github.co
 | agentscope Integration | AgentStateStore (8 methods), AgentTool (6 methods x 2), RuntimeContext bridge, MessageConverter (3 pairs) |
 | Spring Boot Starter | AutoConfiguration, ConfigurationProperties, HealthIndicator |
 | E2E Tests | 69 tests: Identity lifecycle, Memory sync+async, MCP Gateway, Code Interpreter, Runtime local, Auth decorators |
+
+## Python SDK Reference
+
+This Java SDK maintains API compatibility with the [Python AgentArts SDK](https://github.com/huaweicloud/agentarts-sdk-python). When the Python SDK updates, the Java SDK should be synchronized accordingly.
+
+| Item | Value |
+|---|---|
+| Python SDK Repository | https://github.com/huaweicloud/agentarts-sdk-python |
+| Pinned Commit | [`2f64a4b`](https://github.com/huaweicloud/agentarts-sdk-python/commit/2f64a4b) (feature/test) |
+| Branch | `feature/test` |
+| Last Synced | 2026-07-01 |
+
+To check for Python SDK changes since last sync:
+
+```bash
+cd agentarts-sdk-python
+git fetch origin
+git log 2f64a4b..origin/feature/test --oneline
+```
 
 ## License
 
