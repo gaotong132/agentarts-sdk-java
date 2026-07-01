@@ -63,7 +63,8 @@ class MemoryAsyncTest {
                 new TextMessage("user", "async hello"),
                 new TextMessage("assistant", "async reply")
         );
-        MessageBatchResponse batch = dataClient.addMessages(memorySpace.getId(), sessionId, msgs);
+        MessageBatchResponse batch = dataClient.addMessages(memorySpace.getId(), sessionId, msgs,
+                null, null, true); // is_force_extract=true
         msgIds = batch.getItems().stream().map(MessageInfo::getId).toList();
     }
 
@@ -131,14 +132,20 @@ class MemoryAsyncTest {
     // 6. test_async_delete_memory_if_any
     @Test @Order(6)
     @DisplayName("async delete_memory if any exist, else skip")
-    void testAsyncDeleteMemoryIfAny() {
-        MemoryListResponse result = asyncCall(
-                () -> dataClient.listMemories(memorySpace.getId(), 10, 0, null));
-        if (result.getItems() == null || result.getItems().isEmpty()) {
-            assumeTrue(false, "no extracted memories to delete in async path");
+    void testAsyncDeleteMemoryIfAny() throws Exception {
+        // Poll for memory extraction (force_extract may still be async)
+        MemoryListResponse result = null;
+        for (int i = 0; i < 5; i++) {
+            result = asyncCall(() -> dataClient.listMemories(memorySpace.getId(), 10, 0, null));
+            if (result.getItems() != null && !result.getItems().isEmpty()) break;
+            Thread.sleep(3000);
         }
+        if (result == null || result.getItems() == null || result.getItems().isEmpty()) {
+            assumeTrue(false, "no extracted memories to delete in async path after polling");
+        }
+        final MemoryListResponse finalResult = result;
         asyncCall(() -> {
-            dataClient.deleteMemory(memorySpace.getId(), result.getItems().get(0).getId());
+            dataClient.deleteMemory(memorySpace.getId(), finalResult.getItems().get(0).getId());
             return null;
         });
     }

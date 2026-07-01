@@ -143,15 +143,15 @@ public class RuntimeClient implements AutoCloseable {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", name);
         if (JsonUtils.isNotBlank(description)) body.put("description", description);
-        if (artifactSourceConfig != null) body.put("artifact_source_config", artifactSourceConfig);
-        if (identityConfig != null) body.put("identity_config", identityConfig);
+        if (artifactSourceConfig != null) body.put("artifact_source", artifactSourceConfig);
+        if (identityConfig != null) body.put("identity_configuration", identityConfig);
         if (invokeConfig != null) body.put("invoke_config", invokeConfig);
         if (networkConfig != null) body.put("network_config", networkConfig);
-        if (observabilityConfig != null) body.put("observability_config", observabilityConfig);
+        if (observabilityConfig != null) body.put("observability", observabilityConfig);
         if (JsonUtils.isNotBlank(executionAgencyName)) body.put("execution_agency_name", executionAgencyName);
         if (JsonUtils.isNotBlank(agentGatewayId)) body.put("agent_gateway_id", agentGatewayId);
-        if (envVars != null) body.put("env_vars", envVars);
-        if (tagsConfig != null) body.put("tags_config", tagsConfig);
+        if (envVars != null) body.put("environment_variables", envVars);
+        if (tagsConfig != null) body.put("tags", tagsConfig);
 
         RequestResult result = getControlClient().post("/runtimes", body).block();
         return check(result, "create_agent");
@@ -177,14 +177,14 @@ public class RuntimeClient implements AutoCloseable {
                                             List<Map<String, String>> tagsConfig) {
         Map<String, Object> body = new LinkedHashMap<>();
         if (JsonUtils.isNotBlank(description)) body.put("description", description);
-        if (artifactSourceConfig != null) body.put("artifact_source_config", artifactSourceConfig);
+        if (artifactSourceConfig != null) body.put("artifact_source", artifactSourceConfig);
         if (invokeConfig != null) body.put("invoke_config", invokeConfig);
         if (networkConfig != null) body.put("network_config", networkConfig);
-        if (observabilityConfig != null) body.put("observability_config", observabilityConfig);
+        if (observabilityConfig != null) body.put("observability", observabilityConfig);
         if (JsonUtils.isNotBlank(executionAgencyName)) body.put("execution_agency_name", executionAgencyName);
         if (JsonUtils.isNotBlank(agentGatewayId)) body.put("agent_gateway_id", agentGatewayId);
-        if (envVars != null) body.put("env_vars", envVars);
-        if (tagsConfig != null) body.put("tags_config", tagsConfig);
+        if (envVars != null) body.put("environment_variables", envVars);
+        if (tagsConfig != null) body.put("tags", tagsConfig);
 
         RequestResult result = getControlClient().put("/runtimes/" + agentId, body).block();
         return check(result, "update_agent");
@@ -252,10 +252,11 @@ public class RuntimeClient implements AutoCloseable {
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> findAgentByName(String agentName) {
-        List<Map<String, Object>> agents = getAgents(agentName, 1, 1);
+        List<Map<String, Object>> agents = getAgents(agentName, 1, 10);
         if (agents.isEmpty()) return null;
-        Map<String, Object> first = agents.get(0);
-        if (agentName.equals(first.get("name"))) return first;
+        for (Map<String, Object> a : agents) {
+            if (agentName.equals(a.get("name"))) return a;
+        }
         return null;
     }
 
@@ -268,14 +269,11 @@ public class RuntimeClient implements AutoCloseable {
     public Map<String, Object> findAgentById(String agentId) {
         try {
             RequestResult result = getControlClient().get("/runtimes/" + agentId).block();
-            if (result != null && result.isSuccess()) {
-                Object data = result.getData();
-                if (data instanceof Map) return (Map<String, Object>) data;
-            }
+            return check(result, "find_agent_by_id");
         } catch (Exception e) {
             LOG.debug("findAgentById failed: {}", e.getMessage());
+            return null;
         }
-        return null;
     }
 
     /**
@@ -299,10 +297,14 @@ public class RuntimeClient implements AutoCloseable {
      * Create an agent endpoint.
      */
     public Map<String, Object> createAgentEndpoint(String agentId, String endpointName,
-                                                     String endpointType, Map<String, Object> config) {
+                                                     String endpointType, Map<String, Object> config,
+                                                     String targetVersionName) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("endpoint_name", endpointName);
+        body.put("name", endpointName);
+        body.put("agent_id", agentId);
         if (JsonUtils.isNotBlank(endpointType)) body.put("endpoint_type", endpointType);
+        if (JsonUtils.isNotBlank(targetVersionName)) body.put("target_version_name", targetVersionName);
         if (config != null) body.put("config", config);
 
         RequestResult result = getControlClient().post("/runtimes/" + agentId + "/endpoints", body).block();
@@ -310,7 +312,7 @@ public class RuntimeClient implements AutoCloseable {
     }
 
     public Map<String, Object> createAgentEndpoint(String agentId, String endpointName) {
-        return createAgentEndpoint(agentId, endpointName, "invocations", null);
+        return createAgentEndpoint(agentId, endpointName, "invocations", null, "v1");
     }
 
     /**
@@ -564,7 +566,18 @@ public class RuntimeClient implements AutoCloseable {
         if (data instanceof Map) {
             return (Map<String, Object>) data;
         }
-        return Map.of();
+        // Handle Jackson JsonNode responses
+        if (data instanceof com.fasterxml.jackson.databind.JsonNode jsonNode && jsonNode.isObject()) {
+            try {
+                return com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER
+                        .convertValue(jsonNode, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                throw new RuntimeException(operation + " failed to parse JsonNode response: " + e.getMessage());
+            }
+        }
+        throw new RuntimeException(operation + " returned unexpected data type: "
+                + (data != null ? data.getClass().getSimpleName() : "null")
+                + " value=" + data);
     }
 
     @Override

@@ -71,7 +71,8 @@ class MemoryLifecycleTest {
                 new TextMessage("user", "Hello from e2e test"),
                 new TextMessage("assistant", "Hi! How can I help?")
         );
-        seededMessages = dataClient.addMessages(memorySpace.getId(), memorySession.getId(), msgs);
+        seededMessages = dataClient.addMessages(memorySpace.getId(), memorySession.getId(), msgs,
+                null, null, true); // is_force_extract=true to trigger synchronous memory extraction
     }
 
     @AfterAll
@@ -179,10 +180,16 @@ class MemoryLifecycleTest {
     // 11. test_delete_memory_if_any
     @Test @Order(11)
     @DisplayName("delete_memory if any exist, else skip")
-    void testDeleteMemoryIfAny() {
-        MemoryListResponse result = dataClient.listMemories(memorySpace.getId(), 10, 0, null);
-        if (result.getItems() == null || result.getItems().isEmpty()) {
-            assumeTrue(false, "no extracted memories to delete");
+    void testDeleteMemoryIfAny() throws Exception {
+        // Poll for memory extraction (force_extract may still be async)
+        MemoryListResponse result = null;
+        for (int i = 0; i < 5; i++) {
+            result = dataClient.listMemories(memorySpace.getId(), 10, 0, null);
+            if (result.getItems() != null && !result.getItems().isEmpty()) break;
+            Thread.sleep(3000);
+        }
+        if (result == null || result.getItems() == null || result.getItems().isEmpty()) {
+            assumeTrue(false, "no extracted memories to delete after polling");
         }
         dataClient.deleteMemory(memorySpace.getId(), result.getItems().get(0).getId());
     }
