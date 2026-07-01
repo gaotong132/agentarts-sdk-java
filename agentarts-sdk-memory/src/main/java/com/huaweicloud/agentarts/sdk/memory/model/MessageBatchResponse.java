@@ -7,7 +7,9 @@ import java.util.List;
 /** Response for batch adding messages. */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class MessageBatchResponse {
-    @JsonProperty("items") private List<MessageInfo> items;
+    @JsonProperty("messages") private List<MessageInfo> items;
+    @JsonProperty("count") private int count;
 
     public List<MessageInfo> getItems() { return items; }
+    public int getCount() { return count; }
 }

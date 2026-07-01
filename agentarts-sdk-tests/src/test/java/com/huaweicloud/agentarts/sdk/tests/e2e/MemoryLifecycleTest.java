@@ -51,9 +51,13 @@ class MemoryLifecycleTest {
                 "memory-space:" + memorySpace.getId()
         );
 
-        // Create API key for data plane
-        Map<String, Object> keyResult = controlClient.createApiKey();
-        apiKey = (String) keyResult.get("api_key");
+        // Use API key from createSpace response for data plane
+        apiKey = memorySpace.getApiKey() != null ? memorySpace.getApiKey().toString() : null;
+        if (apiKey == null || apiKey.isEmpty()) {
+            // Fallback: create a separate API key
+            Map<String, Object> keyResult = controlClient.createApiKey();
+            apiKey = (String) keyResult.get("api_key");
+        }
 
         // Create data plane client
         dataClient = new MemoryClient(E2EConfig.getRegion(), apiKey);

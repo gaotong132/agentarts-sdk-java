@@ -94,12 +94,19 @@ public class CodeInterpreterClient implements AutoCloseable {
     // Control Plane: CRUD
     // ========================
 
-    public Map<String, Object> createCodeInterpreter(String name, String description) {
+    public Map<String, Object> createCodeInterpreter(String name, String authType, String apiKeyName,
+                                                       String description) {
         Map<String, Object> body = new HashMap<>();
         body.put("name", name);
+        body.put("auth_type", authType != null ? authType : "API_KEY");
+        if (apiKeyName != null) body.put("api_key_name", apiKeyName);
         if (description != null) body.put("description", description);
         RequestResult r = getControlClient().post("/code-interpreters", null, body).block();
         return parseMap(r);
+    }
+
+    public Map<String, Object> createCodeInterpreter(String name, String description) {
+        return createCodeInterpreter(name, "IAM", null, description);
     }
 
     public Map<String, Object> createCodeInterpreter(String name) {

@@ -19,8 +19,8 @@ public class SpaceInfo {
     @JsonProperty("memory_extract_idle_seconds") private Integer memoryExtractIdleSeconds;
     @JsonProperty("memory_extract_max_tokens") private Integer memoryExtractMaxTokens;
     @JsonProperty("memory_extract_max_messages") private Integer memoryExtractMaxMessages;
-    @JsonProperty("memory_strategies_builtin") private List<String> memoryStrategiesBuiltin;
-    @JsonProperty("api_key") private String apiKey;
+    @JsonProperty("memory_strategies_builtin") private List<Object> memoryStrategiesBuiltin;
+    @JsonProperty("api_key") private Object apiKey;
     @JsonProperty("api_key_id") private String apiKeyId;
     @JsonProperty("public_domain") private String publicDomain;
 
@@ -36,7 +36,8 @@ public class SpaceInfo {
     public String getCreatedAt() { return createdAt; }
     public String getUpdatedAt() { return updatedAt; }
     public boolean isMemoryExtractEnabled() { return memoryExtractEnabled; }
-    public String getApiKey() { return apiKey; }
+    public Object getApiKey() { return apiKey; }
+    public void setApiKey(Object apiKey) { this.apiKey = apiKey; }
     public String getApiKeyId() { return apiKeyId; }
     public String getPublicDomain() { return publicDomain; }
 }

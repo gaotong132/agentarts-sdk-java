@@ -48,7 +48,9 @@ public class IdentityClient {
 
     public CreateWorkloadIdentityResponse createWorkloadIdentity(String name) {
         CreateWorkloadIdentityRequest request = new CreateWorkloadIdentityRequest()
-                .withBody(new CreateWorkloadIdentityReqBody().withName(name));
+                .withBody(new CreateWorkloadIdentityReqBody()
+                        .withName(name)
+                        .withAuthorizerType(AuthorizerType.NONE));
         return serviceClient.createWorkloadIdentity(request);
     }
 

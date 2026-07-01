@@ -49,8 +49,11 @@ class MemoryAsyncTest {
         memorySpace = controlClient.createSpace(spaceName, 168, "async e2e test");
         registry.register(() -> controlClient.deleteSpace(memorySpace.getId()), "space:" + memorySpace.getId());
 
-        Map<String, Object> keyResult = controlClient.createApiKey();
-        apiKey = (String) keyResult.get("api_key");
+        apiKey = memorySpace.getApiKey() != null ? memorySpace.getApiKey().toString() : null;
+        if (apiKey == null || apiKey.isEmpty()) {
+            Map<String, Object> keyResult = controlClient.createApiKey();
+            apiKey = (String) keyResult.get("api_key");
+        }
         dataClient = new MemoryClient(E2EConfig.getRegion(), apiKey);
 
         // Seed session + messages
