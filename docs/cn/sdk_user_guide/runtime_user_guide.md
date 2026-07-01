@@ -1,14 +1,16 @@
 # Runtime 运行时 SDK 使用指南
 
-AgentArts Runtime SDK 提供基于 Vert.x 的轻量级 HTTP/WebSocket/SSE 服务器，用于将 Agent 逻辑包装为标准服务端点。
+AgentArts Runtime SDK 提供基于 Vert.x 的轻量级 HTTP/WebSocket/SSE 服务器，以及管理云端 Agent 的客户端，用于将 Agent 逻辑包装为标准服务端点并管理其全生命周期。
 
 ## 概述
 
-运行时 SDK 包含三个核心组件：
+运行时 SDK 包含五个核心组件：
 
 - **AgentArtsRuntimeApp** — HTTP 服务器，暴露 `/invocations`、`/ping`、`/ws` 端点
 - **RequestContext** — 请求上下文，携带 session_id、request_id、user_id 等信息
 - **AgentArtsRuntimeContext** — 线程本地上下文，支持深层调用栈中的状态传递
+- **RuntimeClient** — 双平面客户端，管理云端 Agent 生命周期（控制面 AK/SK）+ 数据面操作（invoke/exec/upload/download/sessions）
+- **LocalRuntimeClient** — 本地开发客户端，连接本地 AgentArts Runtime 服务器（无需云凭证）
 
 ## 服务端点
 
@@ -270,3 +272,253 @@ data: {"chunk":1,"text":"item 1"}
 | 404 | 未注册入口点 | `{"error": "NotFound", "message": "No entrypoint handler registered"}` |
 | 500 | 处理程序异常 | `{"error": "ExceptionClassName", "message": "..."}` |
 | 503 | 并发限制 | `{"error": "Service busy - maximum concurrency reached", "message": ""}` |
+
+## RuntimeClient — 云端 Agent 管理客户端
+
+RuntimeClient 采用**双平面架构**：
+
+| 平面 | 认证方式 | 职责 |
+|------|----------|------|
+| **控制面**（Control Plane） | AK/SK 签名 | Agent CRUD、Endpoint CRUD |
+| **数据面**（Data Plane） | SDK-HMAC-SHA256 或 Bearer Token | invoke、exec、upload、download、sessions |
+
+### 创建客户端
+
+```java
+import com.huaweicloud.agentarts.sdk.service.runtime.RuntimeClient;
+
+// 默认（自动检测 region，SSL 验证开启）
+try (RuntimeClient client = new RuntimeClient()) { ... }
+
+// 指定 region
+try (RuntimeClient client = new RuntimeClient("cn-north-4")) { ... }
+
+// 指定 region + 关闭 SSL 验证
+try (RuntimeClient client = new RuntimeClient("cn-southwest-2", false)) { ... }
+
+// 设置 Bearer Token（数据面认证）
+client.setAuthToken("your-bearer-token");
+```
+
+### 控制面：Agent CRUD
+
+```java
+// 创建 Agent（仅必填参数）
+Map<String, Object> agent = client.createAgent("my-agent", "my agent description");
+String agentId = (String) agent.get("id");
+
+// 创建 Agent（完整参数）
+Map<String, Object> agent = client.createAgent(
+    "my-agent", "description",
+    artifactSourceConfig,   // Map: 制品源配置（可 null）
+    identityConfig,         // Map: 身份配置（可 null）
+    invokeConfig,           // Map: 调用配置（可 null）
+    networkConfig,          // Map: 网络配置（可 null）
+    observabilityConfig,    // Map: 可观测性配置（可 null）
+    "agency-name",          // 执行 Agency（可 null）
+    "gateway-id",           // Agent 网关 ID（可 null）
+    envVars,                // List<Map>: 环境变量（可 null）
+    tagsConfig              // List<Map>: 标签（可 null）
+);
+
+// 更新 Agent
+Map<String, Object> updated = client.updateAgent(
+    agentId, "updated description",
+    null, null, null, null, null, null, null, null
+);
+
+// 创建或更新（先按名称查找，存在则更新，不存在则创建）
+Map<String, Object> agent = client.createOrUpdateAgent(
+    "my-agent", "description",
+    null, null, null, null, null, null, null, null, null
+);
+
+// 列出 Agent（分页）
+List<Map<String, Object>> agents = client.getAgents("name-filter", 1, 10);
+List<Map<String, Object>> allAgents = client.getAgents();  // 默认分页
+
+// 按名称查找
+Map<String, Object> agent = client.findAgentByName("my-agent");  // null 表示未找到
+
+// 按 ID 查找
+Map<String, Object> agent = client.findAgentById(agentId);
+
+// 按名称删除（内部先查找 ID，再删除）
+boolean deleted = client.deleteAgentByName("my-agent");
+```
+
+### 控制面：Endpoint CRUD
+
+```java
+// 创建 Endpoint
+Map<String, Object> ep = client.createAgentEndpoint(agentId, "my-endpoint");
+
+// 创建 Endpoint（带类型和配置）
+Map<String, Object> ep = client.createAgentEndpoint(
+    agentId, "my-endpoint", "invocations", Map.of("timeout", 30)
+);
+
+// 更新 Endpoint
+Map<String, Object> updated = client.updateAgentEndpoint(
+    agentId, "my-endpoint", Map.of("timeout", 60)
+);
+
+// 查找 Endpoint
+Map<String, Object> ep = client.findAgentEndpoint(agentId, "my-endpoint");
+
+// 删除 Endpoint
+client.deleteAgentEndpoint(agentId, "my-endpoint");
+```
+
+### 数据面：调用与执行
+
+```java
+// 调用 Agent
+Map<String, Object> result = client.invokeAgent("my-agent", sessionId, "{\"msg\":\"hello\"}");
+
+// 调用 Agent（完整参数）
+Map<String, Object> result = client.invokeAgent(
+    "my-agent", sessionId, payload,
+    bearerToken,    // Bearer Token 覆盖（可 null）
+    endpoint,       // 自定义 endpoint URL（可 null）
+    900,            // 超时秒数
+    userId,         // 用户 ID（可 null）
+    customPath      // 自定义路径，追加到 /invocations（可 null）
+);
+
+// 执行命令
+Map<String, Object> cmdResult = client.execCommand("my-agent", sessionId, "echo hello");
+
+// 执行命令（完整参数：命令列表 + chunked 传输）
+Map<String, Object> cmdResult = client.execCommand(
+    "my-agent", sessionId,
+    List.of("ls", "-la"),  // 命令参数列表
+    true,                  // chunked 传输
+    null, null, null, 900
+);
+```
+
+### 数据面：文件操作
+
+```java
+// 上传文件
+Map<String, Object> uploadResult = client.uploadFiles("my-agent", sessionId,
+    List.of(Map.of(
+        "path", "/home/user/test.txt",
+        "content", "hello world",
+        "description", "test file"
+    ))
+);
+
+// 上传文件（完整参数：指定远程路径、权限）
+Map<String, Object> uploadResult = client.uploadFiles(
+    "my-agent", sessionId, files,
+    "/home/user/",    // 远程目录
+    1000,             // file_user_id（可 null）
+    1000,             // file_group_id（可 null）
+    "0644",           // file_mode（可 null）
+    null, null, null, 900
+);
+
+// 下载文件
+RequestResult downloadResult = client.downloadFiles("my-agent", sessionId, "/home/user/test.txt");
+if (downloadResult.isSuccess()) {
+    // 处理下载结果
+}
+
+// 下载文件（完整参数：递归下载）
+RequestResult downloadResult = client.downloadFiles(
+    "my-agent", sessionId, "/home/user/dir",
+    true,              // 递归下载
+    null, null, null, 900
+);
+```
+
+### 数据面：会话管理
+
+```java
+// 启动会话
+Map<String, Object> session = client.startSession("my-agent");
+String sessionId = (String) session.get("session_id");
+
+// 执行操作...
+client.execCommand("my-agent", sessionId, "echo hello");
+client.uploadFiles("my-agent", sessionId, files);
+
+// 停止会话
+client.stopSession("my-agent", sessionId);
+```
+
+### RuntimeClient 完整方法列表
+
+| 平面 | 方法 | 说明 |
+|------|------|------|
+| 控制面 | `createAgent(name, description)` | 创建 Agent |
+| 控制面 | `createAgent(name, desc, artifact, identity, invoke, network, obs, agency, gw, env, tags)` | 创建 Agent（完整参数） |
+| 控制面 | `updateAgent(id, desc, artifact, invoke, network, obs, agency, gw, env, tags)` | 更新 Agent |
+| 控制面 | `createOrUpdateAgent(name, desc, ...)` | 创建或更新 Agent |
+| 控制面 | `getAgents(name, offset, limit)` | 列出 Agent（分页） |
+| 控制面 | `getAgents()` | 列出 Agent（默认分页） |
+| 控制面 | `findAgentByName(name)` | 按名称查找 |
+| 控制面 | `findAgentById(id)` | 按 ID 查找 |
+| 控制面 | `deleteAgentByName(name)` | 按名称删除 |
+| 控制面 | `createAgentEndpoint(agentId, name)` | 创建 Endpoint |
+| 控制面 | `createAgentEndpoint(agentId, name, type, config)` | 创建 Endpoint（完整参数） |
+| 控制面 | `updateAgentEndpoint(agentId, name, config)` | 更新 Endpoint |
+| 控制面 | `deleteAgentEndpoint(agentId, name)` | 删除 Endpoint |
+| 控制面 | `findAgentEndpoint(agentId, name)` | 查找 Endpoint |
+| 数据面 | `invokeAgent(name, sessionId, payload)` | 调用 Agent |
+| 数据面 | `invokeAgent(name, sid, payload, token, endpoint, timeout, userId, customPath)` | 调用 Agent（完整参数） |
+| 数据面 | `execCommand(name, sessionId, command)` | 执行命令 |
+| 数据面 | `execCommand(name, sid, cmdList, chunked, token, endpoint, userId, timeout)` | 执行命令（完整参数） |
+| 数据面 | `uploadFiles(name, sessionId, files)` | 上传文件 |
+| 数据面 | `uploadFiles(name, sid, files, path, uid, gid, mode, token, ep, userId, timeout)` | 上传文件（完整参数） |
+| 数据面 | `downloadFiles(name, sessionId, path)` | 下载文件 |
+| 数据面 | `downloadFiles(name, sid, path, recursive, token, ep, userId, timeout)` | 下载文件（完整参数） |
+| 数据面 | `startSession(name)` | 启动会话 |
+| 数据面 | `startSession(name, token, endpoint, userId, timeout)` | 启动会话（完整参数） |
+| 数据面 | `stopSession(name, sessionId)` | 停止会话 |
+| 数据面 | `stopSession(name, sid, token, endpoint, userId, timeout)` | 停止会话（完整参数） |
+
+## LocalRuntimeClient — 本地开发客户端
+
+用于连接本地运行的 AgentArts Runtime 服务器，无需云凭证，适合开发调试。
+
+```java
+import com.huaweicloud.agentarts.sdk.service.runtime.LocalRuntimeClient;
+
+// 默认连接 http://localhost:8080
+try (LocalRuntimeClient client = new LocalRuntimeClient()) {
+    // 调用本地 Agent
+    Map<String, Object> result = client.invokeAgent("{\"message\":\"hello\"}");
+
+    // 健康检查
+    Map<String, Object> ping = client.pingAgent();
+}
+
+// 自定义端口和主机
+try (LocalRuntimeClient client = new LocalRuntimeClient(3000, "127.0.0.1", 60)) {
+    // 带 session ID 和 Bearer Token 调用
+    Map<String, Object> result = client.invokeAgent(
+        "{\"message\":\"hello\"}",
+        "session-123",     // sessionId（可 null）
+        "bearer-token",    // bearerToken（可 null）
+        "user-456",        // userId（可 null）
+        "custom-path"      // customPath（可 null）
+    );
+
+    // 带 session ID 健康检查
+    Map<String, Object> ping = client.pingAgent("session-123");
+}
+```
+
+### LocalRuntimeClient 方法列表
+
+| 方法 | 说明 |
+|------|------|
+| `invokeAgent(payload)` | 调用本地 Agent |
+| `invokeAgent(payload, sessionId, bearerToken, userId, customPath)` | 调用本地 Agent（完整参数） |
+| `pingAgent()` | 健康检查 |
+| `pingAgent(sessionId)` | 带 session ID 的健康检查 |
+| `getPort()` | 获取端口 |
+| `getHost()` | 获取主机 |

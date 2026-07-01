@@ -2,6 +2,7 @@ package com.huaweicloud.agentarts.sdk.tests.e2e;
 
 import com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient;
 import com.huaweicloud.agentarts.sdk.memory.MemoryClient;
+import com.huaweicloud.agentarts.sdk.service.runtime.RuntimeClient;
 import com.huaweicloud.agentarts.sdk.tools.CodeInterpreterClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import org.junit.jupiter.api.*;
@@ -53,8 +54,10 @@ class ReadonlyListsTest {
     @Test
     @DisplayName("list_runtime_agents returns a list")
     void testListRuntimeAgents() {
-        // Java SDK doesn't have RuntimeClient yet — skip with assumption
-        assumeTrue(false, "RuntimeClient not yet implemented in Java SDK");
+        try (RuntimeClient client = new RuntimeClient(E2EConfig.getRegion())) {
+            var agents = client.getAgents(null, 1, 1);
+            assertNotNull(agents, "agents should be a list");
+        }
     }
 
     // 4. test_list_code_interpreters

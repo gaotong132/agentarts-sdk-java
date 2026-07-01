@@ -53,7 +53,7 @@ agentarts-sdk-java/
 | 文档 | 说明 |
 |---|---|
 | [环境变量配置](docs/cn/sdk_user_guide/environment_variables.md) | 所有环境变量、优先级链、Java 常量对照表 |
-| [运行时 SDK](docs/cn/sdk_user_guide/runtime_user_guide.md) | AgentArtsRuntimeApp、RequestContext、SSE 流式、WebSocket、并发控制 |
+| [运行时 SDK](docs/cn/sdk_user_guide/runtime_user_guide.md) | AgentArtsRuntimeApp 服务端 + RuntimeClient 双平面客户端 + LocalRuntimeClient 本地开发 |
 | [Memory SDK](docs/cn/sdk_user_guide/memory_user_guide.md) | MemoryClient 双平面架构、MemorySession、完整 API（25+ 方法） |
 | [Code Interpreter SDK](docs/cn/sdk_user_guide/tools_user_guide.md) | CodeInterpreterClient、CodeSession、17 种操作方法 |
 | [MCP Gateway SDK](docs/cn/sdk_user_guide/mcp_gateway_user_guide.md) | MCPGatewayClient 网关/目标 CRUD、RequestResult |
