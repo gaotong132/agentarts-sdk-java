@@ -6,6 +6,13 @@ import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
+import com.huaweicloud.agentarts.sdk.service.runtime.model.CreateAgentEndpointRequest;
+import com.huaweicloud.agentarts.sdk.service.runtime.model.CreateAgentRequest;
+import com.huaweicloud.agentarts.sdk.service.runtime.model.ExecCommandRequest;
+import com.huaweicloud.agentarts.sdk.service.runtime.model.StopSessionRequest;
+import com.huaweicloud.agentarts.sdk.service.runtime.model.UpdateAgentEndpointRequest;
+import com.huaweicloud.agentarts.sdk.service.runtime.model.UpdateAgentRequest;
+import com.huaweicloud.agentarts.sdk.service.runtime.model.UploadFilesRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -140,20 +147,20 @@ public class RuntimeClient implements AutoCloseable {
                                             String agentGatewayId,
                                             List<Map<String, String>> envVars,
                                             List<Map<String, String>> tagsConfig) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("name", name);
-        if (JsonUtils.isNotBlank(description)) body.put("description", description);
-        if (artifactSourceConfig != null) body.put("artifact_source", artifactSourceConfig);
-        if (identityConfig != null) body.put("identity_configuration", identityConfig);
-        if (invokeConfig != null) body.put("invoke_config", invokeConfig);
-        if (networkConfig != null) body.put("network_config", networkConfig);
-        if (observabilityConfig != null) body.put("observability", observabilityConfig);
-        if (JsonUtils.isNotBlank(executionAgencyName)) body.put("execution_agency_name", executionAgencyName);
-        if (JsonUtils.isNotBlank(agentGatewayId)) body.put("agent_gateway_id", agentGatewayId);
-        if (envVars != null) body.put("environment_variables", envVars);
-        if (tagsConfig != null) body.put("tags", tagsConfig);
+        CreateAgentRequest req = new CreateAgentRequest()
+                .withName(name)
+                .withDescription(description)
+                .withArtifactSource(artifactSourceConfig)
+                .withIdentityConfiguration(identityConfig)
+                .withInvokeConfig(invokeConfig)
+                .withNetworkConfig(networkConfig)
+                .withObservability(observabilityConfig)
+                .withExecutionAgencyName(executionAgencyName)
+                .withAgentGatewayId(agentGatewayId)
+                .withEnvironmentVariables(envVars)
+                .withTags(tagsConfig);
 
-        RequestResult result = getControlClient().post("/runtimes", body).block();
+        RequestResult result = getControlClient().post("/runtimes", req).block();
         return check(result, "create_agent");
     }
 
@@ -175,18 +182,18 @@ public class RuntimeClient implements AutoCloseable {
                                             String agentGatewayId,
                                             List<Map<String, String>> envVars,
                                             List<Map<String, String>> tagsConfig) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        if (JsonUtils.isNotBlank(description)) body.put("description", description);
-        if (artifactSourceConfig != null) body.put("artifact_source", artifactSourceConfig);
-        if (invokeConfig != null) body.put("invoke_config", invokeConfig);
-        if (networkConfig != null) body.put("network_config", networkConfig);
-        if (observabilityConfig != null) body.put("observability", observabilityConfig);
-        if (JsonUtils.isNotBlank(executionAgencyName)) body.put("execution_agency_name", executionAgencyName);
-        if (JsonUtils.isNotBlank(agentGatewayId)) body.put("agent_gateway_id", agentGatewayId);
-        if (envVars != null) body.put("environment_variables", envVars);
-        if (tagsConfig != null) body.put("tags", tagsConfig);
+        UpdateAgentRequest req = new UpdateAgentRequest()
+                .withDescription(description)
+                .withArtifactSource(artifactSourceConfig)
+                .withInvokeConfig(invokeConfig)
+                .withNetworkConfig(networkConfig)
+                .withObservability(observabilityConfig)
+                .withExecutionAgencyName(executionAgencyName)
+                .withAgentGatewayId(agentGatewayId)
+                .withEnvironmentVariables(envVars)
+                .withTags(tagsConfig);
 
-        RequestResult result = getControlClient().put("/runtimes/" + agentId, body).block();
+        RequestResult result = getControlClient().put("/runtimes/" + agentId, req).block();
         return check(result, "update_agent");
     }
 
@@ -299,15 +306,15 @@ public class RuntimeClient implements AutoCloseable {
     public Map<String, Object> createAgentEndpoint(String agentId, String endpointName,
                                                      String endpointType, Map<String, Object> config,
                                                      String targetVersionName) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("endpoint_name", endpointName);
-        body.put("name", endpointName);
-        body.put("agent_id", agentId);
-        if (JsonUtils.isNotBlank(endpointType)) body.put("endpoint_type", endpointType);
-        if (JsonUtils.isNotBlank(targetVersionName)) body.put("target_version_name", targetVersionName);
-        if (config != null) body.put("config", config);
+        CreateAgentEndpointRequest req = new CreateAgentEndpointRequest()
+                .withEndpointName(endpointName)
+                .withName(endpointName)
+                .withAgentId(agentId)
+                .withEndpointType(endpointType)
+                .withTargetVersionName(targetVersionName)
+                .withConfig(config);
 
-        RequestResult result = getControlClient().post("/runtimes/" + agentId + "/endpoints", body).block();
+        RequestResult result = getControlClient().post("/runtimes/" + agentId + "/endpoints", req).block();
         return check(result, "create_agent_endpoint");
     }
 
@@ -320,11 +327,11 @@ public class RuntimeClient implements AutoCloseable {
      */
     public Map<String, Object> updateAgentEndpoint(String agentId, String endpointName,
                                                      Map<String, Object> config) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        if (config != null) body.put("config", config);
+        UpdateAgentEndpointRequest req = new UpdateAgentEndpointRequest()
+                .withConfig(config);
 
         RequestResult result = getControlClient().put(
-                "/runtimes/" + agentId + "/endpoints/" + endpointName, body).block();
+                "/runtimes/" + agentId + "/endpoints/" + endpointName, req).block();
         return check(result, "update_agent_endpoint");
     }
 
@@ -400,12 +407,12 @@ public class RuntimeClient implements AutoCloseable {
     public Map<String, Object> execCommand(String agentName, String sessionId, List<String> command,
                                             boolean chunked, String bearerToken, String endpoint,
                                             String userId, int timeout) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("command", command);
-        body.put("chunked", chunked);
+        ExecCommandRequest req = new ExecCommandRequest()
+                .withCommand(command)
+                .withChunked(chunked);
 
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
-        RequestResult result = getDataClient().post("/runtimes/" + agentName + "/commands", headers, body).block();
+        RequestResult result = getDataClient().post("/runtimes/" + agentName + "/commands", headers, req).block();
         return check(result, "exec_command");
     }
 
@@ -439,15 +446,15 @@ public class RuntimeClient implements AutoCloseable {
                                             Integer fileUserId, Integer fileGroupId, String fileMode,
                                             String bearerToken, String endpoint, String userId,
                                             int timeout) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("files", files);
-        body.put("path", remotePath != null ? remotePath : "/home/user/");
-        if (fileUserId != null) body.put("file_user_id", fileUserId);
-        if (fileGroupId != null) body.put("file_group_id", fileGroupId);
-        if (JsonUtils.isNotBlank(fileMode)) body.put("file_mode", fileMode);
+        UploadFilesRequest req = new UploadFilesRequest()
+                .withFiles(files)
+                .withPath(remotePath != null ? remotePath : "/home/user/")
+                .withFileUserId(fileUserId)
+                .withFileGroupId(fileGroupId)
+                .withFileMode(fileMode);
 
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
-        RequestResult result = getDataClient().post("/runtimes/" + agentName + "/upload-files", headers, body).block();
+        RequestResult result = getDataClient().post("/runtimes/" + agentName + "/upload-files", headers, req).block();
         return check(result, "upload_files");
     }
 
@@ -525,12 +532,12 @@ public class RuntimeClient implements AutoCloseable {
     public Map<String, Object> stopSession(String agentName, String sessionId,
                                             String bearerToken, String endpoint,
                                             String userId, int timeout) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        if (JsonUtils.isNotBlank(sessionId)) body.put("session_id", sessionId);
+        StopSessionRequest req = new StopSessionRequest()
+                .withSessionId(sessionId);
 
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
         RequestResult result = getDataClient().post(
-                "/runtimes/" + agentName + "/sessions-stop", headers, body).block();
+                "/runtimes/" + agentName + "/sessions-stop", headers, req).block();
         return check(result, "stop_session");
     }
 

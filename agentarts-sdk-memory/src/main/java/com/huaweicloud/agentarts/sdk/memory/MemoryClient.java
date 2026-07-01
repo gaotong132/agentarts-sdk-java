@@ -121,16 +121,16 @@ public class MemoryClient implements AutoCloseable {
         String apiKeyId = keyResult != null ? (String) keyResult.get("id") : null;
         String apiKeyValue = keyResult != null ? (String) keyResult.get("api_key") : null;
 
-        Map<String, Object> body = new HashMap<>();
-        body.put("name", name);
-        body.put("message_ttl_hours", messageTtlHours);
-        if (description != null) body.put("description", description);
-        if (apiKeyId != null) body.put("api_key_id", apiKeyId);
-        body.put("network_access", Map.of("public_access_enable", true));
-        body.put("memory_strategies_builtin", List.of("semantic", "user_preference", "episodic"));
+        CreateSpaceRequest req = new CreateSpaceRequest()
+                .withName(name)
+                .withMessageTtlHours(messageTtlHours)
+                .withDescription(description)
+                .withApiKeyId(apiKeyId)
+                .withNetworkAccess(Map.of("public_access_enable", true))
+                .withMemoryStrategiesBuiltin(List.of("semantic", "user_preference", "episodic"));
 
         RequestResult result = getControlPlaneClient()
-                .post("/spaces", null, body).block();
+                .post("/spaces", null, req).block();
         SpaceInfo space = parseResult(result, SpaceInfo.class);
         // Inject the api_key into the response (server doesn't return it)
         if (space != null && apiKeyValue != null) {
@@ -165,13 +165,13 @@ public class MemoryClient implements AutoCloseable {
 
     /** Update a memory space (Control Plane). Null fields are not updated. */
     public SpaceInfo updateSpace(String spaceId, String name, String description, Integer messageTtlHours) {
-        Map<String, Object> body = new HashMap<>();
-        if (name != null) body.put("name", name);
-        if (description != null) body.put("description", description);
-        if (messageTtlHours != null) body.put("message_ttl_hours", messageTtlHours);
+        UpdateSpaceRequest req = new UpdateSpaceRequest()
+                .withName(name)
+                .withDescription(description)
+                .withMessageTtlHours(messageTtlHours);
 
         RequestResult result = getControlPlaneClient()
-                .put("/spaces/" + spaceId, null, body).block();
+                .put("/spaces/" + spaceId, null, req).block();
         return parseResult(result, SpaceInfo.class);
     }
 
@@ -201,13 +201,13 @@ public class MemoryClient implements AutoCloseable {
      * @return created session info
      */
     public SessionInfo createMemorySession(String spaceId, String id, String actorId, String assistantId) {
-        Map<String, Object> body = new HashMap<>();
-        if (id != null) body.put("id", id);
-        if (actorId != null) body.put("actor_id", actorId);
-        if (assistantId != null) body.put("assistant_id", assistantId);
+        CreateMemorySessionRequest req = new CreateMemorySessionRequest()
+                .withId(id)
+                .withActorId(actorId)
+                .withAssistantId(assistantId);
 
         RequestResult result = getDataPlaneClient()
-                .post("/spaces/" + spaceId + "/sessions", null, body).block();
+                .post("/spaces/" + spaceId + "/sessions", null, req).block();
         return parseResult(result, SessionInfo.class);
     }
 
@@ -250,14 +250,14 @@ public class MemoryClient implements AutoCloseable {
             }
         }
 
-        Map<String, Object> body = new HashMap<>();
-        body.put("messages", msgDicts);
-        if (timestamp != null) body.put("timestamp", timestamp);
-        if (idempotencyKey != null) body.put("idempotency_key", idempotencyKey);
-        body.put("is_force_extract", isForceExtract);
+        AddMessagesRequest req = new AddMessagesRequest()
+                .withMessages(msgDicts)
+                .withTimestamp(timestamp)
+                .withIdempotencyKey(idempotencyKey)
+                .withIsForceExtract(isForceExtract);
 
         String url = "/spaces/" + spaceId + "/sessions/" + sessionId + "/messages";
-        RequestResult result = getDataPlaneClient().post(url, null, body).block();
+        RequestResult result = getDataPlaneClient().post(url, null, req).block();
         return parseResult(result, MessageBatchResponse.class);
     }
 

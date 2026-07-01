@@ -2,12 +2,14 @@ package com.huaweicloud.agentarts.sdk.mcpgateway;
 
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
+import com.huaweicloud.agentarts.sdk.mcpgateway.model.CreateMcpGatewayRequest;
+import com.huaweicloud.agentarts.sdk.mcpgateway.model.CreateMcpGatewayTargetRequest;
+import com.huaweicloud.agentarts.sdk.mcpgateway.model.UpdateMcpGatewayRequest;
+import com.huaweicloud.agentarts.sdk.mcpgateway.model.UpdateMcpGatewayTargetRequest;
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -50,13 +52,15 @@ public class MCPGatewayClient implements AutoCloseable {
     public RequestResult createMcpGateway(String name, String description,
                                            String protocolType, String authorizerType,
                                            String agencyName) {
-        Map<String, Object> body = new HashMap<>();
-        if (name != null) body.put("name", name);
-        if (description != null) body.put("description", description);
-        body.put("protocol_type", protocolType != null ? protocolType : "mcp");
-        body.put("authorizer_type", authorizerType != null ? authorizerType : "iam");
-        if (agencyName != null) body.put("agency_name", agencyName);
-        return httpClient.post("/gateways", null, body).block();
+        String protocol = protocolType != null ? protocolType : "mcp";
+        String authorizer = authorizerType != null ? authorizerType : "iam";
+        CreateMcpGatewayRequest req = new CreateMcpGatewayRequest()
+                .withName(name)
+                .withDescription(description)
+                .withProtocolType(protocol)
+                .withAuthorizerType(authorizer)
+                .withAgencyName(agencyName);
+        return httpClient.post("/gateways", null, req).block();
     }
 
     public RequestResult createMcpGateway(String name, String description) {
@@ -64,9 +68,9 @@ public class MCPGatewayClient implements AutoCloseable {
     }
 
     public RequestResult updateMcpGateway(String gatewayId, String description) {
-        Map<String, Object> body = new HashMap<>();
-        if (description != null) body.put("description", description);
-        return httpClient.put("/gateways/" + gatewayId, null, body).block();
+        UpdateMcpGatewayRequest req = new UpdateMcpGatewayRequest()
+                .withDescription(description);
+        return httpClient.put("/gateways/" + gatewayId, null, req).block();
     }
 
     public RequestResult deleteMcpGateway(String gatewayId) {
@@ -97,14 +101,12 @@ public class MCPGatewayClient implements AutoCloseable {
                                                   String description,
                                                   Map<String, Object> targetConfiguration,
                                                   Map<String, Object> credentialProviderConfiguration) {
-        Map<String, Object> body = new HashMap<>();
-        if (name != null) body.put("name", name);
-        if (description != null) body.put("description", description);
-        if (targetConfiguration != null) body.put("target_configuration", targetConfiguration);
-        if (credentialProviderConfiguration != null) {
-            body.put("credential_provider_configuration", credentialProviderConfiguration);
-        }
-        return httpClient.post("/gateways/" + gatewayId + "/targets", null, body).block();
+        CreateMcpGatewayTargetRequest req = new CreateMcpGatewayTargetRequest()
+                .withName(name)
+                .withDescription(description)
+                .withTargetConfiguration(targetConfiguration)
+                .withCredentialProviderConfiguration(credentialProviderConfiguration);
+        return httpClient.post("/gateways/" + gatewayId + "/targets", null, req).block();
     }
 
     public RequestResult createMcpGatewayTarget(String gatewayId, String name, String description) {
@@ -115,14 +117,12 @@ public class MCPGatewayClient implements AutoCloseable {
                                                    String name, String description,
                                                    Map<String, Object> targetConfiguration,
                                                    Map<String, Object> credentialProviderConfiguration) {
-        Map<String, Object> body = new HashMap<>();
-        if (name != null) body.put("name", name);
-        if (description != null) body.put("description", description);
-        if (targetConfiguration != null) body.put("target_configuration", targetConfiguration);
-        if (credentialProviderConfiguration != null) {
-            body.put("credential_provider_configuration", credentialProviderConfiguration);
-        }
-        return httpClient.put("/gateways/" + gatewayId + "/targets/" + targetId, null, body).block();
+        UpdateMcpGatewayTargetRequest req = new UpdateMcpGatewayTargetRequest()
+                .withName(name)
+                .withDescription(description)
+                .withTargetConfiguration(targetConfiguration)
+                .withCredentialProviderConfiguration(credentialProviderConfiguration);
+        return httpClient.put("/gateways/" + gatewayId + "/targets/" + targetId, null, req).block();
     }
 
     public RequestResult deleteMcpGatewayTarget(String gatewayId, String targetId) {
