@@ -69,9 +69,9 @@ class MemoryAsyncTest {
 
     @AfterAll
     static void tearDown() {
+        if (registry != null) registry.cleanupAll();
         if (dataClient != null) dataClient.close();
         if (controlClient != null) controlClient.close();
-        if (registry != null) registry.cleanupAll();
     }
 
     /** Wrap a sync call in Reactor Mono (simulates Python async). */

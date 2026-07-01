@@ -46,8 +46,8 @@ class CodeInterpreterLifecycleTest {
 
     @AfterAll
     static void tearDown() {
-        if (client != null) client.close();
         if (registry != null) registry.cleanupAll();
+        if (client != null) client.close();
     }
 
     // 1. test_get_code_interpreter

@@ -76,9 +76,9 @@ class MemoryLifecycleTest {
 
     @AfterAll
     static void tearDown() {
+        if (registry != null) registry.cleanupAll();
         if (dataClient != null) dataClient.close();
         if (controlClient != null) controlClient.close();
-        if (registry != null) registry.cleanupAll();
     }
 
     // 1. test_get_space
