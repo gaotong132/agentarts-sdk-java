@@ -20,6 +20,10 @@ public class SpaceInfo {
     @JsonProperty("memory_extract_max_tokens") private Integer memoryExtractMaxTokens;
     @JsonProperty("memory_extract_max_messages") private Integer memoryExtractMaxMessages;
     @JsonProperty("memory_strategies_builtin") private List<Object> memoryStrategiesBuiltin;
+    @JsonProperty("memory_strategies_customized") private List<Map<String, Object>> memoryStrategiesCustomized;
+    @JsonProperty("vpc_id") private String vpcId;
+    @JsonProperty("subnet_id") private String subnetId;
+    @JsonProperty("public_access") private Map<String, Object> publicAccess;
     @JsonProperty("api_key") private Object apiKey;
     @JsonProperty("api_key_id") private String apiKeyId;
     @JsonProperty("public_domain") private String publicDomain;
@@ -36,6 +40,11 @@ public class SpaceInfo {
     public String getCreatedAt() { return createdAt; }
     public String getUpdatedAt() { return updatedAt; }
     public boolean isMemoryExtractEnabled() { return memoryExtractEnabled; }
+    public List<Object> getMemoryStrategiesBuiltin() { return memoryStrategiesBuiltin; }
+    public List<Map<String, Object>> getMemoryStrategiesCustomized() { return memoryStrategiesCustomized; }
+    public String getVpcId() { return vpcId; }
+    public String getSubnetId() { return subnetId; }
+    public Map<String, Object> getPublicAccess() { return publicAccess; }
     public Object getApiKey() { return apiKey; }
     public void setApiKey(Object apiKey) { this.apiKey = apiKey; }
     public String getApiKeyId() { return apiKeyId; }
