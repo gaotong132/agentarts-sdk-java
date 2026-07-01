@@ -19,7 +19,7 @@
         <slf4j.version>2.0.17</slf4j.version>
         <vertx.version>4.5.14</vertx.version>
         <huaweicloud-sdk.version>3.1.202</huaweicloud-sdk.version>
-        <agentscope.version>2.0.0-SNAPSHOT</agentscope.version>
+        <agentscope.version>2.0.0-RC2</agentscope.version>
         <picocli.version>4.7.6</picocli.version>
         <freemarker.version>2.3.34</freemarker.version>
         <docker-java.version>3.4.1</docker-java.version>
