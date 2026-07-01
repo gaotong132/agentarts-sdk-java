@@ -13,10 +13,8 @@ import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import java.util.Map;
 
 /**
- * MCP Gateway client for managing MCP gateways and targets.
- *
- * <p>MCP Gateway client for managing gateways and targets via AK/SK signed requests.
- * Always uses AK/SK signing (SDK-HMAC-SHA256). Base URL is control plane + /v1/core.</p>
+ * MCP Gateway client for managing gateways and targets via AK/SK signed requests.
+ * Always uses AK/SK signing (SDK-HMAC-SHA256). Base URL is control plane + /v1/core.
  *
  * <h3>Gateway management:</h3>
  * create/update/delete/get/list_mcp_gateway
@@ -46,7 +44,6 @@ public class MCPGatewayClient implements AutoCloseable {
     // ========================
 
     /**
-     * Create an MCP gateway.
      * Create an MCP gateway with all parameters.
      */
     public RequestResult createMcpGateway(String name, String description,

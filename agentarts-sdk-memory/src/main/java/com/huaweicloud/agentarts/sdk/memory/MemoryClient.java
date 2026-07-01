@@ -13,11 +13,9 @@ import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import java.util.*;
 
 /**
- * Memory client with dual-plane architecture.
- *
- * <p>Memory client with dual-plane architecture (AK/SK control + API Key data).
+ * Memory client with dual-plane architecture (AK/SK control + API Key data).
  * Control plane operations use AK/SK signing.
- * Data plane operations use API Key (Bearer token) authentication.</p>
+ * Data plane operations use API Key (Bearer token) authentication.
  *
  * <h3>Control Plane (AK/SK signed):</h3>
  * <ul>
