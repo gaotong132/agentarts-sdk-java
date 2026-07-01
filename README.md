@@ -45,6 +45,32 @@ agentarts-sdk-java/
 └── agentarts-sdk-tests/                 # Cross-module integration & e2e tests (69 e2e + 15 integration)
 ```
 
+## Documentation
+
+### SDK 用户指南（中文）
+
+| 文档 | 说明 |
+|---|---|
+| [环境变量配置](docs/cn/sdk_user_guide/environment_variables.md) | 所有环境变量、优先级链、Java 常量对照表 |
+| [运行时 SDK](docs/cn/sdk_user_guide/runtime_user_guide.md) | AgentArtsRuntimeApp、RequestContext、SSE 流式、WebSocket、并发控制 |
+| [Memory SDK](docs/cn/sdk_user_guide/memory_user_guide.md) | MemoryClient 双平面架构、MemorySession、完整 API（25+ 方法） |
+| [Code Interpreter SDK](docs/cn/sdk_user_guide/tools_user_guide.md) | CodeInterpreterClient、CodeSession、17 种操作方法 |
+| [MCP Gateway SDK](docs/cn/sdk_user_guide/mcp_gateway_user_guide.md) | MCPGatewayClient 网关/目标 CRUD、RequestResult |
+| [Agent Identity SDK](docs/cn/sdk_user_guide/agent_identity_guide.md) | IdentityClient、注解模式、OAuth2/API Key/STS 三种凭证 |
+
+### CLI 工具指南（中文）
+
+| 文档 | 命令 |
+|---|---|
+| [init](docs/cn/toolkit_user_guide/init.md) | 初始化项目 |
+| [config](docs/cn/toolkit_user_guide/config.md) | 配置管理（9 个子命令） |
+| [dev](docs/cn/toolkit_user_guide/dev.md) | 本地开发服务器 |
+| [deploy](docs/cn/toolkit_user_guide/deploy.md) | 云端/本地部署 |
+| [invoke](docs/cn/toolkit_user_guide/invoke.md) | 调用 Agent |
+| [destroy](docs/cn/toolkit_user_guide/destroy.md) | 销毁 Agent |
+| [runtime](docs/cn/toolkit_user_guide/runtime_cli.md) | 运行时管理（6 个子命令） |
+| [mcp-gateway](docs/cn/toolkit_user_guide/mcp_gateway_cli.md) | MCP 网关管理（10 个子命令） |
+
 ## Quick Start
 
 ### Prerequisites
