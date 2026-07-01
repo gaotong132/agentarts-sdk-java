@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Java](https://img.shields.io/badge/Java-17%2B-brightgreen.svg)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange.svg)](https://maven.apache.org/)
-[![Tests](https://img.shields.io/badge/Tests-283%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-292%20passing-brightgreen.svg)]()
 
 Build, deploy and manage AI agents with Huawei Cloud capabilities.
 
@@ -19,6 +19,7 @@ AgentArts Java SDK is a comprehensive toolkit for developing, deploying, and man
 - **Memory Service** — Dual-plane client (AK/SK control plane + API Key data plane); space/session/message/memory CRUD; `MemorySession` convenience wrapper; OpenAPI "parts" format serialization; search with filters (query, topK, minScore)
 - **Code Interpreter** — Sandboxed code execution client; `CodeSession` AutoCloseable context manager; execute code/commands, upload/download files, install packages, clear context
 - **MCP Gateway** — Gateway and target CRUD management via AK/SK signed requests (10 API methods)
+- **Runtime Client** — Dual-plane client for agent lifecycle management: control plane (AK/SK) with 11 methods (agent CRUD + endpoint CRUD), data plane with 6 methods (invoke, exec, upload, download, session start/stop); `LocalRuntimeClient` for local development
 - **agentscope-java Integration** — `AgentscopeRuntimeHost` (RequestContext→RuntimeContext bridge), `MemoryAgentStateStore` (AgentStateStore 8 methods), `MCPGatewayTool` + `CodeInterpreterTool` (AgentTool implementations), `MessageConverter` (3 bidirectional message type pairs)
 - **CLI Toolkit** — Picocli-based CLI with 9 top-level commands and 24 subcommands: `init`, `config` (8 subcommands), `dev`, `deploy`, `invoke`, `destroy`, `runtime` (6 subcommands), `mcp-gateway` (10 subcommands), `memory` (6 subcommands)
 - **Spring Boot Starter** — AutoConfiguration for `AgentArtsRuntimeApp`, `@ConfigurationProperties` binding (`agentarts.*`), Actuator HealthIndicator (UP/busy/DOWN)
@@ -31,7 +32,7 @@ AgentArts Java SDK is a comprehensive toolkit for developing, deploying, and man
 agentarts-sdk-java/
 ├── agentarts-sdk-bom/                   # Bill of Materials (dependency versions)
 ├── agentarts-sdk-core/                  # Constants, V11Signer, annotations, config, exceptions
-├── agentarts-sdk-service/               # BaseHttpClient, IdentityServiceClient, IAMServiceClient, SWRServiceClient
+├── agentarts-sdk-service/               # BaseHttpClient, IdentityServiceClient, IAMServiceClient, SWRServiceClient, RuntimeClient
 ├── agentarts-sdk-runtime/               # Vert.x HttpServer: /invocations, /ping, /ws, SSE, concurrency control
 ├── agentarts-sdk-identity/              # IdentityClient, auth annotations, TokenPoller, .agent_identity.json
 ├── agentarts-sdk-memory/                # MemoryClient (dual-plane: control + data), MemorySession
@@ -327,11 +328,11 @@ mvn test -pl agentarts-sdk-tests
 
 ## Testing
 
-The test suite includes **283 tests** across three tiers:
+The test suite includes **292 tests** across three tiers:
 
 | Tier | Count | Description |
 |---|---|---|
-| Unit tests | 214 | V11 signing (52), HTTP client (12), Runtime (16), Identity (7), Memory (19), Tools (10), MCP Gateway (5), agentscope (35), CLI (27), Spring Boot (16), Cross-module (15) |
+| Unit tests | 223 | V11 signing (52), HTTP client (12), Runtime server (16), Runtime client (9), Identity (7), Memory (19), Tools (10), MCP Gateway (5), agentscope (35), CLI (27), Spring Boot (16), Cross-module (15) |
 | E2E tests | 69 | Identity (14), Memory (20), MCP Gateway (6), Code Interpreter (4), Runtime (18), Auth (3), Read-only lists (4) |
 
 ### E2E Three-Tier Safety Model
@@ -369,6 +370,7 @@ The Java SDK provides the same API surface as the [Python SDK](https://github.co
 | Memory API | 15 methods + MemorySession wrapper + 15 model classes |
 | Tools API | 17 methods + CodeSession context manager |
 | MCP Gateway API | 10 methods (gateway CRUD + target CRUD) |
+| Runtime Client API | 17 methods: agent CRUD (7) + endpoint CRUD (4) + data plane (6: invoke, exec, upload, download, sessions) |
 | Identity API | Workload identity CRUD + credential providers + access tokens |
 | CLI Commands | 9 top-level + 8 config + 6 runtime + 10 mcp-gateway + 6 memory subcommands |
 | agentscope Integration | AgentStateStore (8 methods), AgentTool (6 methods x 2), RuntimeContext bridge, MessageConverter (3 pairs) |
