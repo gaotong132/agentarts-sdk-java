@@ -13,15 +13,17 @@ AgentArts Java SDK is a comprehensive toolkit for developing, deploying, and man
 
 ### Key Features
 
-- **Vert.x Runtime** — Lightweight HTTP/WebSocket/SSE server wrapping your agent logic as `/invocations`, `/ping`, `/ws` endpoints
-- **agentscope-java Integration** — Native bridge to `ReActAgent`, `AgentStateStore`, `AgentTool`, streaming `Flux<AgentEvent>` via SSE
-- **V11-HMAC-SHA256 Signing** — Full Java implementation of Huawei Cloud V11 signer with HKDF key derivation
-- **Built-in Tools** — Code Interpreter sandbox, Memory management, MCP Gateway client
-- **Cloud Identity** — Workload identity, OAuth2/API Key/STS credential providers via Huawei Cloud AgentIdentity service
-- **CLI Toolkit** — Picocli-based CLI for `init`, `dev`, `deploy`, `invoke`, `destroy`
-- **Spring Boot Starter** — Auto-configuration, properties binding, and health indicator for Spring Boot 3.x
-- **E2E Test Suite** — 69 end-to-end tests covering Identity, Memory, MCP Gateway, Code Interpreter, Runtime, and Auth decorators
-- **Reactive Architecture** — Project Reactor (`Mono`/`Flux`) throughout, aligned with agentscope-java's reactive model
+- **V11-HMAC-SHA256 Signing** — Full Java implementation of Huawei Cloud V11 signer with HKDF key derivation; dual signing mode support (V11 + SDK-HMAC-SHA256); `@RequireAccessToken` / `@RequireApiKey` / `@RequireStsToken` auth annotations with JDK Proxy interceptor
+- **Vert.x Runtime Server** — HTTP server exposing `POST /invocations` (JSON + SSE streaming), `GET /ping` (health check with HEALTHY/HEALTHY_BUSY/UNHEALTHY), `WS /ws` (WebSocket); Semaphore-based concurrency control; `RequestContext` + `AgentArtsRuntimeContext` (7-field ThreadLocal with leak prevention)
+- **Cloud Identity** — Workload identity CRUD, access token issuance (forUserId/forJwt), three credential provider types (OAuth2/API Key/STS), resource token retrieval, `TokenPoller` for async OAuth2 flows, `.agent_identity.json` local bootstrap
+- **Memory Service** — Dual-plane client (AK/SK control plane + API Key data plane); space/session/message/memory CRUD; `MemorySession` convenience wrapper; OpenAPI "parts" format serialization; search with filters (query, topK, minScore)
+- **Code Interpreter** — Sandboxed code execution client; `CodeSession` AutoCloseable context manager; execute code/commands, upload/download files, install packages, clear context
+- **MCP Gateway** — Gateway and target CRUD management via AK/SK signed requests (10 API methods)
+- **agentscope-java Integration** — `AgentscopeRuntimeHost` (RequestContext→RuntimeContext bridge), `MemoryAgentStateStore` (AgentStateStore 8 methods), `MCPGatewayTool` + `CodeInterpreterTool` (AgentTool implementations), `MessageConverter` (3 bidirectional message type pairs)
+- **CLI Toolkit** — Picocli-based CLI with 9 top-level commands and 24 subcommands: `init`, `config` (8 subcommands), `dev`, `deploy`, `invoke`, `destroy`, `runtime` (6 subcommands), `mcp-gateway` (10 subcommands), `memory` (6 subcommands)
+- **Spring Boot Starter** — AutoConfiguration for `AgentArtsRuntimeApp`, `@ConfigurationProperties` binding (`agentarts.*`), Actuator HealthIndicator (UP/busy/DOWN)
+- **E2E Test Suite** — 69 end-to-end tests with three-tier safety model (read-only / lifecycle / billable): Identity (14), Memory (20), MCP Gateway (6), Code Interpreter (4), Runtime (18), Auth (3), Read-only lists (4)
+- **Reactive Architecture** — Project Reactor (`Mono`/`Flux`) for async HTTP and SSE streaming, aligned with agentscope-java's reactive model; Reactor `Schedulers.boundedElastic()` for async memory operations
 
 ## Module Structure
 
