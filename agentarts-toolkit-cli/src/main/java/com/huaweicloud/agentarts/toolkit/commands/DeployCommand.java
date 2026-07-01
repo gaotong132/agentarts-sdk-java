@@ -7,7 +7,7 @@ import picocli.CommandLine.Option;
 /**
  * Deploy agent to Huawei Cloud (alias: launch).
  *
- * <p>Mirrors Python {@code launch/deploy} command from {@code cli/runtime/deploy.py}.
+ * <p>CLI command: deploy agent to cloud or local environment.
  * Flow: docker build → SWR createNamespace/createRepo → createAuthorizationToken →
  * runtime create with V11 signing.</p>
  */

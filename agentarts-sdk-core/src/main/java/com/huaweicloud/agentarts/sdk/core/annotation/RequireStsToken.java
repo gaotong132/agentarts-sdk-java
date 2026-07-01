@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  * <p>STS credentials are fetched via the AgentArts Identity service and injected as a
  * method parameter named by {@link #into()}.</p>
  *
- * <p>Mirrors Python {@code @require_sts_token} decorator.</p>
+ * <p>Injects STS credentials into the annotated method parameter.</p>
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

@@ -9,7 +9,7 @@ import java.util.Map;
 /**
  * AgentArts configuration model for {@code .agentarts_config.yaml}.
  *
- * <p>Mirrors Python {@code agentarts.toolkit.utils.runtime.config.AgentArtsConfigList}.</p>
+ * <p>Container for multiple agent configurations with a default agent selector.</p>
  *
  * <p>This is the top-level configuration that supports multiple agents,
  * each with its own base, SWR, and runtime configuration.</p>

@@ -1,7 +1,7 @@
 package com.huaweicloud.agentarts.sdk.tests.e2e;
 
 /**
- * E2E test helpers — mirrors Python _helpers.py.
+ * E2E test helpers — providing uniqueName, safeDelete utilities.
  */
 public final class E2EHelpers {
 

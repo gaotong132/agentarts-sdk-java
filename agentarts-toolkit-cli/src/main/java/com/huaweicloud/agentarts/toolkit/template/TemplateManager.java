@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * Simple template manager using {{ key }} placeholder substitution.
  *
- * <p>Mirrors Python TemplateManager from toolkit/utils/templates/manager.py.
+ * <p>Template engine for rendering project scaffolding from templates.
  * Templates are loaded from classpath resources under /templates/.</p>
  */
 public class TemplateManager {

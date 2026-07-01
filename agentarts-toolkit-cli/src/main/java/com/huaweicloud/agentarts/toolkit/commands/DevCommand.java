@@ -7,7 +7,7 @@ import picocli.CommandLine.Option;
 /**
  * Run local development server.
  *
- * <p>Mirrors Python {@code dev} command from {@code cli/runtime/dev.py}.</p>
+ * <p>CLI command: start local development server.</p>
  */
 @Command(name = "dev", description = "Run local development server")
 public class DevCommand implements Runnable {

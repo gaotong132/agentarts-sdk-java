@@ -13,7 +13,7 @@ import java.util.Map;
 /**
  * MCP Gateway client for managing MCP gateways and targets.
  *
- * <p>Mirrors Python {@code MCPGatewayClient} from {@code mcpgateway/__init__.py}.
+ * <p>MCP Gateway client for managing gateways and targets via AK/SK signed requests.
  * Always uses AK/SK signing (SDK-HMAC-SHA256). Base URL is control plane + /v1/core.</p>
  *
  * <h3>Gateway management:</h3>
@@ -45,7 +45,7 @@ public class MCPGatewayClient implements AutoCloseable {
 
     /**
      * Create an MCP gateway.
-     * Mirrors Python create_mcp_gateway with all parameters.
+     * Create an MCP gateway with all parameters.
      */
     public RequestResult createMcpGateway(String name, String description,
                                            String protocolType, String authorizerType,

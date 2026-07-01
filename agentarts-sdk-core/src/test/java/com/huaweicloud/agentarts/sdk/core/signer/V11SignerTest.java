@@ -489,7 +489,7 @@ class V11SignerTest {
     // ========================
 
     @Nested
-    @DisplayName("Cross-language Golden Vector (Python parity)")
+    @DisplayName("Cross-language Golden Vector")
     class CrossLanguageTests {
 
         private static final String GOLDEN_AK = "MYTESTAK123456789";

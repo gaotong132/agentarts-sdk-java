@@ -7,7 +7,7 @@ import picocli.CommandLine.Parameters;
 /**
  * Cloud runtime operations subcommand group.
  *
- * <p>Mirrors Python {@code runtime} sub-app from {@code cli/runtime/commands.py}.
+ * <p>CLI command: manage runtime sessions and file transfers.
  * Subcommands: invoke, exec-command, upload-files, download-files, start-session, stop-session.</p>
  */
 @Command(

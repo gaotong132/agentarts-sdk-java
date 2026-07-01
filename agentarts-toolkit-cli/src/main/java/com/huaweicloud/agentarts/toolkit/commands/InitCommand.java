@@ -7,7 +7,7 @@ import picocli.CommandLine.Option;
 /**
  * Initialize a new AgentArts project.
  *
- * <p>Mirrors Python {@code init} command from {@code cli/runtime/init.py}.</p>
+ * <p>CLI command: initialize a new AgentArts project.</p>
  */
 @Command(name = "init", description = "Initialize a new AgentArts project")
 public class InitCommand implements Runnable {

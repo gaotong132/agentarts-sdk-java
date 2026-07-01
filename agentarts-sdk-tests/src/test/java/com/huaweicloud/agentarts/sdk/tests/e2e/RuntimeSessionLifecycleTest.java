@@ -5,7 +5,7 @@ import org.junit.jupiter.api.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Runtime session lifecycle tests — mirrors Python test_runtime_session_lifecycle.py (1 test).
+ * Runtime session lifecycle tests — (1 test: session start/exec/upload/download/stop).
  * Requires AGENTARTS_TEST_RUN_BILLABLE=1.
  */
 @Tag("e2e")

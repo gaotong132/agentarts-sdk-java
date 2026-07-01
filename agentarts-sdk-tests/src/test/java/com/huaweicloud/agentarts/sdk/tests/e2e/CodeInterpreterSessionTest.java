@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Code Interpreter session tests — mirrors Python test_code_interpreter_session.py (1 test).
+ * Code Interpreter session tests — (1 test: full workflow - execute, upload, download).
  * Requires AGENTARTS_TEST_RUN_BILLABLE=1.
  */
 @Tag("e2e")

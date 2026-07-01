@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Identity lifecycle tests — mirrors Python test_identity_lifecycle.py (9 tests).
+ * Identity lifecycle tests — (9 tests: CRUD identities, credential providers, tokens).
  * Requires AGENTARTS_TEST_ALLOW_CREATE=1.
  */
 @Tag("e2e")

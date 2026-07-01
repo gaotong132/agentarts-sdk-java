@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  * <p>The annotated method will handle {@code /ws} WebSocket connections.
  * It should accept a Vert.x {@code ServerWebSocket} and optionally a {@code RequestContext}.</p>
  *
- * <p>Mirrors Python {@code @app.websocket} decorator.</p>
+ * <p>Marks a method as the WebSocket handler for the runtime.</p>
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

@@ -16,16 +16,16 @@ import static org.junit.jupiter.api.Assertions.*;
 class MemoryModuleTest {
 
     // ========================
-    // Python Parity: Method signature verification
+    // API verification: Method signature verification
     // ========================
 
     @Nested
-    @DisplayName("Python Parity: MemoryClient API methods")
+    @DisplayName("API method verification: MemoryClient")
     class PythonParityTests {
 
         @Test
         void controlPlaneMethodsExist() throws Exception {
-            // Mirrors Python MemoryClient control plane methods
+            // MemoryClient control plane methods
             Class<?> cls = MemoryClient.class;
             assertNotNull(cls.getMethod("createSpace", String.class, int.class, String.class));
             assertNotNull(cls.getMethod("createSpace", String.class));
@@ -39,7 +39,7 @@ class MemoryModuleTest {
 
         @Test
         void dataPlaneMethodsExist() throws Exception {
-            // Mirrors Python MemoryClient data plane methods
+            // MemoryClient data plane methods
             Class<?> cls = MemoryClient.class;
             assertNotNull(cls.getMethod("createMemorySession", String.class, String.class, String.class, String.class));
             assertNotNull(cls.getMethod("createMemorySession", String.class));
@@ -59,7 +59,7 @@ class MemoryModuleTest {
 
         @Test
         void constructorMatchesPython() throws Exception {
-            // Python: __init__(region_name=None, api_key=None, verify_ssl=True)
+            // Expected: constructors(regionName, apiKey, verifySsl), (regionName, apiKey), ()
             Class<?> cls = MemoryClient.class;
             assertNotNull(cls.getConstructor(String.class, String.class, boolean.class));
             assertNotNull(cls.getConstructor(String.class, String.class));
@@ -68,7 +68,7 @@ class MemoryModuleTest {
 
         @Test
         void implementsAutoCloseable() {
-            // Python: __enter__/__exit__ (context manager)
+            // Expected: implements AutoCloseable
             assertTrue(AutoCloseable.class.isAssignableFrom(MemoryClient.class));
         }
     }
@@ -85,7 +85,7 @@ class MemoryModuleTest {
         void textMessageToDict() {
             TextMessage msg = new TextMessage("user", "Hello!");
             Map<String, Object> dict = msg.toDict();
-            // Python parity: {role, parts:[{type:"text", text:content}]}
+            // Expected: {role, parts:[{type:"text", text:content}]}
             assertEquals("user", dict.get("role"));
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> parts = (List<Map<String, Object>>) dict.get("parts");
@@ -112,7 +112,7 @@ class MemoryModuleTest {
         void toolCallMessageToDict() {
             ToolCallMessage msg = new ToolCallMessage("call-1", "search", Map.of("query", "test"));
             Map<String, Object> dict = msg.toDict();
-            // Python parity: {role:"tool", parts:[{type:"tool_call", tool_call:{id,name,arguments}}]}
+            // Expected: OpenAPI parts format for tool_call
             assertEquals("tool", dict.get("role"));
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> parts = (List<Map<String, Object>>) dict.get("parts");
@@ -135,7 +135,7 @@ class MemoryModuleTest {
         void toolResultMessageToDict() {
             ToolResultMessage msg = new ToolResultMessage("call-1", "result data");
             Map<String, Object> dict = msg.toDict();
-            // Python parity: {role:"tool", parts:[{type:"tool_result", tool_result:{tool_call_id,content,asset_ref}}]}
+            // Expected: OpenAPI parts format for tool_result
             assertEquals("tool", dict.get("role"));
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> parts = (List<Map<String, Object>>) dict.get("parts");
@@ -197,11 +197,11 @@ class MemoryModuleTest {
     }
 
     // ========================
-    // RetrievalConfig (Python parity)
+    // RetrievalConfig field verification
     // ========================
 
     @Nested
-    @DisplayName("RetrievalConfig Python parity")
+    @DisplayName("RetrievalConfig field verification")
     class RetrievalConfigTests {
 
         @Test
@@ -229,11 +229,11 @@ class MemoryModuleTest {
     }
 
     // ========================
-    // MemorySession (Python parity)
+    // MemorySession wrapper verification
     // ========================
 
     @Nested
-    @DisplayName("MemorySession Python parity")
+    @DisplayName("MemorySession wrapper verification")
     class SessionTests {
 
         @Test

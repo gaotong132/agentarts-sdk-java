@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Tool result message for add_messages. Mirrors Python ToolResultMessage.
+ * Tool result message for add_messages API.
  *
- * <p>Serializes to OpenAPI "parts" format matching Python:
+ * <p>Serializes to OpenAPI "parts" format:
  * {@code {"role":"tool", "parts":[{"type":"tool_result", "tool_result":{tool_call_id,content,asset_ref}}]}}</p>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -35,7 +35,7 @@ public class ToolResultMessage {
     public void setMeta(String meta) { this.meta = meta; }
 
     /**
-     * Convert to OpenAPI format matching Python to_dict():
+     * Convert to OpenAPI "parts" format:
      * {@code {"role":"tool", "parts":[{"type":"tool_result", "tool_result":{...}}]}}
      */
     public Map<String, Object> toDict() {

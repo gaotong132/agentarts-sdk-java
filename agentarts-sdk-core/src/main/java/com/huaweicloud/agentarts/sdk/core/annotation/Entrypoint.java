@@ -13,7 +13,7 @@ import java.lang.annotation.Target;
  * It should accept a JSON payload (as String, Map, or custom POJO) and optionally
  * a {@code RequestContext} as the second parameter.</p>
  *
- * <p>Mirrors Python {@code @app.entrypoint} decorator.</p>
+ * <p>Marks a method as the main invocation handler for the runtime.</p>
  *
  * <h3>Usage:</h3>
  * <pre>{@code

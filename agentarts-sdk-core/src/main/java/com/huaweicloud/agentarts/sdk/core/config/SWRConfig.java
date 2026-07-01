@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /**
  * SWR (Software Repository for Container) configuration.
  *
- * <p>Mirrors Python {@code SWRConfig}.</p>
+ * <p>SWR (Software Repository for Container) configuration.</p>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SWRConfig {

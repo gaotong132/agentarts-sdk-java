@@ -3,7 +3,7 @@ package com.huaweicloud.agentarts.sdk.runtime.context;
 /**
  * Coroutine/thread-safe runtime context for AgentArts.
  *
- * <p>Mirrors Python {@code AgentArtsRuntimeContext} from {@code runtime/context.py}.
+ * <p>Thread-local runtime context for AgentArts request processing.
  * Uses a dual-layer approach:</p>
  * <ul>
  *   <li><strong>ThreadLocal</strong> — for synchronous handler code and interceptors</li>

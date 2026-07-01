@@ -14,12 +14,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class MCPGatewayModuleTest {
 
     @Nested
-    @DisplayName("Python Parity: MCPGatewayClient API methods")
+    @DisplayName("API verification: MCPGatewayClient API methods")
     class PythonParityTests {
 
         @Test
         void gatewayCrudMethodsExist() throws Exception {
-            // Mirrors Python: create/update/delete/get/list_mcp_gateway
+            // Gateway CRUD: create/update/delete/get/list_mcp_gateway
             Class<?> cls = MCPGatewayClient.class;
             assertNotNull(cls.getMethod("createMcpGateway", String.class, String.class, String.class, String.class, String.class));
             assertNotNull(cls.getMethod("createMcpGateway", String.class, String.class));
@@ -32,7 +32,7 @@ class MCPGatewayModuleTest {
 
         @Test
         void targetCrudMethodsExist() throws Exception {
-            // Mirrors Python: create/update/delete/get/list_mcp_gateway_target
+            // Gateway CRUD: create/update/delete/get/list_mcp_gateway_target
             Class<?> cls = MCPGatewayClient.class;
             assertNotNull(cls.getMethod("createMcpGatewayTarget", String.class, String.class, String.class, Map.class, Map.class));
             assertNotNull(cls.getMethod("createMcpGatewayTarget", String.class, String.class, String.class));

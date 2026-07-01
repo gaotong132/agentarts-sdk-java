@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Memory lifecycle tests — mirrors Python test_memory_lifecycle.py (12 tests).
+ * Memory lifecycle tests — (12 tests: space, session, messages, memories CRUD).
  * Requires AGENTARTS_TEST_ALLOW_CREATE=1.
  */
 @Tag("e2e")

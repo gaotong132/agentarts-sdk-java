@@ -2,7 +2,7 @@ package com.huaweicloud.agentarts.toolkit.operations;
 
 /**
  * Destroy operation: delete agent from Huawei Cloud.
- * Mirrors Python operations/runtime/destroy.py.
+ * Operation: destroy a deployed agent from Huawei Cloud.
  */
 public class DestroyOperation {
     /**

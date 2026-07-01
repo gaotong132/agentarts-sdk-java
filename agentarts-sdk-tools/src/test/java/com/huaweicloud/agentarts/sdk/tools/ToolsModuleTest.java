@@ -15,16 +15,16 @@ import static org.junit.jupiter.api.Assertions.*;
 class ToolsModuleTest {
 
     // ========================
-    // Python Parity: CodeInterpreter API methods
+    // API verification: CodeInterpreter API methods
     // ========================
 
     @Nested
-    @DisplayName("Python Parity: CodeInterpreterClient API methods")
+    @DisplayName("API verification: CodeInterpreterClient API methods")
     class PythonParityTests {
 
         @Test
         void controlPlaneMethodsExist() throws Exception {
-            // Mirrors Python CodeInterpreter control plane methods
+            // CodeInterpreter control plane methods
             Class<?> cls = CodeInterpreterClient.class;
             assertNotNull(cls.getMethod("createCodeInterpreter", String.class, String.class));
             assertNotNull(cls.getMethod("createCodeInterpreter", String.class));
@@ -46,7 +46,7 @@ class ToolsModuleTest {
 
         @Test
         void dataPlaneInvokeMethodsExist() throws Exception {
-            // Mirrors Python: invoke, execute_code, execute_command, upload_file, upload_files,
+            // Data plane: invoke, execute_code, execute_command, upload_file, upload_files,
             // download_file, download_files, install_packages, clear_context
             Class<?> cls = CodeInterpreterClient.class;
             assertNotNull(cls.getMethod("invoke", String.class, Map.class));
@@ -88,11 +88,11 @@ class ToolsModuleTest {
     }
 
     // ========================
-    // CodeSession (Python parity)
+    // CodeSession wrapper verification
     // ========================
 
     @Nested
-    @DisplayName("CodeSession Python parity")
+    @DisplayName("CodeSession wrapper verification")
     class CodeSessionTests {
 
         @Test

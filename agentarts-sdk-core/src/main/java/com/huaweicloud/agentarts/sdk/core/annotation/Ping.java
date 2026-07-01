@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  * <p>The annotated method will handle {@code GET /ping} requests.
  * It should return a {@code PingStatus} value.</p>
  *
- * <p>Mirrors Python {@code @app.ping} decorator.</p>
+ * <p>Marks a method as the health check handler for the runtime.</p>
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

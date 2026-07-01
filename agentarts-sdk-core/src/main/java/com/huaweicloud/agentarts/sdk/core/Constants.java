@@ -5,8 +5,8 @@ import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 /**
  * Centralized constants and environment variable accessors for AgentArts SDK.
  *
- * <p>Mirrors Python {@code agentarts.sdk.utils.constant} module. All values are
- * loaded from environment variables.</p>
+ * <p>Provides centralized constants and environment variable accessors.
+ * All values are loaded from environment variables.</p>
  *
  * <p>Environment variable priority for region:
  * <ol>
@@ -50,7 +50,7 @@ public final class Constants {
     public static final String ENV_AGENTARTS_BIND_IP = "AGENTARTS_BIND_IP";
 
     // ========================
-    // HTTP Header constants (matching Python runtime/model.py)
+    // HTTP Header constants for AgentArts runtime
     // ========================
 
     public static final String SESSION_HEADER = "x-hw-agentarts-session-id";

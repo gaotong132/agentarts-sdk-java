@@ -8,7 +8,7 @@ import java.nio.file.*;
 /**
  * Init operation: creates project skeleton from templates.
  *
- * <p>Mirrors Python {@code operations/runtime/init.py:init_project}.</p>
+ * <p>Operation: initialize a new project from templates.</p>
  */
 public class InitOperation {
 

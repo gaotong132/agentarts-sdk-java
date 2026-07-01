@@ -3,7 +3,7 @@ package com.huaweicloud.agentarts.sdk.service.http;
 /**
  * Configuration for an HTTP client instance.
  *
- * <p>Mirrors Python {@code RequestConfig} from {@code http_client.py}.</p>
+ * <p>HTTP request configuration: base URL, timeout, SSL verification.</p>
  */
 public class RequestConfig {
 

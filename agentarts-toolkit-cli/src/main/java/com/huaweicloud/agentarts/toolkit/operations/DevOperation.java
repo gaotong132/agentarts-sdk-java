@@ -2,7 +2,7 @@ package com.huaweicloud.agentarts.toolkit.operations;
 
 /**
  * Dev operation: run local development server.
- * Mirrors Python operations/runtime/dev.py.
+ * Operation: start local development server.
  */
 public class DevOperation {
     /**

@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Memory async tests — mirrors Python test_memory_async.py (8 tests).
+ * Memory async tests — (8 tests: async memory operations + session wrapper).
  * Uses Reactor's Mono.fromCallable + Schedulers.boundedElastic to simulate
  * Python's asyncio pattern.
  * Requires AGENTARTS_TEST_ALLOW_CREATE=1.

@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 /**
  * High-level Identity client for AgentArts workload identity management.
  *
- * <p>Mirrors Python {@code IdentityClient} from {@code service/identity/identity_client.py}.
+ * <p>Service client wrapping Huawei Cloud AgentIdentity API operations.
  * Wraps {@link IdentityServiceClient} and provides convenience methods for
  * workload identity bootstrap, token creation, and resource token retrieval.</p>
  */

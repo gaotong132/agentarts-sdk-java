@@ -31,7 +31,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Base HTTP client for AgentArts services with signing support.
  *
- * <p>Mirrors Python {@code BaseHTTPClient} from {@code http_client.py}.
+ * <p>Base HTTP client for AgentArts services with signing support.
  * Supports two signing modes:</p>
  * <ul>
  *   <li>{@link SignMode#V11_HMAC_SHA256} — AgentArts V11 signer with HKDF key derivation</li>

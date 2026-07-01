@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Read-only list tests — mirrors Python test_readonly_lists.py (4 tests).
+ * Read-only list tests — (4 tests: list spaces, gateways, agents, interpreters).
  */
 @Tag("e2e")
 @DisplayName("Read-Only List Tests")

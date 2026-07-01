@@ -7,7 +7,7 @@ import picocli.CommandLine.Parameters;
 /**
  * MCP Gateway management subcommand group.
  *
- * <p>Mirrors Python {@code mcp-gateway} sub-app with 10 CRUD commands.</p>
+ * <p>CLI command: manage MCP gateways and targets.</p>
  */
 @Command(
     name = "mcp-gateway",

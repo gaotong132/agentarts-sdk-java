@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * Runtime configuration for deploying and running the agent.
  *
- * <p>Mirrors Python {@code AgentArtsRuntimeConfig}.</p>
+ * <p>Runtime configuration for deploying and running the agent.</p>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RuntimeConfig {

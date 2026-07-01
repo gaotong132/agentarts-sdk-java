@@ -1,10 +1,11 @@
 package com.huaweicloud.agentarts.sdk.identity.auth;
 
 /**
- * Interface for polling OAuth2 token status.
+ * Abstract base class for polling OAuth2 token authorization status.
  *
- * <p>Mirrors Python {@code TokenPoller} from
- * {@code service/identity/polling/token_poller.py}.</p>
+ * <p>Subclasses implement {@link #poll()} to check the token status.
+ * The poller runs at a configurable interval until the token is authorized
+ * or the timeout is reached.</p>
  */
 public abstract class TokenPoller {
 

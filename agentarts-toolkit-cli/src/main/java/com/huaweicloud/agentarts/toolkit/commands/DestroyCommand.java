@@ -7,7 +7,7 @@ import picocli.CommandLine.Option;
 /**
  * Destroy agent from Huawei Cloud.
  *
- * <p>Mirrors Python {@code destroy} command from {@code cli/runtime/destroy.py}.</p>
+ * <p>CLI command: destroy a deployed agent.</p>
  */
 @Command(name = "destroy", description = "Destroy agent from Huawei Cloud")
 public class DestroyCommand implements Runnable {

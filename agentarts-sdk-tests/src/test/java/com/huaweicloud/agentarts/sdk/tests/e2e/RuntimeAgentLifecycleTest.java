@@ -5,7 +5,7 @@ import org.junit.jupiter.api.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Runtime agent lifecycle tests — mirrors Python test_runtime_agent_lifecycle.py (6 tests).
+ * Runtime agent lifecycle tests — (6 tests: agent CRUD, skipped - backend prereq).
  * All tests are skipped: backend requires artifact_source_config + identity_configuration.
  */
 @Tag("e2e")

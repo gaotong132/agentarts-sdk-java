@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  * <p>The token is fetched via the AgentArts Identity service and injected as a
  * method parameter named by {@link #into()}.</p>
  *
- * <p>Mirrors Python {@code @require_access_token} decorator.</p>
+ * <p>Injects an OAuth2 access token into the annotated method parameter.</p>
  *
  * <h3>Usage:</h3>
  * <pre>{@code

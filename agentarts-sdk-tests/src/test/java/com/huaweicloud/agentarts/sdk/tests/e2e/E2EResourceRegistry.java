@@ -5,7 +5,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * LIFO resource cleanup registry — mirrors Python _ResourceRegistry.
+ * LIFO resource cleanup registry — LIFO cleanup queue, drained at session end.
  *
  * <p>Every resource created by a test is registered here; at session end
  * {@link #cleanupAll()} calls each deleter in reverse order, swallowing errors

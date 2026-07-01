@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  * <p>The API key is fetched via the AgentArts Identity service and injected as a
  * method parameter named by {@link #into()}.</p>
  *
- * <p>Mirrors Python {@code @require_api_key} decorator.</p>
+ * <p>Injects an API key into the annotated method parameter.</p>
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

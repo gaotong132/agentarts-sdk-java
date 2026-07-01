@@ -28,7 +28,7 @@ import java.util.function.Supplier;
 /**
  * AgentArts Runtime Application — Vert.x-based HTTP server.
  *
- * <p>Mirrors Python {@code AgentArtsRuntimeApp} from {@code runtime/app.py}.
+ * <p>Vert.x-based HTTP server for hosting agent endpoints.
  * Exposes three endpoints:</p>
  * <ul>
  *   <li>{@code POST /invocations} — main agent invocation (sync JSON / SSE streaming)</li>
@@ -155,7 +155,7 @@ public class AgentArtsRuntimeApp {
     }
 
     // ========================
-    // Async task tracking (mirrors Python _active_tasks)
+    // Async task tracking
     // ========================
 
     /**

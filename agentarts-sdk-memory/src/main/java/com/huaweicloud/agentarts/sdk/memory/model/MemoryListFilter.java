@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Memory list filter. Mirrors Python MemoryListFilter. */
+/** Memory list filter for sorting and filtering extracted memories. */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class MemoryListFilter {
     @JsonProperty("strategy_type") private String strategyType;

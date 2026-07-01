@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Memory search filter. Mirrors Python MemorySearchFilter. */
+/** Memory search filter for querying extracted memories. */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class MemorySearchFilter {
     @JsonProperty("query") private String query;

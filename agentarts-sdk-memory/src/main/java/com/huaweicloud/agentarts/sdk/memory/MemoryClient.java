@@ -16,7 +16,7 @@ import java.util.stream.Collectors;
 /**
  * Memory client with dual-plane architecture.
  *
- * <p>Mirrors Python {@code MemoryClient} from {@code memory/__init__.py}.
+ * <p>Memory client with dual-plane architecture (AK/SK control + API Key data).
  * Control plane operations use AK/SK signing.
  * Data plane operations use API Key (Bearer token) authentication.</p>
  *

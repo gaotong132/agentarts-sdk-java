@@ -13,7 +13,7 @@ import java.util.*;
 /**
  * Code Interpreter client with dual-plane architecture.
  *
- * <p>Mirrors Python {@code CodeInterpreter} from {@code tools/__init__.py}.
+ * <p>Code Interpreter client with dual-plane architecture.
  * Control plane uses AK/SK signing. Data plane uses API Key or IAM.</p>
  *
  * <h3>Control Plane (AK/SK):</h3>

@@ -14,7 +14,7 @@ import java.nio.file.Path;
 /**
  * Local identity configuration stored in {@code .agent_identity.json}.
  *
- * <p>Mirrors Python {@code Config} from {@code identity/config.py}.</p>
+ * <p>Local identity configuration stored in {@code .agent_identity.json}.</p>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class LocalIdentityConfig {

@@ -15,7 +15,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Service client wrapping Huawei Cloud {@link SwrClient} for container registry operations.
  *
- * <p>Mirrors Python {@code SWRClient} from {@code service/swr_client.py}.
+ * <p>Service client wrapping Huawei Cloud SWR operations.
  * Provides namespace (organization), repository, and authorization token management
  * for deploying agent containers to SWR.</p>
  */

@@ -9,7 +9,7 @@ import java.util.Map;
 /**
  * Result of an HTTP request, with support for streaming responses.
  *
- * <p>Mirrors Python {@code RequestResult} from {@code http_client.py}.</p>
+ * <p>Result of an HTTP request, with support for streaming responses.</p>
  *
  * <p>For non-streaming responses, {@link #getData()} contains the parsed JSON
  * (as {@link JsonNode}) or the raw response body as a String.</p>

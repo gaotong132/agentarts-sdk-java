@@ -2,7 +2,7 @@ package com.huaweicloud.agentarts.toolkit.operations;
 
 /**
  * Deploy operation: build → SWR → runtime create.
- * Mirrors Python operations/runtime/deploy.py.
+ * Operation: build and deploy agent to cloud or local environment.
  * Flow: docker build → SWR createNamespace/createRepo → createAuthorizationToken → runtime create (V11 signed).
  */
 public class DeployOperation {

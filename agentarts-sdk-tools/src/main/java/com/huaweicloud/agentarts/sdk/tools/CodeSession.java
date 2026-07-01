@@ -3,7 +3,7 @@ package com.huaweicloud.agentarts.sdk.tools;
 /**
  * Context manager for Code Interpreter sessions.
  *
- * <p>Mirrors Python {@code code_session} context manager from {@code tools/__init__.py}.
+ * <p>AutoCloseable session context that manages Code Interpreter lifecycle.
  * Creates a CodeInterpreterClient, starts a session, and stops it on close.</p>
  *
  * <h3>Usage:</h3>

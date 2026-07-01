@@ -2,7 +2,7 @@ package com.huaweicloud.agentarts.sdk.memory.model;
 
 /**
  * Retrieval configuration for memory search.
- * Mirrors Python RetrievalConfig with identical field names and defaults.
+ * Configuration for memory retrieval: user ID, max tokens, top-k, score threshold.
  */
 public class RetrievalConfig {
     private String userId;

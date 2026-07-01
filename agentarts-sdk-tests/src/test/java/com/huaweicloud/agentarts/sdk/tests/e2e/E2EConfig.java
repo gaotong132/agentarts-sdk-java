@@ -3,7 +3,7 @@ package com.huaweicloud.agentarts.sdk.tests.e2e;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 
 /**
- * E2E test configuration — mirrors Python conftest.py env-var gates.
+ * E2E test configuration — providing three-tier safety model gates.
  *
  * <p>Three-tier safety model:</p>
  * <ul>

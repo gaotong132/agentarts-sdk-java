@@ -14,23 +14,23 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for CLI module: command tree structure, Python parity, templates, config operations.
+ * Tests for CLI module: command tree structure, API verification, templates, config operations.
  */
 class CliModuleTest {
 
     private final CommandLine cli = new CommandLine(new AgentArtsCli());
 
     // ========================
-    // Python Parity: Command tree verification
+    // API verification: Command tree verification
     // ========================
 
     @Nested
-    @DisplayName("Python Parity: Command tree matches Typer CLI")
+    @DisplayName("API verification: Command tree matches Typer CLI")
     class CommandTreeTests {
 
         @Test
         void topLevelCommandsExist() {
-            // Mirrors Python: init, config(alias configure), dev, deploy(alias launch),
+            // Commands: init, config(alias configure), dev, deploy(alias launch),
             // invoke, destroy, runtime, mcp-gateway, memory
             Map<String, CommandLine> subs = cli.getSubcommands();
             assertNotNull(subs.get("init"), "init command missing");
@@ -129,11 +129,11 @@ class CliModuleTest {
     }
 
     // ========================
-    // Python Parity: Init command options
+    // API verification: Init command options
     // ========================
 
     @Nested
-    @DisplayName("Python Parity: init command options")
+    @DisplayName("API verification: init command options")
     class InitOptionsTests {
 
         @Test
@@ -163,11 +163,11 @@ class CliModuleTest {
     }
 
     // ========================
-    // Python Parity: dev command options
+    // API verification: dev command options
     // ========================
 
     @Nested
-    @DisplayName("Python Parity: dev command options")
+    @DisplayName("API verification: dev command options")
     class DevOptionsTests {
 
         @Test
@@ -196,11 +196,11 @@ class CliModuleTest {
     }
 
     // ========================
-    // Python Parity: deploy command options
+    // API verification: deploy command options
     // ========================
 
     @Nested
-    @DisplayName("Python Parity: deploy command options")
+    @DisplayName("API verification: deploy command options")
     class DeployOptionsTests {
 
         @Test
@@ -234,11 +234,11 @@ class CliModuleTest {
     }
 
     // ========================
-    // Python Parity: invoke command options
+    // API verification: invoke command options
     // ========================
 
     @Nested
-    @DisplayName("Python Parity: invoke command options")
+    @DisplayName("API verification: invoke command options")
     class InvokeOptionsTests {
 
         @Test
@@ -325,7 +325,7 @@ class CliModuleTest {
     }
 
     // ========================
-    // Config YAML format (Python parity)
+    // Config YAML format verification
     // ========================
 
     @Nested

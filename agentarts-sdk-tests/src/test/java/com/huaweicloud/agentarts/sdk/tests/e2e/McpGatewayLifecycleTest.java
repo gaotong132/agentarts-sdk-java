@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * MCP Gateway lifecycle tests — mirrors Python test_mcp_gateway_lifecycle.py (6 tests).
+ * MCP Gateway lifecycle tests — (6 tests: gateway + target CRUD, xfail).
  * All tests are expected to fail (xfail) due to SDK trust_policy bug.
  * Requires AGENTARTS_TEST_ALLOW_CREATE=1.
  */

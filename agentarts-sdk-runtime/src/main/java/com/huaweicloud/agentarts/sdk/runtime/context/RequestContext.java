@@ -5,7 +5,7 @@ import com.huaweicloud.agentarts.sdk.core.Constants;
 /**
  * Immutable snapshot of an incoming request's context.
  *
- * <p>Mirrors Python {@code RequestContext} from {@code runtime/context.py}.</p>
+ * <p>Immutable snapshot of an incoming request context.</p>
  *
  * <p>Holds the session ID, request ID, and workload access token
  * extracted from HTTP headers.</p>

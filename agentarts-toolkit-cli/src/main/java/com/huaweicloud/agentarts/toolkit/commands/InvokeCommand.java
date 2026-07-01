@@ -8,7 +8,7 @@ import picocli.CommandLine.Parameters;
 /**
  * Invoke agent with JSON payload.
  *
- * <p>Mirrors Python {@code invoke} command from {@code cli/runtime/invoke.py}.
+ * <p>CLI command: invoke a deployed agent.
  * Registered at both top-level and under 'runtime' subcommand.</p>
  */
 @Command(name = "invoke", description = "Invoke agent with JSON payload")

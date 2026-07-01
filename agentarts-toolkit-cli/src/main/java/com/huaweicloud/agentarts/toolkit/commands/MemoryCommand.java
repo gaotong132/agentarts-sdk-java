@@ -7,7 +7,7 @@ import picocli.CommandLine.Parameters;
 /**
  * Memory space management subcommand group.
  *
- * <p>Mirrors Python {@code memory} sub-app: create, get, list, update, delete, status.</p>
+ * <p>CLI command: manage memory spaces.</p>
  */
 @Command(
     name = "memory",

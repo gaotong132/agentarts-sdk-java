@@ -20,7 +20,7 @@ import java.util.TreeMap;
 /**
  * V11-HMAC-SHA256 request signer for AgentArts self-developed endpoints.
  *
- * <p>This is a 1:1 Java port of Python {@code agentarts.sdk.utils.signer_v11.V11Signer}.
+ * <p>V11-HMAC-SHA256 request signer for AgentArts endpoints.
  * Used for signing HTTP requests to AgentArts control plane, data plane,
  * runtime invoke, code interpreter, and MCP gateway endpoints.</p>
  *
@@ -33,7 +33,7 @@ import java.util.TreeMap;
  *   <li>Build Authorization header</li>
  * </ol>
  *
- * <h3>Critical porting notes:</h3>
+ * <h3>Algorithm notes:</h3>
  * <ul>
  *   <li>HKDF uses AK as salt and SK as IKM (reversed from typical HKDF conventions)</li>
  *   <li>Canonical URI always ends with trailing {@code /}</li>

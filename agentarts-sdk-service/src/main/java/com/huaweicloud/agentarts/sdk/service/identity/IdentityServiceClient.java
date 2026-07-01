@@ -17,7 +17,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Service client wrapping Huawei Cloud {@link AgentIdentityClient}.
  *
- * <p>Mirrors Python {@code IdentityClient} from {@code service/identity/identity_client.py}.
+ * <p>Service client wrapping Huawei Cloud AgentIdentity API operations.
  * Wraps all 31 API methods from the Huawei Cloud Java SDK AgentIdentityClient,
  * providing both sync and async invocation patterns.</p>
  *

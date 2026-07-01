@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /**
  * Base configuration for an agent: name, entrypoint, region, platform, etc.
  *
- * <p>Mirrors Python {@code BaseConfig}.</p>
+ * <p>Base agent configuration: name, entrypoint, region, language.</p>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class BaseConfig {

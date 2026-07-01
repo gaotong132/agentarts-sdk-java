@@ -3,7 +3,7 @@ package com.huaweicloud.agentarts.sdk.core;
 /**
  * Runtime ping status for health-check endpoint.
  *
- * <p>Mirrors Python {@code agentarts.sdk.runtime.model.PingStatus}.</p>
+ * <p>Agent runtime health status.</p>
  */
 public enum PingStatus {
 

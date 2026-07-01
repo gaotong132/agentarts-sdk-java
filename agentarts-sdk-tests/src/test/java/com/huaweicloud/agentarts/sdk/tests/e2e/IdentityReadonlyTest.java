@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Identity read-only tests — mirrors Python test_identity_readonly.py (5 tests).
+ * Identity read-only tests — (5 tests: list identities, list providers, get/token).
  */
 @Tag("e2e")
 @DisplayName("Identity Read-Only Tests")

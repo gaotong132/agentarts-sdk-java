@@ -18,7 +18,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Service client wrapping Huawei Cloud IAM v5 for agency management.
  *
- * <p>Mirrors Python {@code IAMClient} from {@code service/iam_client.py}.
+ * <p>Service client wrapping Huawei Cloud IAM v5 for agency management.
  * Uses IAM v5 (not v3) for agency creation, matching the Python SDK.</p>
  *
  * <h3>APIs:</h3>
@@ -79,7 +79,7 @@ public class IAMServiceClient {
     /**
      * Create an IAM agency for delegated access.
      *
-     * <p>Mirrors Python {@code IAMClient.create_agency(agency_name, trust_policy, ...)}
+     * <p>Create an IAM agency for delegated access.
      * using IAM v5 API.</p>
      *
      * @param agencyName          name of the agency to create

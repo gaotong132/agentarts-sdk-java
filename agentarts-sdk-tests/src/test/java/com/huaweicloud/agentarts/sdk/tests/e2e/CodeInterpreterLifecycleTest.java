@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Code Interpreter lifecycle tests — mirrors Python test_code_interpreter_lifecycle.py (3 tests).
+ * Code Interpreter lifecycle tests — (3 tests: get, list, update).
  * Requires AGENTARTS_TEST_ALLOW_CREATE=1.
  */
 @Tag("e2e")

@@ -9,7 +9,7 @@ import picocli.CommandLine.Parameters;
 /**
  * Configuration management (alias: configure).
  *
- * <p>Mirrors Python {@code config} sub-app from {@code cli/runtime/config.py}.
+ * <p>CLI command: manage agent configuration.
  * Subcommands: list, set-default, get, set, remove, set-env, remove-env, list-env.</p>
  */
 @Command(

@@ -24,7 +24,7 @@ import reactor.core.publisher.Flux;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Runtime local tests — mirrors Python test_runtime_app_local.py (11 tests).
+ * Runtime local tests — (11 tests: ping, invocations, SSE, WebSocket).
  * Uses Vert.x WebClient instead of Python's Starlette TestClient.
  */
 @Tag("e2e")

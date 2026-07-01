@@ -3,7 +3,7 @@ package com.huaweicloud.agentarts.sdk.core;
 /**
  * Exception thrown when an API call to AgentArts services returns a non-success response.
  *
- * <p>Mirrors Python {@code agentarts.sdk.service.http_client.APIException}.</p>
+ * <p>Exception for AgentArts API errors with status code and error details.</p>
  */
 public class APIException extends RuntimeException {
 

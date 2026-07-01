@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Auth decorator tests — mirrors Python test_auth_decorators.py (3 tests).
+ * Auth decorator tests — (3 tests: api_key, sts_token, oauth2_3lo).
  * Requires AGENTARTS_TEST_ALLOW_CREATE=1.
  */
 @Tag("e2e")

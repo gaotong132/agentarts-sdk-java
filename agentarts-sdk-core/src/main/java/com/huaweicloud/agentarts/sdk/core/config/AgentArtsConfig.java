@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /**
  * Per-agent configuration in {@code .agentarts_config.yaml}.
  *
- * <p>Mirrors Python {@code AgentArtsConfig} with three sections: base, swr_config, runtime.</p>
+ * <p>Agent configuration with three sections: base, swr_config, runtime.</p>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AgentArtsConfig {

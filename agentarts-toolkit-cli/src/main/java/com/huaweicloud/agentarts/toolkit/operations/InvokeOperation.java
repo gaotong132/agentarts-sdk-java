@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Invoke operation: send JSON payload to local or cloud agent.
- * Mirrors Python operations/runtime/invoke.py.
+ * Operation: invoke agent with JSON payload (local or cloud).
  */
 public class InvokeOperation {
 

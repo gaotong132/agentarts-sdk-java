@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * Convenience wrapper that binds space_id and session_id.
  *
- * <p>Mirrors Python {@code MemorySession} from {@code memory/session.py}.
+ * <p>Convenience wrapper that binds space_id and session_id.
  * Pre-binds spaceId and sessionId so callers don't need to pass them repeatedly.</p>
  *
  * <h3>Usage:</h3>
@@ -32,7 +32,7 @@ public class MemorySession implements AutoCloseable {
     }
 
     /**
-     * Factory method. Mirrors Python MemorySession.of().
+     * Factory method. Creates a session, auto-creating if sessionId is null.
      * If sessionId is null, a new session is auto-created.
      */
     public static MemorySession of(String spaceId, String actorId, String sessionId,

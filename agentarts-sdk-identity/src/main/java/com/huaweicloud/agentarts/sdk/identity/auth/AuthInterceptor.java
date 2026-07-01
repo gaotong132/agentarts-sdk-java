@@ -19,7 +19,7 @@ import java.util.Map;
  * before invoking methods annotated with {@link RequireAccessToken},
  * {@link RequireApiKey}, or {@link RequireStsToken}.
  *
- * <p>Mirrors Python auth decorators from {@code identity/auth.py}.
+ * <p>Dynamic proxy interceptor for @Require* annotation enforcement.
  * Uses {@link Proxy} (not Spring AOP) to keep the SDK lightweight.</p>
  *
  * <h3>Usage:</h3>

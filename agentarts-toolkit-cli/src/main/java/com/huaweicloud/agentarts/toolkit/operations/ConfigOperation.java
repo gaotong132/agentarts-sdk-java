@@ -15,7 +15,7 @@ import java.util.Map;
 /**
  * Config operation: manages .agentarts_config.yaml.
  *
- * <p>Mirrors Python {@code operations/runtime/config.py}.</p>
+ * <p>Operation: manage configuration file.</p>
  */
 public class ConfigOperation {
 

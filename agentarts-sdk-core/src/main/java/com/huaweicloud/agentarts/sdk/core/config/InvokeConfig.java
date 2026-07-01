@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * Invoke configuration: protocol, port, file transfer config, URL match type.
  *
- * <p>Mirrors Python {@code InvokeConfig}.</p>
+ * <p>Invoke configuration: protocol, port, file transfer config, URL match type.</p>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class InvokeConfig {

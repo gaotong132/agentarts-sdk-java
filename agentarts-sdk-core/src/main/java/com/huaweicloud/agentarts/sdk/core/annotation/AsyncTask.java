@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  * <p>The annotated method runs as a tracked background task. The runtime's
  * {@code /ping} endpoint will report {@code HealthyBusy} while tasks are running.</p>
  *
- * <p>Mirrors Python {@code @app.async_task} decorator.</p>
+ * <p>Marks a method as a background async task handler.</p>
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
