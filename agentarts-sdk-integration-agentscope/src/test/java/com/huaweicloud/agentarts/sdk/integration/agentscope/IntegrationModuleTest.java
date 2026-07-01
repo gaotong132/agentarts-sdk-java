@@ -6,9 +6,7 @@ import com.huaweicloud.agentarts.sdk.integration.agentscope.state.MemoryAgentSta
 import com.huaweicloud.agentarts.sdk.integration.agentscope.tool.CodeInterpreterTool;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.tool.MCPGatewayTool;
 import com.huaweicloud.agentarts.sdk.memory.MemoryClient;
-import com.huaweicloud.agentarts.sdk.memory.model.TextMessage;
-import com.huaweicloud.agentarts.sdk.memory.model.ToolCallMessage;
-import com.huaweicloud.agentarts.sdk.memory.model.ToolResultMessage;
+import com.huaweicloud.agentarts.sdk.memory.model.*;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.ToolResultBlock;
@@ -21,6 +19,7 @@ import com.huaweicloud.agentarts.sdk.runtime.context.RequestContext;
 import org.junit.jupiter.api.*;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -38,11 +37,12 @@ class IntegrationModuleTest {
     class StateStoreTests {
 
         private MemoryAgentStateStore store;
+        private FakeMemoryClient fakeClient;
 
         @BeforeEach
         void setUp() {
-            MemoryClient client = new MemoryClient("cn-southwest-2", "test-key");
-            store = new MemoryAgentStateStore(client, "space-123");
+            fakeClient = new FakeMemoryClient();
+            store = new MemoryAgentStateStore(fakeClient, "space-123");
         }
 
         @Test
@@ -54,6 +54,10 @@ class IntegrationModuleTest {
         void saveAndGetSingleState() {
             TestState state = new TestState("hello");
             store.save("user1", "session1", "key1", state);
+
+            // Verify Memory API was called
+            assertTrue(fakeClient.sessionCreated, "createMemorySession should have been called");
+            assertTrue(fakeClient.messagesAdded, "addMessages should have been called");
 
             Optional<TestState> result = store.get("user1", "session1", "key1", TestState.class);
             assertTrue(result.isPresent());
@@ -148,6 +152,21 @@ class IntegrationModuleTest {
 
             Optional<TestState> result = store.get(null, "session1", "key1", TestState.class);
             assertTrue(result.isPresent());
+        }
+
+        @Test
+        void multipleUsersIsolated() {
+            store.save("alice", "s1", "k", new TestState("alice-val"));
+            store.save("bob", "s1", "k", new TestState("bob-val"));
+
+            assertEquals("alice-val", store.get("alice", "s1", "k", TestState.class).orElseThrow().value);
+            assertEquals("bob-val", store.get("bob", "s1", "k", TestState.class).orElseThrow().value);
+        }
+
+        @Test
+        void closeClosesMemoryClient() {
+            store.close();
+            assertTrue(fakeClient.closed, "close() should have been called on MemoryClient");
         }
     }
 
@@ -361,11 +380,94 @@ class IntegrationModuleTest {
     }
 
     // ========================
-    // Helper: test State implementation
+    // Helper: test State implementation (Jackson-serializable)
     // ========================
 
-    static class TestState implements State {
-        final String value;
-        TestState(String value) { this.value = value; }
+    public static class TestState implements State {
+        public String value;
+        public TestState() {} // Jackson default constructor
+        public TestState(String value) { this.value = value; }
+    }
+
+    // ========================
+    // Fake MemoryClient for testing (avoids Mockito + JDK 26 incompatibility)
+    // ========================
+
+    static class FakeMemoryClient extends MemoryClient {
+        boolean sessionCreated = false;
+        boolean messagesAdded = false;
+        boolean closed = false;
+
+        /** In-memory message storage: memSessionId → list of MessageInfo */
+        final Map<String, List<MessageInfo>> messageStore = new ConcurrentHashMap<>();
+
+        FakeMemoryClient() {
+            super("cn-southwest-2", "fake-test-key");
+        }
+
+        @Override
+        public SessionInfo createMemorySession(String spaceId, String id, String actorId, String assistantId) {
+            sessionCreated = true;
+            // Return a SessionInfo with the requested ID via JSON deserialization
+            String json = "{\"id\":\"" + id + "\",\"space_id\":\"" + spaceId + "\"}";
+            try {
+                return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, SessionInfo.class);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        public MessageBatchResponse addMessages(String spaceId, String sessionId, List<?> messages,
+                                                  Long timestamp, String idempotencyKey, boolean isForceExtract) {
+            messagesAdded = true;
+            List<MessageInfo> stored = messageStore.computeIfAbsent(sessionId, k -> new ArrayList<>());
+            int seq = stored.size();
+            for (Object m : messages) {
+                if (m instanceof TextMessage tm) {
+                    Map<String, Object> part = new HashMap<>();
+                    part.put("type", "text");
+                    part.put("text", tm.getContent());
+
+                    String json = "{\"id\":\"msg-" + (++seq) + "\",\"session_id\":\"" + sessionId
+                            + "\",\"seq\":" + seq + ",\"role\":\"" + tm.getRole()
+                            + "\",\"parts\":" + new com.fasterxml.jackson.databind.ObjectMapper()
+                            .valueToTree(List.of(part)).toString() + "}";
+                    try {
+                        MessageInfo mi = new com.fasterxml.jackson.databind.ObjectMapper()
+                                .readValue(json, MessageInfo.class);
+                        stored.add(mi);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+            return new MessageBatchResponse();
+        }
+
+        @Override
+        public List<MessageInfo> getLastKMessages(String sessionId, int k, String spaceId) {
+            List<MessageInfo> all = messageStore.getOrDefault(sessionId, List.of());
+            int start = Math.max(0, all.size() - k);
+            return new ArrayList<>(all.subList(start, all.size()));
+        }
+
+        @Override
+        public MessageListResponse listMessages(String spaceId, String sessionId, int limit, int offset) {
+            List<MessageInfo> all = messageStore.getOrDefault(sessionId, List.of());
+            int end = Math.min(all.size(), offset + limit);
+            List<MessageInfo> page = (offset < all.size()) ? all.subList(offset, end) : List.of();
+            String json = "{\"items\":[],\"total\":" + all.size() + "}";
+            try {
+                return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, MessageListResponse.class);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
     }
 }

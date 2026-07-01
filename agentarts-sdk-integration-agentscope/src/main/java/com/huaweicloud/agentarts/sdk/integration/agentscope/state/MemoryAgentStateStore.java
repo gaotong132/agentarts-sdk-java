@@ -1,116 +1,220 @@
 package com.huaweicloud.agentarts.sdk.integration.agentscope.state;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huaweicloud.agentarts.sdk.memory.MemoryClient;
 import com.huaweicloud.agentarts.sdk.memory.model.*;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.state.State;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * AgentStateStore implementation backed by AgentArts Memory service.
+ * AgentStateStore 实现，通过 AgentArts Memory 数据面 API 持久化 agentscope State。
  *
- * <p>Implements all 8 methods of the {@link AgentStateStore} interface.
- * Uses the Memory data plane API for session and message management.
- * Falls back to in-memory storage for State objects that can't be
- * directly mapped to Memory API calls.</p>
+ * <p>映射策略：每个 (userId, sessionId, key) 三元组对应一个 Memory Session，
+ * State 对象序列化为 JSON 后作为 TextMessage 存入。每次 save 追加新消息，
+ * 读取时取最新的消息。</p>
  *
- * <p>Contract matches agentscope's InMemoryAgentStateStore behavior:
- * save(key, list) does full replacement; get returns Optional.empty() when not found.</p>
+ * <p>消息内容格式：</p>
+ * <ul>
+ *   <li>单 State: {@code __S__:{className}:{json}}</li>
+ *   <li>列表 State: 每个元素一条 {@code __L__:{className}:{json}}</li>
+ * </ul>
  */
 public class MemoryAgentStateStore implements AgentStateStore {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MemoryAgentStateStore.class);
+
+    private static final String SINGLE_PREFIX = "__S__:";
+    private static final String LIST_PREFIX = "__L__:";
+    private static final String LIST_BATCH = "__LB__:";
+    private static final String SESSION_PREFIX = "__as_";
 
     private final MemoryClient memoryClient;
     private final String spaceId;
 
-    // In-memory fallback for State objects that can't be persisted via Memory API
-    // Structure: userId → sessionId → key → State (or List<State>)
-    private final Map<String, Map<String, Map<String, Object>>> localStore = new ConcurrentHashMap<>();
+    /** ObjectMapper 配置：忽略未知属性，与 agentscope 的 JacksonJsonCodec 行为一致。 */
+    private final ObjectMapper mapper;
+
+    /** 本地缓存: logicalKey → Memory Session ID，避免重复创建 Session。 */
+    private final Map<String, String> sessionCache = new ConcurrentHashMap<>();
+
+    /** 本地缓存: logicalKey → 已知的 session 存在状态（用于 exists/listSessionIds）。 */
+    private final Set<String> knownSessions = ConcurrentHashMap.newKeySet();
 
     public MemoryAgentStateStore(MemoryClient memoryClient, String spaceId) {
-        this.memoryClient = memoryClient;
-        this.spaceId = spaceId;
+        this.memoryClient = Objects.requireNonNull(memoryClient, "memoryClient");
+        this.spaceId = Objects.requireNonNull(spaceId, "spaceId");
+        this.mapper = new ObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
     /**
-     * Convenience constructor that creates a MemoryClient internally.
+     * 便捷构造函数。
      */
     public MemoryAgentStateStore(String regionName, String apiKey, String spaceId) {
-        this.memoryClient = new MemoryClient(regionName, apiKey);
-        this.spaceId = spaceId;
+        this(new MemoryClient(regionName, apiKey), spaceId);
     }
+
+    // ========================
+    // AgentStateStore 接口实现
+    // ========================
 
     @Override
     public void save(String userId, String sessionId, String key, State value) {
-        ensureSession(userId, sessionId);
-        getOrCreateSessionMap(userId, sessionId).put(key, value);
+        String memSessionId = getOrCreateMemorySession(userId, sessionId, key);
+        if (memSessionId == null) return;
+
+        try {
+            String json = mapper.writeValueAsString(value);
+            String className = value.getClass().getName();
+            String content = SINGLE_PREFIX + className + ":" + json;
+            TextMessage msg = new TextMessage("system", content);
+            memoryClient.addMessages(spaceId, memSessionId, List.of(msg), null, null, false);
+        } catch (Exception e) {
+            LOG.warn("MemoryAgentStateStore.save({},{},{}) failed: {}", userId, sessionId, key, e.getMessage());
+        }
     }
 
     @Override
     public void save(String userId, String sessionId, String key, List<? extends State> values) {
-        ensureSession(userId, sessionId);
-        // Full replacement (matches InMemoryAgentStateStore behavior)
-        getOrCreateSessionMap(userId, sessionId).put(key, new ArrayList<>(values));
+        String memSessionId = getOrCreateMemorySession(userId, sessionId, key);
+        if (memSessionId == null) return;
+
+        try {
+            List<TextMessage> messages = new ArrayList<>();
+            // Batch marker: indicates start of a new list save (enables full-replacement semantics)
+            messages.add(new TextMessage("system", LIST_BATCH + values.size()));
+            for (State item : values) {
+                String json = mapper.writeValueAsString(item);
+                String className = item.getClass().getName();
+                messages.add(new TextMessage("system", LIST_PREFIX + className + ":" + json));
+            }
+            memoryClient.addMessages(spaceId, memSessionId, messages, null, null, false);
+        } catch (Exception e) {
+            LOG.warn("MemoryAgentStateStore.save list({},{},{}) failed: {}", userId, sessionId, key, e.getMessage());
+        }
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T extends State> Optional<T> get(String userId, String sessionId, String key, Class<T> type) {
-        Map<String, Object> sessionMap = getSessionMap(userId, sessionId);
-        if (sessionMap == null) return Optional.empty();
-        Object value = sessionMap.get(key);
-        if (value == null) return Optional.empty();
-        if (type.isInstance(value)) return Optional.of(type.cast(value));
+        String logicalKey = buildLogicalKey(userId, sessionId, key);
+        String memSessionId = sessionCache.get(logicalKey);
+        if (memSessionId == null) return Optional.empty();
+
+        try {
+            List<MessageInfo> msgs = memoryClient.getLastKMessages(memSessionId, 1, spaceId);
+            if (msgs == null || msgs.isEmpty()) return Optional.empty();
+
+            // 从最后一条消息开始查找 __S__: 前缀的消息
+            for (int i = msgs.size() - 1; i >= 0; i--) {
+                String text = extractText(msgs.get(i));
+                if (text != null && text.startsWith(SINGLE_PREFIX)) {
+                    String body = text.substring(SINGLE_PREFIX.length());
+                    int colonIdx = body.indexOf(':');
+                    if (colonIdx > 0) {
+                        String json = body.substring(colonIdx + 1);
+                        T result = mapper.readValue(json, type);
+                        return Optional.of(result);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("MemoryAgentStateStore.get({},{},{}) failed: {}", userId, sessionId, key, e.getMessage());
+        }
         return Optional.empty();
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T extends State> List<T> getList(String userId, String sessionId, String key, Class<T> itemType) {
-        Map<String, Object> sessionMap = getSessionMap(userId, sessionId);
-        if (sessionMap == null) return List.of();
-        Object value = sessionMap.get(key);
-        if (value instanceof List<?> list) {
-            return list.stream()
-                    .filter(itemType::isInstance)
-                    .map(itemType::cast)
-                    .collect(Collectors.toList());
+        String logicalKey = buildLogicalKey(userId, sessionId, key);
+        String memSessionId = sessionCache.get(logicalKey);
+        if (memSessionId == null) return List.of();
+
+        try {
+            // 获取消息总数
+            MessageListResponse first = memoryClient.listMessages(spaceId, memSessionId, 1, 0);
+            int total = first.getTotal();
+            if (total == 0) return List.of();
+
+            // 获取全部消息
+            List<MessageInfo> allMsgs = memoryClient.getLastKMessages(memSessionId, total, spaceId);
+            if (allMsgs == null || allMsgs.isEmpty()) return List.of();
+
+            // 从末尾找到最后一个 __LB__: 批次标记，只读取该批次的 __L__: 消息
+            int batchStart = -1;
+            int batchCount = 0;
+            for (int i = allMsgs.size() - 1; i >= 0; i--) {
+                String text = extractText(allMsgs.get(i));
+                if (text != null && text.startsWith(LIST_BATCH)) {
+                    batchStart = i;
+                    try {
+                        batchCount = Integer.parseInt(text.substring(LIST_BATCH.length()));
+                    } catch (NumberFormatException e) {
+                        batchCount = 0;
+                    }
+                    break;
+                }
+            }
+            if (batchStart < 0) return List.of();
+
+            // 读取 batchStart 之后的 batchCount 条 __L__: 消息
+            List<T> result = new ArrayList<>();
+            for (int i = batchStart + 1; i < allMsgs.size() && result.size() < batchCount; i++) {
+                String text = extractText(allMsgs.get(i));
+                if (text != null && text.startsWith(LIST_PREFIX)) {
+                    String body = text.substring(LIST_PREFIX.length());
+                    int colonIdx = body.indexOf(':');
+                    if (colonIdx > 0) {
+                        String json = body.substring(colonIdx + 1);
+                        result.add(mapper.readValue(json, itemType));
+                    }
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            LOG.warn("MemoryAgentStateStore.getList({},{},{}) failed: {}", userId, sessionId, key, e.getMessage());
         }
         return List.of();
     }
 
     @Override
     public boolean exists(String userId, String sessionId) {
-        String normalizedUserId = normalizeUserId(userId);
-        Map<String, Map<String, Object>> userMap = localStore.get(normalizedUserId);
-        return userMap != null && userMap.containsKey(sessionId);
+        String prefix = normalizeUserId(userId) + "|" + sessionId + "|";
+        return sessionCache.keySet().stream().anyMatch(k -> k.startsWith(prefix));
     }
 
     @Override
     public void delete(String userId, String sessionId) {
-        String normalizedUserId = normalizeUserId(userId);
-        Map<String, Map<String, Object>> userMap = localStore.get(normalizedUserId);
-        if (userMap != null) {
-            userMap.remove(sessionId);
-        }
+        String prefix = normalizeUserId(userId) + "|" + sessionId + "|";
+        sessionCache.keySet().removeIf(k -> k.startsWith(prefix));
+        // Memory API 无 deleteSession，数据会在 Space TTL 过期后自动清理
     }
 
     @Override
     public void delete(String userId, String sessionId, String key) {
-        Map<String, Object> sessionMap = getSessionMap(userId, sessionId);
-        if (sessionMap != null) {
-            sessionMap.remove(key);
-        }
+        String logicalKey = buildLogicalKey(userId, sessionId, key);
+        sessionCache.remove(logicalKey);
     }
 
     @Override
     public Set<String> listSessionIds(String userId) {
-        String normalizedUserId = normalizeUserId(userId);
-        Map<String, Map<String, Object>> userMap = localStore.get(normalizedUserId);
-        if (userMap == null) return Set.of();
-        return Set.copyOf(userMap.keySet());
+        String normUser = normalizeUserId(userId);
+        String prefix = normUser + "|";
+        return sessionCache.keySet().stream()
+                .filter(k -> k.startsWith(prefix))
+                .map(k -> {
+                    // 提取 sessionId 部分: normUser|sessionId|key → sessionId
+                    String rest = k.substring(prefix.length());
+                    int pipeIdx = rest.indexOf('|');
+                    return pipeIdx > 0 ? rest.substring(0, pipeIdx) : rest;
+                })
+                .collect(Collectors.toSet());
     }
 
     @Override
@@ -119,29 +223,54 @@ public class MemoryAgentStateStore implements AgentStateStore {
     }
 
     // ========================
-    // Internal helpers
+    // 内部方法
     // ========================
+
+    /**
+     * 获取或创建 Memory Session。
+     *
+     * @return Memory Session ID，创建失败时返回 null
+     */
+    private String getOrCreateMemorySession(String userId, String sessionId, String key) {
+        String logicalKey = buildLogicalKey(userId, sessionId, key);
+        return sessionCache.computeIfAbsent(logicalKey, k -> {
+            String memSessionId = SESSION_PREFIX + logicalKey.replace("|", "_");
+            try {
+                SessionInfo session = memoryClient.createMemorySession(
+                        spaceId, memSessionId, normalizeUserId(userId), null);
+                if (session != null && session.getId() != null) {
+                    // 服务端可能返回我们指定的 ID 或自动生成的 ID
+                    return session.getId();
+                }
+            } catch (Exception e) {
+                LOG.warn("MemoryAgentStateStore: createMemorySession failed for {}: {}", logicalKey, e.getMessage());
+            }
+            return memSessionId; // fallback: 使用本地生成的 ID
+        });
+    }
+
+    /**
+     * 构建逻辑键: {normalizedUserId}|{sessionId}|{key}
+     */
+    private String buildLogicalKey(String userId, String sessionId, String key) {
+        return normalizeUserId(userId) + "|" + sessionId + "|" + key;
+    }
 
     private String normalizeUserId(String userId) {
         return (userId == null) ? "__anon__" : userId;
     }
 
-    private void ensureSession(String userId, String sessionId) {
-        String normalizedUserId = normalizeUserId(userId);
-        localStore.computeIfAbsent(normalizedUserId, k -> new ConcurrentHashMap<>());
-    }
-
-    private Map<String, Object> getOrCreateSessionMap(String userId, String sessionId) {
-        String normalizedUserId = normalizeUserId(userId);
-        return localStore
-                .computeIfAbsent(normalizedUserId, k -> new ConcurrentHashMap<>())
-                .computeIfAbsent(sessionId, k -> new ConcurrentHashMap<>());
-    }
-
-    private Map<String, Object> getSessionMap(String userId, String sessionId) {
-        String normalizedUserId = normalizeUserId(userId);
-        Map<String, Map<String, Object>> userMap = localStore.get(normalizedUserId);
-        if (userMap == null) return null;
-        return userMap.get(sessionId);
+    /**
+     * 从 MessageInfo 中提取文本内容。
+     */
+    private String extractText(MessageInfo msg) {
+        if (msg == null || msg.getParts() == null) return null;
+        StringBuilder sb = new StringBuilder();
+        for (Map<String, Object> part : msg.getParts()) {
+            if ("text".equals(part.get("type")) && part.get("text") != null) {
+                sb.append(part.get("text"));
+            }
+        }
+        return sb.isEmpty() ? null : sb.toString();
     }
 }
