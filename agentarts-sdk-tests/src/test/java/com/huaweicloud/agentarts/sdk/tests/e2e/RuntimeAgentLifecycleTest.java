@@ -1,60 +1,144 @@
 package com.huaweicloud.agentarts.sdk.tests.e2e;
 
+import com.huaweicloud.agentarts.sdk.service.runtime.RuntimeClient;
 import org.junit.jupiter.api.*;
 
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Runtime agent lifecycle tests — (6 tests: agent CRUD, skipped - backend prereq).
- * All tests are skipped: backend requires artifact_source_config + identity_configuration.
+ * Runtime agent lifecycle tests (6 tests).
+ *
+ * <p>Tests CRUD operations on Runtime agents and endpoints via the control plane.
+ * Requires AGENTARTS_TEST_ALLOW_CREATE=1 and a backend that supports
+ * artifact_source_config and identity_configuration.</p>
  */
 @Tag("e2e")
-@DisplayName("Runtime Agent Lifecycle Tests (Skipped)")
+@DisplayName("Runtime Agent Lifecycle Tests")
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class RuntimeAgentLifecycleTest {
 
-    private static final String SKIP_REASON =
-            "Backend rejects create_agent without artifact_source_config (a built image) " +
-            "and identity_configuration. Supply a deployable artifact to exercise this CRUD path.";
+    private static RuntimeClient client;
+    private static E2EResourceRegistry registry;
+    private static String runId;
+
+    private static String createdAgentId;
+    private static String createdAgentName;
+    private static String createdEndpointName;
+    private static boolean setupSucceeded = false;
+
+    @BeforeAll
+    static void setUp() {
+        assumeTrue(E2EConfig.hasCloudCredentials(),
+                "Set HUAWEICLOUD_SDK_AK and HUAWEICLOUD_SDK_SK to run cloud tests");
+        assumeTrue(E2EConfig.allowCreate(),
+                "Set AGENTARTS_TEST_ALLOW_CREATE=1 to run create/delete lifecycle tests");
+
+        client = new RuntimeClient(E2EConfig.getRegion());
+        registry = new E2EResourceRegistry();
+        runId = E2EConfig.getRunId();
+
+        createdAgentName = E2EHelpers.uniqueName("agent", runId);
+
+        // Try to create agent — may fail if backend requires artifact_source_config
+        try {
+            Map<String, Object> agent = client.createAgent(createdAgentName, "e2e test agent");
+            createdAgentId = (String) agent.get("id");
+            if (createdAgentId != null) {
+                registry.register(
+                        () -> client.deleteAgentByName(createdAgentName),
+                        "runtime-agent:" + createdAgentName);
+                setupSucceeded = true;
+            }
+        } catch (Exception e) {
+            System.err.println("Runtime agent creation not supported: " + e.getMessage());
+        }
+    }
+
+    @AfterAll
+    static void tearDown() {
+        if (registry != null) registry.cleanupAll();
+        if (client != null) client.close();
+    }
+
+    private void requireSetup() {
+        assumeTrue(setupSucceeded,
+                "Backend rejects create_agent without artifact_source_config and identity_configuration");
+    }
 
     // 1. test_find_agent_by_name
-    @Test
-    @DisplayName("find_agent_by_name (skipped: backend prereq)")
+    @Test @Order(1)
+    @DisplayName("find_agent_by_name returns the created agent")
     void testFindAgentByName() {
-        assumeTrue(false, SKIP_REASON);
+        requireSetup();
+        Map<String, Object> found = client.findAgentByName(createdAgentName);
+        assertNotNull(found);
+        assertEquals(createdAgentId, found.get("id"));
     }
 
     // 2. test_find_agent_by_id
-    @Test
-    @DisplayName("find_agent_by_id (skipped: backend prereq)")
+    @Test @Order(2)
+    @DisplayName("find_agent_by_id returns the created agent")
     void testFindAgentById() {
-        assumeTrue(false, SKIP_REASON);
+        requireSetup();
+        Map<String, Object> found = client.findAgentById(createdAgentId);
+        assertNotNull(found);
+        assertEquals(createdAgentId, found.get("id"));
     }
 
     // 3. test_get_agents
-    @Test
-    @DisplayName("get_agents (skipped: backend prereq)")
+    @Test @Order(3)
+    @DisplayName("get_agents returns a list containing the created agent")
     void testGetAgents() {
-        assumeTrue(false, SKIP_REASON);
+        requireSetup();
+        List<Map<String, Object>> agents = client.getAgents(createdAgentName, 1, 10);
+        assertNotNull(agents);
+        assertFalse(agents.isEmpty());
     }
 
     // 4. test_update_agent
-    @Test
-    @DisplayName("update_agent (skipped: backend prereq)")
+    @Test @Order(4)
+    @DisplayName("update_agent changes the description")
     void testUpdateAgent() {
-        assumeTrue(false, SKIP_REASON);
+        requireSetup();
+        Map<String, Object> updated = client.updateAgent(
+                createdAgentId, "updated description",
+                null, null, null, null, null, null, null, null);
+        assertNotNull(updated);
+        assertEquals(createdAgentId, updated.get("id"));
     }
 
     // 5. test_find_agent_endpoint
-    @Test
-    @DisplayName("find_agent_endpoint (skipped: backend prereq)")
+    @Test @Order(5)
+    @DisplayName("create and find agent endpoint")
     void testFindAgentEndpoint() {
-        assumeTrue(false, SKIP_REASON);
+        requireSetup();
+        createdEndpointName = E2EHelpers.uniqueName("ep", runId);
+        Map<String, Object> ep = client.createAgentEndpoint(createdAgentId, createdEndpointName);
+        assertNotNull(ep);
+
+        Map<String, Object> found = client.findAgentEndpoint(createdAgentId, createdEndpointName);
+        assertNotNull(found);
+
+        // Cleanup endpoint
+        client.deleteAgentEndpoint(createdAgentId, createdEndpointName);
     }
 
     // 6. test_update_agent_endpoint
-    @Test
-    @DisplayName("update_agent_endpoint (skipped: backend prereq)")
+    @Test @Order(6)
+    @DisplayName("update agent endpoint config")
     void testUpdateAgentEndpoint() {
-        assumeTrue(false, SKIP_REASON);
+        requireSetup();
+        String epName = E2EHelpers.uniqueName("ep2", runId);
+        client.createAgentEndpoint(createdAgentId, epName);
+
+        Map<String, Object> updated = client.updateAgentEndpoint(
+                createdAgentId, epName, Map.of("timeout", 60));
+        assertNotNull(updated);
+
+        client.deleteAgentEndpoint(createdAgentId, epName);
     }
 }
