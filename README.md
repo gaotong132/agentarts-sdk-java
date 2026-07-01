@@ -20,7 +20,7 @@ AgentArts Java SDK is a comprehensive toolkit for developing, deploying, and man
 - **Cloud Identity** — Workload identity, OAuth2/API Key/STS credential providers via Huawei Cloud AgentIdentity service
 - **CLI Toolkit** — Picocli-based CLI for `init`, `dev`, `deploy`, `invoke`, `destroy`
 - **Spring Boot Starter** — Auto-configuration, properties binding, and health indicator for Spring Boot 3.x
-- **E2E Test Suite** — 69 end-to-end tests ported from Python SDK, covering Identity, Memory, MCP Gateway, Code Interpreter, Runtime, and Auth decorators
+- **E2E Test Suite** — 69 end-to-end tests covering Identity, Memory, MCP Gateway, Code Interpreter, Runtime, and Auth decorators
 - **Reactive Architecture** — Project Reactor (`Mono`/`Flux`) throughout, aligned with agentscope-java's reactive model
 
 ### Python SDK Reference
@@ -323,7 +323,7 @@ The test suite includes **283 tests** across three tiers:
 | Tier | Count | Description |
 |---|---|---|
 | Unit tests | 214 | V11 signing (52), HTTP client (12), Runtime (16), Identity (7), Memory (19), Tools (10), MCP Gateway (5), agentscope (35), CLI (27), Spring Boot (16), Cross-module (15) |
-| E2E tests | 69 | Identity (14), Memory (20), MCP Gateway (6), Code Interpreter (4), Runtime (18), Auth (3), Read-only lists (4) — ported 1:1 from Python SDK |
+| E2E tests | 69 | Identity (14), Memory (20), MCP Gateway (6), Code Interpreter (4), Runtime (18), Auth (3), Read-only lists (4) |
 
 ### E2E Three-Tier Safety Model
 
