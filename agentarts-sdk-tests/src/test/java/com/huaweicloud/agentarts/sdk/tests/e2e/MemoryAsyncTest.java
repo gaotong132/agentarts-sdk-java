@@ -133,15 +133,15 @@ class MemoryAsyncTest {
     @Test @Order(6)
     @DisplayName("async delete_memory if any exist, else skip")
     void testAsyncDeleteMemoryIfAny() throws Exception {
-        // Poll for memory extraction (force_extract may still be async)
+        // Poll for memory extraction (force_extract may still be async on the backend)
         MemoryListResponse result = null;
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 10; i++) {
             result = asyncCall(() -> dataClient.listMemories(memorySpace.getId(), 10, 0, null));
             if (result.getItems() != null && !result.getItems().isEmpty()) break;
-            Thread.sleep(3000);
+            Thread.sleep(5000);
         }
         if (result == null || result.getItems() == null || result.getItems().isEmpty()) {
-            assumeTrue(false, "no extracted memories to delete in async path after polling");
+            assumeTrue(false, "no extracted memories to delete in async path after polling (10x5s)");
         }
         final MemoryListResponse finalResult = result;
         asyncCall(() -> {

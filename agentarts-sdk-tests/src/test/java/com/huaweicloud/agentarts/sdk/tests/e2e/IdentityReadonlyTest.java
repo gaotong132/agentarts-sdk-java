@@ -60,19 +60,31 @@ class IdentityReadonlyTest {
         assertNotNull(result);
     }
 
-    // 5. test_get_and_token_for_preprovisioned_workload_identity
+    // 5. test_get_and_token_for_workload_identity
     @Test
-    @DisplayName("get + token for pre-provisioned workload identity")
-    void testGetAndTokenForPreprovisionedWorkloadIdentity() {
-        String preName = E2EConfig.getPreWorkloadIdentity();
-        assumeTrue(preName != null && !preName.isEmpty(),
-                "Set AGENTARTS_TEST_WORKLOAD_IDENTITY_NAME to exercise get/token against a pre-provisioned workload identity");
+    @DisplayName("get + token for workload identity (creates temp if no pre-provisioned)")
+    void testGetAndTokenForWorkloadIdentity() {
+        String name = E2EConfig.getPreWorkloadIdentity();
+        boolean isTemporary = false;
 
-        var wi = identityClient.getWorkloadIdentity(preName);
-        assertNotNull(wi);
+        if (name == null || name.isEmpty()) {
+            // No pre-provisioned identity — create a temporary one
+            name = "aa-it-readonly-" + E2EConfig.getRunId();
+            identityClient.createWorkloadIdentity(name);
+            isTemporary = true;
+        }
 
-        String token = identityClient.createWorkloadAccessToken(preName);
-        assertNotNull(token);
-        assertFalse(token.isEmpty());
+        try {
+            var wi = identityClient.getWorkloadIdentity(name);
+            assertNotNull(wi);
+
+            String token = identityClient.createWorkloadAccessToken(name);
+            assertNotNull(token);
+            assertFalse(token.isEmpty());
+        } finally {
+            if (isTemporary) {
+                try { identityClient.deleteWorkloadIdentity(name); } catch (Exception ignored) {}
+            }
+        }
     }
 }
