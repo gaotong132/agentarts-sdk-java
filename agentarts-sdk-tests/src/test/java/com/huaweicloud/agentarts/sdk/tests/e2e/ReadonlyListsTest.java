@@ -55,7 +55,7 @@ class ReadonlyListsTest {
     @DisplayName("list_runtime_agents returns a list")
     void testListRuntimeAgents() {
         try (RuntimeClient client = new RuntimeClient(E2EConfig.getRegion())) {
-            var agents = client.getAgents(null, 1, 1);
+            var agents = client.getAgents(null, 1, 10);
             assertNotNull(agents, "agents should be a list");
         }
     }

@@ -73,7 +73,7 @@ public class MemoryClient implements AutoCloseable {
 
     private synchronized BaseHttpClient getControlPlaneClient() {
         if (controlPlaneClient == null) {
-            String endpoint = Constants.getMemoryEndpoint("control", regionName);
+            String endpoint = Constants.getMemoryEndpoint("control", regionName) + "/v1/core";
             RequestConfig config = RequestConfig.builder()
                     .baseUrl(endpoint)
                     .verifySsl(verifySsl)
@@ -122,7 +122,7 @@ public class MemoryClient implements AutoCloseable {
         if (description != null) body.put("description", description);
 
         RequestResult result = getControlPlaneClient()
-                .post("/v1/spaces", null, body).block();
+                .post("/spaces", null, body).block();
         return parseResult(result, SpaceInfo.class);
     }
 
@@ -134,13 +134,13 @@ public class MemoryClient implements AutoCloseable {
     /** Get a memory space by ID (Control Plane). */
     public SpaceInfo getSpace(String spaceId) {
         RequestResult result = getControlPlaneClient()
-                .get("/v1/spaces/" + spaceId).block();
+                .get("/spaces/" + spaceId).block();
         return parseResult(result, SpaceInfo.class);
     }
 
     /** List memory spaces with pagination (Control Plane). */
     public SpaceListResponse listSpaces(int limit, int offset) {
-        String url = "/v1/spaces?limit=" + limit + "&offset=" + offset;
+        String url = "/spaces?limit=" + limit + "&offset=" + offset;
         RequestResult result = getControlPlaneClient().get(url).block();
         return parseResult(result, SpaceListResponse.class);
     }
@@ -158,19 +158,19 @@ public class MemoryClient implements AutoCloseable {
         if (messageTtlHours != null) body.put("message_ttl_hours", messageTtlHours);
 
         RequestResult result = getControlPlaneClient()
-                .put("/v1/spaces/" + spaceId, null, body).block();
+                .put("/spaces/" + spaceId, null, body).block();
         return parseResult(result, SpaceInfo.class);
     }
 
     /** Delete a memory space (Control Plane). */
     public void deleteSpace(String spaceId) {
-        getControlPlaneClient().delete("/v1/spaces/" + spaceId).block();
+        getControlPlaneClient().delete("/spaces/" + spaceId).block();
     }
 
     /** Create an API key for data plane access (Control Plane). */
     public Map<String, Object> createApiKey() {
         RequestResult result = getControlPlaneClient()
-                .post("/v1/api-keys", null, Map.of()).block();
+                .post("/api-keys", null, Map.of()).block();
         return parseResultAsMap(result);
     }
 

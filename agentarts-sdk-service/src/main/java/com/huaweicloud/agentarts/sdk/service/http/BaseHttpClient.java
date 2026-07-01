@@ -6,6 +6,9 @@ import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
 import com.huaweicloud.agentarts.sdk.core.signer.V11Signer;
+import com.huaweicloud.sdk.core.auth.AKSKSigner;
+import com.huaweicloud.sdk.core.auth.BasicCredentials;
+import com.huaweicloud.sdk.core.http.HttpMethod;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.ext.web.client.HttpRequest;
@@ -375,12 +378,6 @@ public class BaseHttpClient implements AutoCloseable {
     private void signRequest(String method, String fullUrl, Map<String, String> headers,
                               Object body, Map<String, List<String>> queryParams) {
         try {
-            URI uri = URI.create(fullUrl);
-            String host = uri.getHost();
-            String path = uri.getRawPath();
-
-            headers.put("Host", host);
-
             String ak = Constants.getAk();
             String sk = Constants.getSk();
 
@@ -389,19 +386,96 @@ public class BaseHttpClient implements AutoCloseable {
                 return;
             }
 
-            headers.put("x-sdk-content-sha256", "UNSIGNED-PAYLOAD");
-
-            // Add security token if present
-            String securityToken = Constants.getSecurityToken();
-            if (!securityToken.isEmpty()) {
-                headers.put("X-Security-Token", securityToken);
+            if (signMode == SignMode.V11_HMAC_SHA256) {
+                signRequestV11(method, fullUrl, headers, body, queryParams, ak, sk);
+            } else {
+                signRequestSdk(method, fullUrl, headers, body, queryParams, ak, sk);
             }
-
-            V11Signer signer = new V11Signer(ak, sk, regionId);
-            signer.sign(method, path, queryParams, headers);
         } catch (Exception e) {
             LOG.warn("Failed to sign request: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Sign using Huawei Cloud SDK standard SDK-HMAC-SHA256 (via built-in AKSKSigner).
+     */
+    private void signRequestSdk(String method, String fullUrl, Map<String, String> headers,
+                                 Object body, Map<String, List<String>> queryParams,
+                                 String ak, String sk) throws Exception {
+        URI uri = URI.create(fullUrl);
+        String endpoint = uri.getScheme() + "://" + uri.getHost();
+        if (uri.getPort() > 0 && uri.getPort() != 443 && uri.getPort() != 80) {
+            endpoint += ":" + uri.getPort();
+        }
+        String path = uri.getRawPath();
+
+        BasicCredentials credentials = new BasicCredentials().withAk(ak).withSk(sk);
+        String securityToken = Constants.getSecurityToken();
+        if (!securityToken.isEmpty()) {
+            credentials.withSecurityToken(securityToken);
+        }
+
+        com.huaweicloud.sdk.core.http.HttpRequest.HttpRequestBuilder builder = com.huaweicloud.sdk.core.http.HttpRequest
+                .newBuilder()
+                .withEndpoint(endpoint)
+                .withPath(path)
+                .withMethod(HttpMethod.valueOf(method));
+
+        // Parse query params from the URL (they're embedded in fullUrl, not in the queryParams arg)
+        String rawQuery = uri.getRawQuery();
+        if (rawQuery != null && !rawQuery.isEmpty()) {
+            for (String pair : rawQuery.split("&")) {
+                String[] kv = pair.split("=", 2);
+                String key = java.net.URLDecoder.decode(kv[0], StandardCharsets.UTF_8);
+                String value = kv.length > 1 ? java.net.URLDecoder.decode(kv[1], StandardCharsets.UTF_8) : "";
+                builder.addQueryParam(key, List.of(value));
+            }
+        }
+        // Also add explicit queryParams if provided
+        if (queryParams != null) {
+            for (Map.Entry<String, List<String>> entry : queryParams.entrySet()) {
+                builder.addQueryParam(entry.getKey(), entry.getValue());
+            }
+        }
+
+        String bodyStr = "";
+        if (body != null) {
+            if (body instanceof String) {
+                bodyStr = (String) body;
+            } else {
+                bodyStr = OBJECT_MAPPER.writeValueAsString(body);
+            }
+        }
+        if (!"GET".equals(method) && !"HEAD".equals(method) && !bodyStr.isEmpty()) {
+            builder.withBodyAsString(bodyStr);
+            builder.withContentType("application/json");
+        }
+
+        com.huaweicloud.sdk.core.http.HttpRequest sdkRequest = builder.build();
+        Map<String, String> signedHeaders = AKSKSigner.getInstance().sign(sdkRequest, credentials);
+        headers.putAll(signedHeaders);
+    }
+
+    /**
+     * Sign using V11-HMAC-SHA256 with HKDF key derivation (AgentArts custom signer).
+     */
+    private void signRequestV11(String method, String fullUrl, Map<String, String> headers,
+                                 Object body, Map<String, List<String>> queryParams,
+                                 String ak, String sk) throws Exception {
+        URI uri = URI.create(fullUrl);
+        String host = uri.getHost();
+        String path = uri.getRawPath();
+
+        headers.put("Host", host);
+        headers.put("x-sdk-content-sha256", "UNSIGNED-PAYLOAD");
+
+        String securityToken = Constants.getSecurityToken();
+        if (!securityToken.isEmpty()) {
+            headers.put("X-Security-Token", securityToken);
+        }
+
+        V11Signer signer = new V11Signer(ak, sk, regionId);
+        signer.sign(method, path, queryParams, headers);
     }
 
     // ========================

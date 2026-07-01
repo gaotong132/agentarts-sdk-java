@@ -7,9 +7,9 @@ import java.util.List;
 /** Response for listing spaces. */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class SpaceListResponse {
-    @JsonProperty("items") private List<SpaceInfo> items;
+    @JsonProperty("spaces") private List<SpaceInfo> items;
     @JsonProperty("total") private int total;
-    @JsonProperty("limit") private int limit;
+    @JsonProperty("size") private int limit;
     @JsonProperty("offset") private int offset;
 
     public List<SpaceInfo> getItems() { return items; }

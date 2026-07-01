@@ -67,7 +67,7 @@ public class CodeInterpreterClient implements AutoCloseable {
 
     private synchronized BaseHttpClient getControlClient() {
         if (controlClient == null) {
-            String endpoint = Constants.getControlPlaneEndpoint(region);
+            String endpoint = Constants.getControlPlaneEndpoint(region) + "/v1/core";
             RequestConfig config = RequestConfig.builder().baseUrl(endpoint).verifySsl(verifySsl).build();
             controlClient = new BaseHttpClient(config, true, SignMode.SDK_HMAC_SHA256, region);
         }
@@ -98,7 +98,7 @@ public class CodeInterpreterClient implements AutoCloseable {
         Map<String, Object> body = new HashMap<>();
         body.put("name", name);
         if (description != null) body.put("description", description);
-        RequestResult r = getControlClient().post("/v1/code-interpreters", null, body).block();
+        RequestResult r = getControlClient().post("/code-interpreters", null, body).block();
         return parseMap(r);
     }
 
@@ -107,7 +107,7 @@ public class CodeInterpreterClient implements AutoCloseable {
     }
 
     public Map<String, Object> listCodeInterpreters(String name, int limit, int offset) {
-        String url = "/v1/code-interpreters?limit=" + limit + "&offset=" + offset;
+        String url = "/code-interpreters?limit=" + limit + "&offset=" + offset;
         if (name != null) url += "&name=" + name;
         RequestResult r = getControlClient().get(url).block();
         return parseMap(r);
@@ -118,17 +118,17 @@ public class CodeInterpreterClient implements AutoCloseable {
     }
 
     public Map<String, Object> updateCodeInterpreter(String codeInterpreterId, Map<String, Object> updates) {
-        RequestResult r = getControlClient().put("/v1/code-interpreters/" + codeInterpreterId, null, updates).block();
+        RequestResult r = getControlClient().put("/code-interpreters/" + codeInterpreterId, null, updates).block();
         return parseMap(r);
     }
 
     public Map<String, Object> getCodeInterpreter(String codeInterpreterId) {
-        RequestResult r = getControlClient().get("/v1/code-interpreters/" + codeInterpreterId).block();
+        RequestResult r = getControlClient().get("/code-interpreters/" + codeInterpreterId).block();
         return parseMap(r);
     }
 
     public void deleteCodeInterpreter(String codeInterpreterId) {
-        getControlClient().delete("/v1/code-interpreters/" + codeInterpreterId).block();
+        getControlClient().delete("/code-interpreters/" + codeInterpreterId).block();
     }
 
     // ========================
