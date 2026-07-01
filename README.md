@@ -30,8 +30,8 @@ This Java SDK maintains API compatibility with the [Python AgentArts SDK](https:
 | Item | Value |
 |---|---|
 | Python SDK Repository | https://github.com/huaweicloud/agentarts-sdk-python |
-| Pinned Commit | [`1528b3e`](https://github.com/huaweicloud/agentarts-sdk-python/commit/1528b3e2dea727695855291a53ed6f86be63a39b) |
-| Branch | `main` |
+| Pinned Commit | [`2f64a4b`](https://github.com/huaweicloud/agentarts-sdk-python/commit/2f64a4b) (feature/test) |
+| Branch | `feature/test` |
 | Last Synced | 2026-07-01 |
 
 To check for Python SDK changes since last sync:
@@ -39,7 +39,7 @@ To check for Python SDK changes since last sync:
 ```bash
 cd agentarts-sdk-python
 git fetch origin
-git log 1528b3e..origin/main --oneline
+git log 2f64a4b..origin/feature/test --oneline
 ```
 
 ## Module Structure
