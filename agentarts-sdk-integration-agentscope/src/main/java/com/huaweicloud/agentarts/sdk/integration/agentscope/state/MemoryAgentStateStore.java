@@ -228,24 +228,25 @@ public class MemoryAgentStateStore implements AgentStateStore {
 
     /**
      * 获取或创建 Memory Session。
+     * Memory API 要求 Session ID 为 UUID 格式，因此让服务端自动生成，
+     * 本地缓存 logicalKey → server-generated UUID 的映射。
      *
-     * @return Memory Session ID，创建失败时返回 null
+     * @return Memory Session ID（UUID），创建失败时返回 null
      */
     private String getOrCreateMemorySession(String userId, String sessionId, String key) {
         String logicalKey = buildLogicalKey(userId, sessionId, key);
         return sessionCache.computeIfAbsent(logicalKey, k -> {
-            String memSessionId = SESSION_PREFIX + logicalKey.replace("|", "_");
             try {
+                // 传 null 让服务端自动生成 UUID 格式的 session ID
                 SessionInfo session = memoryClient.createMemorySession(
-                        spaceId, memSessionId, normalizeUserId(userId), null);
+                        spaceId, null, normalizeUserId(userId), null);
                 if (session != null && session.getId() != null) {
-                    // 服务端可能返回我们指定的 ID 或自动生成的 ID
                     return session.getId();
                 }
             } catch (Exception e) {
                 LOG.warn("MemoryAgentStateStore: createMemorySession failed for {}: {}", logicalKey, e.getMessage());
             }
-            return memSessionId; // fallback: 使用本地生成的 ID
+            return null;
         });
     }
 

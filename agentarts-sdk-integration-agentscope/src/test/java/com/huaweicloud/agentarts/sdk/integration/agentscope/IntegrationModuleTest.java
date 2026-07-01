@@ -408,8 +408,9 @@ class IntegrationModuleTest {
         @Override
         public SessionInfo createMemorySession(String spaceId, String id, String actorId, String assistantId) {
             sessionCreated = true;
-            // Return a SessionInfo with the requested ID via JSON deserialization
-            String json = "{\"id\":\"" + id + "\",\"space_id\":\"" + spaceId + "\"}";
+            // If id is null, generate a UUID (matching real Memory API behavior)
+            String sessionId = (id != null) ? id : java.util.UUID.randomUUID().toString();
+            String json = "{\"id\":\"" + sessionId + "\",\"space_id\":\"" + spaceId + "\"}";
             try {
                 return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, SessionInfo.class);
             } catch (Exception e) {
