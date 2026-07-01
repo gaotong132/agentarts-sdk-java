@@ -2,6 +2,7 @@ package com.huaweicloud.agentarts.sdk.memory;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
 import com.huaweicloud.agentarts.sdk.memory.model.*;
@@ -355,8 +356,9 @@ public class MemoryClient implements AutoCloseable {
 
     private <T> T parseResult(RequestResult result, Class<T> type) {
         if (result == null || !result.isSuccess()) {
+            int status = result != null ? result.getStatusCode() : 0;
             String err = result != null ? result.getError() : "null response";
-            throw new RuntimeException("API call failed: " + err);
+            throw new APIException(status, "memory_api", err);
         }
         try {
             JsonNode data = result.getDataAsJson();
@@ -365,13 +367,16 @@ public class MemoryClient implements AutoCloseable {
             }
             return null;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse response", e);
+            throw new APIException(result.getStatusCode(), "memory_api",
+                    "Failed to parse response: " + e.getMessage(), e);
         }
     }
 
     private Map<String, Object> parseResultAsMap(RequestResult result) {
         if (result == null || !result.isSuccess()) {
-            throw new RuntimeException("API call failed");
+            int status = result != null ? result.getStatusCode() : 0;
+            String err = result != null ? result.getError() : "null response";
+            throw new APIException(status, "memory_api", err);
         }
         try {
             JsonNode data = result.getDataAsJson();
@@ -382,13 +387,16 @@ public class MemoryClient implements AutoCloseable {
             }
             return Map.of();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse response", e);
+            throw new APIException(result.getStatusCode(), "memory_api",
+                    "Failed to parse response: " + e.getMessage(), e);
         }
     }
 
     private <T> List<T> parseResultAsList(RequestResult result, Class<T> type) {
         if (result == null || !result.isSuccess()) {
-            throw new RuntimeException("API call failed");
+            int status = result != null ? result.getStatusCode() : 0;
+            String err = result != null ? result.getError() : "null response";
+            throw new APIException(status, "memory_api", err);
         }
         try {
             JsonNode data = result.getDataAsJson();
@@ -401,14 +409,21 @@ public class MemoryClient implements AutoCloseable {
             }
             return List.of();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to parse response", e);
+            throw new APIException(result.getStatusCode(), "memory_api",
+                    "Failed to parse response: " + e.getMessage(), e);
         }
     }
 
     @Override
-    public void close() {
-        if (controlPlaneClient != null) controlPlaneClient.close();
-        if (dataPlaneClient != null) dataPlaneClient.close();
+    public synchronized void close() {
+        if (controlPlaneClient != null) {
+            controlPlaneClient.close();
+            controlPlaneClient = null;
+        }
+        if (dataPlaneClient != null) {
+            dataPlaneClient.close();
+            dataPlaneClient = null;
+        }
     }
 
     public String getRegionName() { return regionName; }

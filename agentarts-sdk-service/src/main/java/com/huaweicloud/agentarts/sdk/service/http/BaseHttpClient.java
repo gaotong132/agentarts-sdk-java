@@ -382,7 +382,7 @@ public class BaseHttpClient implements AutoCloseable {
             String sk = Constants.getSk();
 
             if (ak.isEmpty() || sk.isEmpty()) {
-                LOG.warn("AK/SK not configured, skipping {} signing", signMode);
+                LOG.error("AK/SK not configured — skipping {} signing; request will be rejected by server", signMode);
                 return;
             }
 
@@ -392,7 +392,7 @@ public class BaseHttpClient implements AutoCloseable {
                 signRequestSdk(method, fullUrl, headers, body, queryParams, ak, sk);
             }
         } catch (Exception e) {
-            LOG.warn("Failed to sign request: {}", e.getMessage());
+            LOG.error("Failed to sign request — request will be sent unsigned: {}", e.getMessage(), e);
         }
     }
 

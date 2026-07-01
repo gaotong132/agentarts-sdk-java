@@ -1,8 +1,6 @@
 package com.huaweicloud.agentarts.sdk.tools;
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.util.List;
 import java.util.Map;
@@ -116,6 +114,105 @@ class ToolsModuleTest {
         @Test
         void getSessionIdMethodExists() throws Exception {
             assertNotNull(CodeSession.class.getMethod("getSessionId"));
+        }
+    }
+
+    // ========================
+    // CodeInterpreterClient input validation (Python alignment)
+    // ========================
+
+    @Nested
+    @DisplayName("CodeInterpreterClient input validation")
+    class ValidationTests {
+
+        private CodeInterpreterClient client;
+
+        @BeforeEach
+        void setUp() {
+            client = new CodeInterpreterClient("cn-southwest-2", "http://localhost:9999", "API_KEY", false);
+        }
+
+        @AfterEach
+        void tearDown() {
+            client.close();
+        }
+
+        @Test
+        void createRejectsInvalidName() {
+            // Python: regex [a-z][a-z0-9-]{0,38}[a-z0-9]$
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.createCodeInterpreter("INVALID", "IAM", null, null,
+                            null, null, null, null, null));
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.createCodeInterpreter("a", "IAM", null, null,
+                            null, null, null, null, null));
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.createCodeInterpreter("has spaces", "IAM", null, null,
+                            null, null, null, null, null));
+        }
+
+        @Test
+        void createRejectsApiKeyWithoutKeyName() {
+            // Python: API_KEY auth_type requires api_key_name
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.createCodeInterpreter("valid-name", "API_KEY", null, null,
+                            null, null, null, null, null));
+        }
+
+        @Test
+        void executeCodeRejectsInvalidLanguage() {
+            // Python: valid_languages = ["python"]
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.executeCode("print(1)", "javascript", false));
+        }
+
+        @Test
+        void executeCommandRejectsInvalidFormat() {
+            // Python: regex ^[a-zA-Z0-9_\-\.=\s\/\.:]+$
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.executeCommand("rm -rf /; echo pwned"));
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.executeCommand("cmd & background"));
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.executeCommand("echo $HOME"));
+        }
+
+        @Test
+        void uploadFileRejectsInvalidPath() {
+            // Python: absolute path must start with /home/user
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.uploadFile("/etc/passwd", "content", "desc"));
+        }
+
+        @Test
+        void downloadFileRejectsInvalidPath() {
+            // Python: path must start with /home/user
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.downloadFile("/etc/passwd"));
+        }
+
+        @Test
+        void installPackagesRejectsEmptyList() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.installPackages(List.of()));
+        }
+
+        @Test
+        void installPackagesRejectsInjectionChars() {
+            // Python: rejects ;, &, |, `, $
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.installPackages(List.of("numpy;rm -rf /")));
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.installPackages(List.of("pkg&bg")));
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.installPackages(List.of("$evil")));
+        }
+
+        @Test
+        void invokeRejectsWithoutSession() {
+            // Python: "No Code Interpreter exists, use create_code_interpreter method first"
+            assertThrows(IllegalStateException.class,
+                    () -> client.invoke("execute_code", Map.of("code", "print(1)")));
         }
     }
 }

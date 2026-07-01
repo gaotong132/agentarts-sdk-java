@@ -54,6 +54,7 @@ public final class Constants {
     // ========================
 
     public static final String SESSION_HEADER = "x-hw-agentarts-session-id";
+    public static final String CODE_INTERPRETER_SESSION_HEADER = "x-HW-Agentarts-Code-Interpreter-Session-Id";
     public static final String ACCESS_TOKEN_HEADER = "X-HW-AgentGateway-Workload-Access-Token";
     public static final String USER_ID_HEADER = "X-HW-AgentGateway-User-Id";
     public static final String CUSTOM_HEADER_PREFIX = "X-Hw-AgentArts-Runtime-Custom-";

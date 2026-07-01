@@ -1,5 +1,6 @@
 package com.huaweicloud.agentarts.sdk.service.runtime;
 
+import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
@@ -80,8 +81,9 @@ public class LocalRuntimeClient implements AutoCloseable {
 
         RequestResult result = httpClient.post(path, headers.isEmpty() ? null : headers, payload).block();
         if (result == null || !result.isSuccess()) {
+            int status = result != null ? result.getStatusCode() : 0;
             String err = result != null ? result.getError() : "null response";
-            throw new RuntimeException("invoke_agent failed: " + err);
+            throw new APIException(status, "invoke_agent", err);
         }
         Object data = result.getData();
         if (data instanceof Map) return (Map<String, Object>) data;
@@ -106,8 +108,9 @@ public class LocalRuntimeClient implements AutoCloseable {
 
         RequestResult result = httpClient.get("/ping", headers).block();
         if (result == null || !result.isSuccess()) {
+            int status = result != null ? result.getStatusCode() : 0;
             String err = result != null ? result.getError() : "null response";
-            throw new RuntimeException("ping_agent failed: " + err);
+            throw new APIException(status, "ping_agent", err);
         }
         Object data = result.getData();
         if (data instanceof Map) return (Map<String, Object>) data;

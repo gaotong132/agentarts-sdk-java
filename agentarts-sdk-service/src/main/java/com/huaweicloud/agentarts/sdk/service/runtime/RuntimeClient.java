@@ -1,5 +1,6 @@
 package com.huaweicloud.agentarts.sdk.service.runtime;
 
+import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
@@ -136,7 +137,6 @@ public class RuntimeClient implements AutoCloseable {
      * @param tagsConfig            tags as list of {key, value} maps (nullable)
      * @return created agent data
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> createAgent(String name, String description,
                                             Map<String, Object> artifactSourceConfig,
                                             Map<String, Object> identityConfig,
@@ -172,7 +172,6 @@ public class RuntimeClient implements AutoCloseable {
     /**
      * Update a Runtime agent by ID.
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> updateAgent(String agentId, String description,
                                             Map<String, Object> artifactSourceConfig,
                                             Map<String, Object> invokeConfig,
@@ -200,7 +199,6 @@ public class RuntimeClient implements AutoCloseable {
     /**
      * Create or update an agent: find by name first, then create or update.
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> createOrUpdateAgent(String agentName, String description,
                                                     Map<String, Object> artifactSourceConfig,
                                                     Map<String, Object> identityConfig,
@@ -257,7 +255,6 @@ public class RuntimeClient implements AutoCloseable {
      *
      * @return agent data map, or null if not found
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> findAgentByName(String agentName) {
         List<Map<String, Object>> agents = getAgents(agentName, 1, 10);
         if (agents.isEmpty()) return null;
@@ -272,7 +269,6 @@ public class RuntimeClient implements AutoCloseable {
      *
      * @return agent data map, or null if not found
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> findAgentById(String agentId) {
         try {
             RequestResult result = getControlClient().get("/runtimes/" + agentId).block();
@@ -347,7 +343,6 @@ public class RuntimeClient implements AutoCloseable {
     /**
      * Find an agent endpoint.
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> findAgentEndpoint(String agentId, String endpointName) {
         RequestResult result = getControlClient().get(
                 "/runtimes/" + agentId + "/endpoints/" + endpointName).block();
@@ -371,7 +366,6 @@ public class RuntimeClient implements AutoCloseable {
      * @param customPath  optional custom path appended to invocations
      * @return invocation result
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> invokeAgent(String agentName, String sessionId, String payload,
                                             String bearerToken, String endpoint, int timeout,
                                             String userId, String customPath) {
@@ -403,7 +397,6 @@ public class RuntimeClient implements AutoCloseable {
      * @param timeout     timeout in seconds
      * @return execution result
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> execCommand(String agentName, String sessionId, List<String> command,
                                             boolean chunked, String bearerToken, String endpoint,
                                             String userId, int timeout) {
@@ -440,7 +433,6 @@ public class RuntimeClient implements AutoCloseable {
      * @param timeout       timeout in seconds
      * @return upload result
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> uploadFiles(String agentName, String sessionId,
                                             List<Map<String, Object>> files, String remotePath,
                                             Integer fileUserId, Integer fileGroupId, String fileMode,
@@ -504,7 +496,6 @@ public class RuntimeClient implements AutoCloseable {
      * @param timeout     timeout in seconds
      * @return session data (includes session_id)
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> startSession(String agentName, String bearerToken,
                                              String endpoint, String userId, int timeout) {
         Map<String, String> headers = buildDataHeaders(null, bearerToken, userId);
@@ -528,7 +519,6 @@ public class RuntimeClient implements AutoCloseable {
      * @param timeout     timeout in seconds
      * @return stop result
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> stopSession(String agentName, String sessionId,
                                             String bearerToken, String endpoint,
                                             String userId, int timeout) {
@@ -563,11 +553,10 @@ public class RuntimeClient implements AutoCloseable {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> check(RequestResult result, String operation) {
         if (result == null) {
-            throw new RuntimeException(operation + " failed: null response");
+            throw new APIException(0, operation, "null response");
         }
         if (!result.isSuccess()) {
-            throw new RuntimeException(operation + " failed: " + result.getError()
-                    + " (HTTP " + result.getStatusCode() + ")");
+            throw new APIException(result.getStatusCode(), operation, result.getError());
         }
         Object data = result.getData();
         if (data instanceof Map) {
@@ -579,17 +568,25 @@ public class RuntimeClient implements AutoCloseable {
                 return com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER
                         .convertValue(jsonNode, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
             } catch (Exception e) {
-                throw new RuntimeException(operation + " failed to parse JsonNode response: " + e.getMessage());
+                throw new APIException(result.getStatusCode(), operation,
+                        "failed to parse JsonNode response: " + e.getMessage(), e);
             }
         }
-        throw new RuntimeException(operation + " returned unexpected data type: "
+        throw new APIException(result.getStatusCode(), operation,
+                "returned unexpected data type: "
                 + (data != null ? data.getClass().getSimpleName() : "null")
                 + " value=" + data);
     }
 
     @Override
-    public void close() {
-        if (controlClient != null) controlClient.close();
-        if (dataClient != null) dataClient.close();
+    public synchronized void close() {
+        if (controlClient != null) {
+            controlClient.close();
+            controlClient = null;
+        }
+        if (dataClient != null) {
+            dataClient.close();
+            dataClient = null;
+        }
     }
 }
