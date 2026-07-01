@@ -2,6 +2,7 @@ package com.huaweicloud.agentarts.sdk.memory.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Map;
 import java.util.Objects;
 
 /** Request body for creating a memory session. */
@@ -11,6 +12,7 @@ public class CreateMemorySessionRequest {
     @JsonProperty("id") private String id;
     @JsonProperty("actor_id") private String actorId;
     @JsonProperty("assistant_id") private String assistantId;
+    @JsonProperty("meta") private Map<String, Object> meta;
 
     public CreateMemorySessionRequest() {}
 
@@ -25,6 +27,10 @@ public class CreateMemorySessionRequest {
     public String getAssistantId() { return assistantId; }
     public void setAssistantId(String assistantId) { this.assistantId = assistantId; }
     public CreateMemorySessionRequest withAssistantId(String assistantId) { this.assistantId = assistantId; return this; }
+
+    public Map<String, Object> getMeta() { return meta; }
+    public void setMeta(Map<String, Object> meta) { this.meta = meta; }
+    public CreateMemorySessionRequest withMeta(Map<String, Object> meta) { this.meta = meta; return this; }
 
     @Override
     public boolean equals(Object o) {
