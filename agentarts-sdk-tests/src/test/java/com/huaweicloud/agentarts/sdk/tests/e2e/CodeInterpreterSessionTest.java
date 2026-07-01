@@ -48,9 +48,9 @@ class CodeInterpreterSessionTest {
             assertNotNull(cmdResult);
 
             // upload_file + download_file round-trip
-            Map<String, Object> up = client.uploadFile("/tmp/aa-it-test.txt", "FILE_CONTENT", "test");
+            Map<String, Object> up = client.uploadFile("/home/user/aa-it-test.txt", "FILE_CONTENT", "test");
             assertNotNull(up);
-            Object downloaded = client.downloadFile("/tmp/aa-it-test.txt");
+            Object downloaded = client.downloadFile("/home/user/aa-it-test.txt");
             assertTrue(downloaded.toString().contains("FILE_CONTENT"));
 
             // get_session

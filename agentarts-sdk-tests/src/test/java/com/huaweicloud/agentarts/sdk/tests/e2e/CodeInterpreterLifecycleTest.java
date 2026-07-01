@@ -36,7 +36,9 @@ class CodeInterpreterLifecycleTest {
 
         // Create code interpreter
         ciName = E2EHelpers.uniqueName("ci", runId);
-        Map<String, Object> result = client.createCodeInterpreter(ciName, "e2e test CI");
+        Map<String, Object> result = client.createCodeInterpreter(
+                ciName, "API_KEY", ciName + "-ak", "e2e test CI",
+                null, null, null, null, null);
         assertNotNull(result);
         ciId = (String) result.get("id");
         if (ciId != null) {
@@ -73,7 +75,7 @@ class CodeInterpreterLifecycleTest {
     void testUpdateCodeInterpreter() {
         assertNotNull(ciId, "Code interpreter ID should be set from setup");
         Map<String, Object> updated = client.updateCodeInterpreter(ciId,
-                Map.of("tags", java.util.List.of(Map.of("key", "env", "value", "aa-it"))));
+                null, java.util.List.of(Map.of("key", "env", "value", "aa-it")));
         assertNotNull(updated);
     }
 }
