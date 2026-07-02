@@ -1,5 +1,6 @@
 package com.huaweicloud.agentarts.sdk.service.runtime;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
@@ -7,13 +8,7 @@ import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
-import com.huaweicloud.agentarts.sdk.service.runtime.model.CreateAgentEndpointRequest;
-import com.huaweicloud.agentarts.sdk.service.runtime.model.CreateAgentRequest;
-import com.huaweicloud.agentarts.sdk.service.runtime.model.ExecCommandRequest;
-import com.huaweicloud.agentarts.sdk.service.runtime.model.StopSessionRequest;
-import com.huaweicloud.agentarts.sdk.service.runtime.model.UpdateAgentEndpointRequest;
-import com.huaweicloud.agentarts.sdk.service.runtime.model.UpdateAgentRequest;
-import com.huaweicloud.agentarts.sdk.service.runtime.model.UploadFilesRequest;
+import com.huaweicloud.agentarts.sdk.service.runtime.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,27 +22,11 @@ import java.util.*;
  *   <li><b>Control Plane</b> (AK/SK signed) — agent CRUD, endpoint CRUD</li>
  *   <li><b>Data Plane</b> (configurable signing or Bearer token) — invoke, exec, upload, download, sessions</li>
  * </ul>
- *
- * <h3>Control Plane paths:</h3>
- * <pre>
- * POST/GET   /v1/core/runtimes
- * GET/PUT/DELETE /v1/core/runtimes/{agentId}
- * POST/GET/PUT/DELETE /v1/core/runtimes/{agentId}/endpoints/{name}
- * </pre>
- *
- * <h3>Data Plane paths:</h3>
- * <pre>
- * POST /runtimes/{name}/invocations
- * POST /runtimes/{name}/commands
- * POST /runtimes/{name}/upload-files
- * GET  /runtimes/{name}/download-files
- * POST /runtimes/{name}/sessions-start
- * POST /runtimes/{name}/sessions-stop
- * </pre>
  */
 public class RuntimeClient implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(RuntimeClient.class);
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = JsonUtils.MAPPER;
 
     private final String region;
     private final boolean verifySsl;
@@ -56,13 +35,6 @@ public class RuntimeClient implements AutoCloseable {
     private BaseHttpClient controlClient;
     private BaseHttpClient dataClient;
 
-    /**
-     * Create a RuntimeClient with full configuration.
-     *
-     * @param region    Huawei Cloud region (nullable, auto-detected)
-     * @param verifySsl whether to verify SSL certificates
-     * @param signMode  signing mode for data plane (default SDK_HMAC_SHA256)
-     */
     public RuntimeClient(String region, boolean verifySsl, SignMode signMode) {
         this.region = region != null ? region : Constants.getRegion();
         this.verifySsl = verifySsl;
@@ -81,9 +53,6 @@ public class RuntimeClient implements AutoCloseable {
         this(null, true, SignMode.SDK_HMAC_SHA256);
     }
 
-    /**
-     * Set Bearer token for data plane authentication.
-     */
     public void setAuthToken(String token) {
         getDataClient().setAuthToken("Bearer", token);
     }
@@ -121,32 +90,16 @@ public class RuntimeClient implements AutoCloseable {
     // Control Plane: Agent CRUD
     // ========================
 
-    /**
-     * Create a Runtime agent.
-     *
-     * @param name                  agent name
-     * @param description           agent description
-     * @param artifactSourceConfig  artifact source configuration (nullable)
-     * @param identityConfig        identity configuration (nullable)
-     * @param invokeConfig          invoke configuration (nullable)
-     * @param networkConfig         network configuration (nullable)
-     * @param observabilityConfig   observability configuration (nullable)
-     * @param executionAgencyName   execution agency name (nullable)
-     * @param agentGatewayId        agent gateway ID (nullable)
-     * @param envVars               environment variables as list of {key, value} maps (nullable)
-     * @param tagsConfig            tags as list of {key, value} maps (nullable)
-     * @return created agent data
-     */
-    public Map<String, Object> createAgent(String name, String description,
-                                            Map<String, Object> artifactSourceConfig,
-                                            Map<String, Object> identityConfig,
-                                            Map<String, Object> invokeConfig,
-                                            Map<String, Object> networkConfig,
-                                            Map<String, Object> observabilityConfig,
-                                            String executionAgencyName,
-                                            String agentGatewayId,
-                                            List<Map<String, String>> envVars,
-                                            List<Map<String, String>> tagsConfig) {
+    public AgentInfo createAgent(String name, String description,
+                                  Map<String, Object> artifactSourceConfig,
+                                  Map<String, Object> identityConfig,
+                                  Map<String, Object> invokeConfig,
+                                  Map<String, Object> networkConfig,
+                                  Map<String, Object> observabilityConfig,
+                                  String executionAgencyName,
+                                  String agentGatewayId,
+                                  List<Map<String, String>> envVars,
+                                  List<Map<String, String>> tagsConfig) {
         CreateAgentRequest req = new CreateAgentRequest()
                 .withName(name)
                 .withDescription(description)
@@ -161,26 +114,22 @@ public class RuntimeClient implements AutoCloseable {
                 .withTags(tagsConfig);
 
         RequestResult result = getControlClient().post("/runtimes", req).block();
-        return check(result, "create_agent");
+        return parseResult(result, AgentInfo.class, "create_agent");
     }
 
-    /** Convenience overload with required parameters only. */
-    public Map<String, Object> createAgent(String name, String description) {
+    public AgentInfo createAgent(String name, String description) {
         return createAgent(name, description, null, null, null, null, null, null, null, null, null);
     }
 
-    /**
-     * Update a Runtime agent by ID.
-     */
-    public Map<String, Object> updateAgent(String agentId, String description,
-                                            Map<String, Object> artifactSourceConfig,
-                                            Map<String, Object> invokeConfig,
-                                            Map<String, Object> networkConfig,
-                                            Map<String, Object> observabilityConfig,
-                                            String executionAgencyName,
-                                            String agentGatewayId,
-                                            List<Map<String, String>> envVars,
-                                            List<Map<String, String>> tagsConfig) {
+    public AgentInfo updateAgent(String agentId, String description,
+                                  Map<String, Object> artifactSourceConfig,
+                                  Map<String, Object> invokeConfig,
+                                  Map<String, Object> networkConfig,
+                                  Map<String, Object> observabilityConfig,
+                                  String executionAgencyName,
+                                  String agentGatewayId,
+                                  List<Map<String, String>> envVars,
+                                  List<Map<String, String>> tagsConfig) {
         UpdateAgentRequest req = new UpdateAgentRequest()
                 .withDescription(description)
                 .withArtifactSource(artifactSourceConfig)
@@ -193,26 +142,22 @@ public class RuntimeClient implements AutoCloseable {
                 .withTags(tagsConfig);
 
         RequestResult result = getControlClient().put("/runtimes/" + agentId, req).block();
-        return check(result, "update_agent");
+        return parseResult(result, AgentInfo.class, "update_agent");
     }
 
-    /**
-     * Create or update an agent: find by name first, then create or update.
-     */
-    public Map<String, Object> createOrUpdateAgent(String agentName, String description,
-                                                    Map<String, Object> artifactSourceConfig,
-                                                    Map<String, Object> identityConfig,
-                                                    Map<String, Object> invokeConfig,
-                                                    Map<String, Object> networkConfig,
-                                                    Map<String, Object> observabilityConfig,
-                                                    String executionAgencyName,
-                                                    String agentGatewayId,
-                                                    List<Map<String, String>> envVars,
-                                                    List<Map<String, String>> tagsConfig) {
-        Map<String, Object> existing = findAgentByName(agentName);
+    public AgentInfo createOrUpdateAgent(String agentName, String description,
+                                          Map<String, Object> artifactSourceConfig,
+                                          Map<String, Object> identityConfig,
+                                          Map<String, Object> invokeConfig,
+                                          Map<String, Object> networkConfig,
+                                          Map<String, Object> observabilityConfig,
+                                          String executionAgencyName,
+                                          String agentGatewayId,
+                                          List<Map<String, String>> envVars,
+                                          List<Map<String, String>> tagsConfig) {
+        AgentInfo existing = findAgentByName(agentName);
         if (existing != null) {
-            String agentId = (String) existing.get("id");
-            return updateAgent(agentId, description, artifactSourceConfig, invokeConfig,
+            return updateAgent(existing.getId(), description, artifactSourceConfig, invokeConfig,
                     networkConfig, observabilityConfig, executionAgencyName, agentGatewayId,
                     envVars, tagsConfig);
         } else {
@@ -222,73 +167,42 @@ public class RuntimeClient implements AutoCloseable {
         }
     }
 
-    /**
-     * List agents with optional filtering and pagination.
-     *
-     * @param agentName filter by name (nullable)
-     * @param offset    pagination offset (default 1)
-     * @param limit     page size (default 10)
-     * @return list of agent maps
-     */
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> getAgents(String agentName, int offset, int limit) {
+    public AgentListResponse getAgents(String agentName, int offset, int limit) {
         StringBuilder url = new StringBuilder("/runtimes?offset=").append(offset).append("&limit=").append(limit);
         if (JsonUtils.isNotBlank(agentName)) {
             url.append("&name=").append(agentName);
         }
         RequestResult result = getControlClient().get(url.toString()).block();
-        Map<String, Object> data = check(result, "get_agents");
-        Object items = data.get("items");
-        if (items instanceof List) {
-            return (List<Map<String, Object>>) items;
-        }
-        return List.of();
+        return parseResult(result, AgentListResponse.class, "get_agents");
     }
 
-    /** List agents with default pagination. */
-    public List<Map<String, Object>> getAgents() {
+    public AgentListResponse getAgents() {
         return getAgents(null, 1, 10);
     }
 
-    /**
-     * Find an agent by name.
-     *
-     * @return agent data map, or null if not found
-     */
-    public Map<String, Object> findAgentByName(String agentName) {
-        List<Map<String, Object>> agents = getAgents(agentName, 1, 10);
-        if (agents.isEmpty()) return null;
-        for (Map<String, Object> a : agents) {
-            if (agentName.equals(a.get("name"))) return a;
+    public AgentInfo findAgentByName(String agentName) {
+        AgentListResponse response = getAgents(agentName, 1, 10);
+        if (response.getItems() == null) return null;
+        for (AgentInfo a : response.getItems()) {
+            if (agentName.equals(a.getName())) return a;
         }
         return null;
     }
 
-    /**
-     * Find an agent by ID.
-     *
-     * @return agent data map, or null if not found
-     */
-    public Map<String, Object> findAgentById(String agentId) {
+    public AgentInfo findAgentById(String agentId) {
         try {
             RequestResult result = getControlClient().get("/runtimes/" + agentId).block();
-            return check(result, "find_agent_by_id");
+            return parseResult(result, AgentInfo.class, "find_agent_by_id");
         } catch (Exception e) {
             LOG.debug("findAgentById failed: {}", e.getMessage());
             return null;
         }
     }
 
-    /**
-     * Delete an agent by name (finds by name first, then deletes by ID).
-     *
-     * @return true if deleted, false if not found
-     */
     public boolean deleteAgentByName(String agentName) {
-        Map<String, Object> agent = findAgentByName(agentName);
+        AgentInfo agent = findAgentByName(agentName);
         if (agent == null) return false;
-        String agentId = (String) agent.get("id");
-        RequestResult result = getControlClient().delete("/runtimes/" + agentId).block();
+        RequestResult result = getControlClient().delete("/runtimes/" + agent.getId()).block();
         return result != null && result.isSuccess();
     }
 
@@ -296,12 +210,9 @@ public class RuntimeClient implements AutoCloseable {
     // Control Plane: Endpoint CRUD
     // ========================
 
-    /**
-     * Create an agent endpoint.
-     */
-    public Map<String, Object> createAgentEndpoint(String agentId, String endpointName,
-                                                     String endpointType, Map<String, Object> config,
-                                                     String targetVersionName) {
+    public AgentEndpointInfo createAgentEndpoint(String agentId, String endpointName,
+                                                   String endpointType, Map<String, Object> config,
+                                                   String targetVersionName) {
         CreateAgentEndpointRequest req = new CreateAgentEndpointRequest()
                 .withEndpointName(endpointName)
                 .withName(endpointName)
@@ -311,61 +222,40 @@ public class RuntimeClient implements AutoCloseable {
                 .withConfig(config);
 
         RequestResult result = getControlClient().post("/runtimes/" + agentId + "/endpoints", req).block();
-        return check(result, "create_agent_endpoint");
+        return parseResult(result, AgentEndpointInfo.class, "create_agent_endpoint");
     }
 
-    public Map<String, Object> createAgentEndpoint(String agentId, String endpointName) {
+    public AgentEndpointInfo createAgentEndpoint(String agentId, String endpointName) {
         return createAgentEndpoint(agentId, endpointName, "invocations", null, "v1");
     }
 
-    /**
-     * Update an agent endpoint.
-     */
-    public Map<String, Object> updateAgentEndpoint(String agentId, String endpointName,
-                                                     Map<String, Object> config) {
+    public AgentEndpointInfo updateAgentEndpoint(String agentId, String endpointName,
+                                                   Map<String, Object> config) {
         UpdateAgentEndpointRequest req = new UpdateAgentEndpointRequest()
                 .withConfig(config);
 
         RequestResult result = getControlClient().put(
                 "/runtimes/" + agentId + "/endpoints/" + endpointName, req).block();
-        return check(result, "update_agent_endpoint");
+        return parseResult(result, AgentEndpointInfo.class, "update_agent_endpoint");
     }
 
-    /**
-     * Delete an agent endpoint.
-     */
-    public Map<String, Object> deleteAgentEndpoint(String agentId, String endpointName) {
+    public AgentEndpointInfo deleteAgentEndpoint(String agentId, String endpointName) {
         RequestResult result = getControlClient().delete(
                 "/runtimes/" + agentId + "/endpoints/" + endpointName).block();
-        return check(result, "delete_agent_endpoint");
+        return parseResult(result, AgentEndpointInfo.class, "delete_agent_endpoint");
     }
 
-    /**
-     * Find an agent endpoint.
-     */
-    public Map<String, Object> findAgentEndpoint(String agentId, String endpointName) {
+    public AgentEndpointInfo findAgentEndpoint(String agentId, String endpointName) {
         RequestResult result = getControlClient().get(
                 "/runtimes/" + agentId + "/endpoints/" + endpointName).block();
-        return check(result, "find_agent_endpoint");
+        return parseResult(result, AgentEndpointInfo.class, "find_agent_endpoint");
     }
 
     // ========================
     // Data Plane: Invoke / Exec
     // ========================
 
-    /**
-     * Invoke a runtime agent with a JSON payload.
-     *
-     * @param agentName   agent name
-     * @param sessionId   session ID (nullable)
-     * @param payload     JSON payload string
-     * @param bearerToken optional Bearer token override
-     * @param endpoint    optional custom endpoint URL
-     * @param timeout     request timeout in seconds
-     * @param userId      optional user ID header
-     * @param customPath  optional custom path appended to invocations
-     * @return invocation result
-     */
+    @SuppressWarnings("unchecked")
     public Map<String, Object> invokeAgent(String agentName, String sessionId, String payload,
                                             String bearerToken, String endpoint, int timeout,
                                             String userId, String customPath) {
@@ -379,24 +269,11 @@ public class RuntimeClient implements AutoCloseable {
         return check(result, "invoke_agent");
     }
 
-    /** Convenience overload with defaults. */
     public Map<String, Object> invokeAgent(String agentName, String sessionId, String payload) {
         return invokeAgent(agentName, sessionId, payload, null, null, 900, null, null);
     }
 
-    /**
-     * Execute a command in a runtime session.
-     *
-     * @param agentName   agent name
-     * @param sessionId   session ID
-     * @param command     command as list of strings
-     * @param chunked     whether to use chunked transfer
-     * @param bearerToken optional Bearer token
-     * @param endpoint    optional custom endpoint
-     * @param userId      optional user ID
-     * @param timeout     timeout in seconds
-     * @return execution result
-     */
+    @SuppressWarnings("unchecked")
     public Map<String, Object> execCommand(String agentName, String sessionId, List<String> command,
                                             boolean chunked, String bearerToken, String endpoint,
                                             String userId, int timeout) {
@@ -417,22 +294,7 @@ public class RuntimeClient implements AutoCloseable {
     // Data Plane: File Operations
     // ========================
 
-    /**
-     * Upload files to a runtime session.
-     *
-     * @param agentName     agent name
-     * @param sessionId     session ID
-     * @param files         list of file maps ({path, content, description})
-     * @param remotePath    remote directory path (default /home/user/)
-     * @param fileUserId    file owner user ID (nullable)
-     * @param fileGroupId   file owner group ID (nullable)
-     * @param fileMode      file permission mode (nullable)
-     * @param bearerToken   optional Bearer token
-     * @param endpoint      optional custom endpoint
-     * @param userId        optional user ID
-     * @param timeout       timeout in seconds
-     * @return upload result
-     */
+    @SuppressWarnings("unchecked")
     public Map<String, Object> uploadFiles(String agentName, String sessionId,
                                             List<Map<String, Object>> files, String remotePath,
                                             Integer fileUserId, Integer fileGroupId, String fileMode,
@@ -454,19 +316,6 @@ public class RuntimeClient implements AutoCloseable {
         return uploadFiles(agentName, sessionId, files, null, null, null, null, null, null, null, 900);
     }
 
-    /**
-     * Download files from a runtime session.
-     *
-     * @param agentName   agent name
-     * @param sessionId   session ID
-     * @param path        remote file/directory path
-     * @param recursive   whether to download recursively
-     * @param bearerToken optional Bearer token
-     * @param endpoint    optional custom endpoint
-     * @param userId      optional user ID
-     * @param timeout     timeout in seconds
-     * @return download result (check isSuccess, access data or streaming body)
-     */
     public RequestResult downloadFiles(String agentName, String sessionId, String path,
                                         boolean recursive, String bearerToken, String endpoint,
                                         String userId, int timeout) {
@@ -486,16 +335,7 @@ public class RuntimeClient implements AutoCloseable {
     // Data Plane: Session Management
     // ========================
 
-    /**
-     * Start a runtime session.
-     *
-     * @param agentName   agent name
-     * @param bearerToken optional Bearer token
-     * @param endpoint    optional custom endpoint
-     * @param userId      optional user ID
-     * @param timeout     timeout in seconds
-     * @return session data (includes session_id)
-     */
+    @SuppressWarnings("unchecked")
     public Map<String, Object> startSession(String agentName, String bearerToken,
                                              String endpoint, String userId, int timeout) {
         Map<String, String> headers = buildDataHeaders(null, bearerToken, userId);
@@ -508,17 +348,7 @@ public class RuntimeClient implements AutoCloseable {
         return startSession(agentName, null, null, null, 30);
     }
 
-    /**
-     * Stop a runtime session.
-     *
-     * @param agentName   agent name
-     * @param sessionId   session ID
-     * @param bearerToken optional Bearer token
-     * @param endpoint    optional custom endpoint
-     * @param userId      optional user ID
-     * @param timeout     timeout in seconds
-     * @return stop result
-     */
+    @SuppressWarnings("unchecked")
     public Map<String, Object> stopSession(String agentName, String sessionId,
                                             String bearerToken, String endpoint,
                                             String userId, int timeout) {
@@ -550,32 +380,32 @@ public class RuntimeClient implements AutoCloseable {
         return headers.isEmpty() ? null : headers;
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> check(RequestResult result, String operation) {
+    /**
+     * Parse response into a typed POJO.
+     */
+    private <T> T parseResult(RequestResult result, Class<T> type, String operation) {
         if (result == null) {
             throw new APIException(0, operation, "null response");
         }
         if (!result.isSuccess()) {
             throw new APIException(result.getStatusCode(), operation, result.getError());
         }
-        Object data = result.getData();
-        if (data instanceof Map) {
-            return (Map<String, Object>) data;
+        try {
+            JsonNode data = result.getDataAsJson();
+            if (data != null) return MAPPER.treeToValue(data, type);
+            return null;
+        } catch (Exception e) {
+            throw new APIException(result.getStatusCode(), operation,
+                    "failed to parse response: " + e.getMessage(), e);
         }
-        // Handle Jackson JsonNode responses
-        if (data instanceof com.fasterxml.jackson.databind.JsonNode jsonNode && jsonNode.isObject()) {
-            try {
-                return com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER
-                        .convertValue(jsonNode, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-            } catch (Exception e) {
-                throw new APIException(result.getStatusCode(), operation,
-                        "failed to parse JsonNode response: " + e.getMessage(), e);
-            }
-        }
-        throw new APIException(result.getStatusCode(), operation,
-                "returned unexpected data type: "
-                + (data != null ? data.getClass().getSimpleName() : "null")
-                + " value=" + data);
+    }
+
+    /**
+     * Parse response as Map (for flexible/opaque responses like invoke, exec, upload).
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> check(RequestResult result, String operation) {
+        return parseResult(result, Map.class, operation);
     }
 
     @Override

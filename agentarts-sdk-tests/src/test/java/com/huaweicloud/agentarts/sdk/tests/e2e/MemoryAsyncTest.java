@@ -51,8 +51,8 @@ class MemoryAsyncTest {
 
         apiKey = memorySpace.getApiKey() != null ? memorySpace.getApiKey().toString() : null;
         if (apiKey == null || apiKey.isEmpty()) {
-            Map<String, Object> keyResult = controlClient.createApiKey();
-            apiKey = (String) keyResult.get("api_key");
+            ApiKeyInfo keyResult = controlClient.createApiKey();
+            apiKey = keyResult != null ? keyResult.getApiKey() : null;
         }
         dataClient = new MemoryClient(E2EConfig.getRegion(), apiKey);
 

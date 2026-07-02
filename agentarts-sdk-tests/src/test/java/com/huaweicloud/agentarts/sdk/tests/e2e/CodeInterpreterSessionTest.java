@@ -54,7 +54,7 @@ class CodeInterpreterSessionTest {
             assertTrue(downloaded.toString().contains("FILE_CONTENT"));
 
             // get_session
-            Map<String, Object> sess = client.getSession(ciName, session.getSessionId());
+            var sess = client.getSession(ciName, session.getSessionId());
             assertNotNull(sess);
 
             // clear_context

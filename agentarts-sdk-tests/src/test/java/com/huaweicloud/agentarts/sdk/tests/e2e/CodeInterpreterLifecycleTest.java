@@ -1,6 +1,7 @@
 package com.huaweicloud.agentarts.sdk.tests.e2e;
 
 import com.huaweicloud.agentarts.sdk.tools.CodeInterpreterClient;
+import com.huaweicloud.agentarts.sdk.tools.model.CodeInterpreterInfo;
 import org.junit.jupiter.api.*;
 
 import java.util.Map;
@@ -36,11 +37,11 @@ class CodeInterpreterLifecycleTest {
 
         // Create code interpreter
         ciName = E2EHelpers.uniqueName("ci", runId);
-        Map<String, Object> result = client.createCodeInterpreter(
+        CodeInterpreterInfo result = client.createCodeInterpreter(
                 ciName, "API_KEY", ciName + "-ak", "e2e test CI",
                 null, null, null, null, null);
         assertNotNull(result);
-        ciId = (String) result.get("id");
+        ciId = result.getId();
         if (ciId != null) {
             registry.register(() -> client.deleteCodeInterpreter(ciId), "code-interpreter:" + ciId);
         }
@@ -57,15 +58,15 @@ class CodeInterpreterLifecycleTest {
     @DisplayName("get_code_interpreter returns the created CI")
     void testGetCodeInterpreter() {
         assertNotNull(ciId, "Code interpreter ID should be set from setup");
-        Map<String, Object> got = client.getCodeInterpreter(ciId);
-        assertEquals(ciId, got.get("id"));
+        CodeInterpreterInfo got = client.getCodeInterpreter(ciId);
+        assertEquals(ciId, got.getId());
     }
 
     // 2. test_list_code_interpreters
     @Test @Order(2)
-    @DisplayName("list_code_interpreters returns a dict")
+    @DisplayName("list_code_interpreters returns a response")
     void testListCodeInterpreters() {
-        Map<String, Object> result = client.listCodeInterpreters(null, 10, 0);
+        var result = client.listCodeInterpreters(null, 10, 0);
         assertNotNull(result);
     }
 
@@ -74,7 +75,7 @@ class CodeInterpreterLifecycleTest {
     @DisplayName("update_code_interpreter succeeds")
     void testUpdateCodeInterpreter() {
         assertNotNull(ciId, "Code interpreter ID should be set from setup");
-        Map<String, Object> updated = client.updateCodeInterpreter(ciId,
+        CodeInterpreterInfo updated = client.updateCodeInterpreter(ciId,
                 null, java.util.List.of(Map.of("key", "env", "value", "aa-it")));
         assertNotNull(updated);
     }

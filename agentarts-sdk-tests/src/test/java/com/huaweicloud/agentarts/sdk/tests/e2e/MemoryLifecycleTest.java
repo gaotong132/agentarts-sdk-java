@@ -55,8 +55,8 @@ class MemoryLifecycleTest {
         apiKey = memorySpace.getApiKey() != null ? memorySpace.getApiKey().toString() : null;
         if (apiKey == null || apiKey.isEmpty()) {
             // Fallback: create a separate API key
-            Map<String, Object> keyResult = controlClient.createApiKey();
-            apiKey = (String) keyResult.get("api_key");
+            ApiKeyInfo keyResult = controlClient.createApiKey();
+            apiKey = keyResult != null ? keyResult.getApiKey() : null;
         }
 
         // Create data plane client

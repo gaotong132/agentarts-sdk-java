@@ -51,8 +51,8 @@ class MemoryAgentStateStoreE2ETest {
         // Get API key from the space
         apiKey = space.getApiKey() != null ? space.getApiKey().toString() : null;
         if (apiKey == null || apiKey.isEmpty()) {
-            Map<String, Object> keyResult = controlClient.createApiKey();
-            apiKey = (String) keyResult.get("api_key");
+            ApiKeyInfo keyResult = controlClient.createApiKey();
+            apiKey = keyResult != null ? keyResult.getApiKey() : null;
         }
         assertNotNull(apiKey, "API key should be available");
 

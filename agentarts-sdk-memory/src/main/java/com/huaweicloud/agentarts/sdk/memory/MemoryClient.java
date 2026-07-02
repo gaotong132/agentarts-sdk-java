@@ -114,9 +114,9 @@ public class MemoryClient implements AutoCloseable {
      */
     public SpaceInfo createSpace(String name, int messageTtlHours, String description) {
         // Create API key first — space creation requires api_key_id
-        Map<String, Object> keyResult = createApiKey();
-        String apiKeyId = keyResult != null ? (String) keyResult.get("id") : null;
-        String apiKeyValue = keyResult != null ? (String) keyResult.get("api_key") : null;
+        ApiKeyInfo keyResult = createApiKey();
+        String apiKeyId = keyResult != null ? keyResult.getId() : null;
+        String apiKeyValue = keyResult != null ? keyResult.getApiKey() : null;
 
         CreateSpaceRequest req = new CreateSpaceRequest()
                 .withName(name)
@@ -178,10 +178,10 @@ public class MemoryClient implements AutoCloseable {
     }
 
     /** Create an API key for data plane access (Control Plane). */
-    public Map<String, Object> createApiKey() {
+    public ApiKeyInfo createApiKey() {
         RequestResult result = getControlPlaneClient()
                 .post("/space-keys", null, Map.of()).block();
-        return parseResultAsMap(result);
+        return parseResult(result, ApiKeyInfo.class);
     }
 
     // ========================

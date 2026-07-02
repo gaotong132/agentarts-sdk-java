@@ -116,7 +116,7 @@ public class CodeInterpreterClient implements AutoCloseable {
     private static final java.util.regex.Pattern NAME_PATTERN =
             java.util.regex.Pattern.compile("[a-z][a-z0-9-]{0,38}[a-z0-9]$");
 
-    public Map<String, Object> createCodeInterpreter(String name, String authType, String apiKeyName,
+    public CodeInterpreterInfo createCodeInterpreter(String name, String authType, String apiKeyName,
                                                        String description, String executionAgencyName,
                                                        Map<String, Object> observability,
                                                        Map<String, Object> networkConfig,
@@ -144,32 +144,32 @@ public class CodeInterpreterClient implements AutoCloseable {
                 .withTags(tags);
 
         RequestResult r = getControlClient().post("/code-interpreters", null, req).block();
-        return parseMap(r);
+        return parseResult(r, CodeInterpreterInfo.class);
     }
 
     /** Convenience overload: create with auth type and description. */
-    public Map<String, Object> createCodeInterpreter(String name, String authType, String apiKeyName,
+    public CodeInterpreterInfo createCodeInterpreter(String name, String authType, String apiKeyName,
                                                        String description) {
         return createCodeInterpreter(name, authType, apiKeyName, description,
                 null, null, null, null, null);
     }
 
-    public Map<String, Object> createCodeInterpreter(String name, String description) {
+    public CodeInterpreterInfo createCodeInterpreter(String name, String description) {
         return createCodeInterpreter(name, "IAM", null, description);
     }
 
-    public Map<String, Object> createCodeInterpreter(String name) {
+    public CodeInterpreterInfo createCodeInterpreter(String name) {
         return createCodeInterpreter(name, null);
     }
 
-    public Map<String, Object> listCodeInterpreters(String name, int limit, int offset) {
+    public CodeInterpreterListResponse listCodeInterpreters(String name, int limit, int offset) {
         String url = "/code-interpreters?limit=" + limit + "&offset=" + offset;
         if (name != null) url += "&name=" + name;
         RequestResult r = getControlClient().get(url).block();
-        return parseMap(r);
+        return parseResult(r, CodeInterpreterListResponse.class);
     }
 
-    public Map<String, Object> listCodeInterpreters() {
+    public CodeInterpreterListResponse listCodeInterpreters() {
         return listCodeInterpreters(null, 10, 0);
     }
 
@@ -181,7 +181,7 @@ public class CodeInterpreterClient implements AutoCloseable {
      * @param tags              tag list (nullable)
      * @return updated interpreter data
      */
-    public Map<String, Object> updateCodeInterpreter(String codeInterpreterId,
+    public CodeInterpreterInfo updateCodeInterpreter(String codeInterpreterId,
                                                        Map<String, Object> observability,
                                                        List<Map<String, String>> tags) {
         UpdateCodeInterpreterRequest req = new UpdateCodeInterpreterRequest()
@@ -189,20 +189,20 @@ public class CodeInterpreterClient implements AutoCloseable {
                 .withTags(tags);
 
         RequestResult r = getControlClient().put("/code-interpreters/" + codeInterpreterId, null, req).block();
-        return parseMap(r);
+        return parseResult(r, CodeInterpreterInfo.class);
     }
 
     /** Convenience overload: update with a generic map (backward compatible). */
     @SuppressWarnings("unchecked")
-    public Map<String, Object> updateCodeInterpreter(String codeInterpreterId, Map<String, Object> updates) {
+    public CodeInterpreterInfo updateCodeInterpreter(String codeInterpreterId, Map<String, Object> updates) {
         Map<String, Object> observability = (Map<String, Object>) updates.get("observability");
         List<Map<String, String>> tags = (List<Map<String, String>>) updates.get("tags");
         return updateCodeInterpreter(codeInterpreterId, observability, tags);
     }
 
-    public Map<String, Object> getCodeInterpreter(String codeInterpreterId) {
+    public CodeInterpreterInfo getCodeInterpreter(String codeInterpreterId) {
         RequestResult r = getControlClient().get("/code-interpreters/" + codeInterpreterId).block();
-        return parseMap(r);
+        return parseResult(r, CodeInterpreterInfo.class);
     }
 
     public void deleteCodeInterpreter(String codeInterpreterId) {
@@ -238,13 +238,13 @@ public class CodeInterpreterClient implements AutoCloseable {
      * Get session details.
      * GET /v1/code-interpreters/{name}/sessions-get
      */
-    public Map<String, Object> getSession(String codeInterpreterName, String sessionId) {
+    public CodeInterpreterSessionInfo getSession(String codeInterpreterName, String sessionId) {
         String sid = sessionId != null ? sessionId : this.sessionId;
         String url = "/v1/code-interpreters/" + codeInterpreterName + "/sessions-get";
         Map<String, String> headers = sid != null
                 ? Map.of(Constants.CODE_INTERPRETER_SESSION_HEADER, sid) : null;
         RequestResult r = getDataClient().get(url, headers).block();
-        return parseMap(r);
+        return parseResult(r, CodeInterpreterSessionInfo.class);
     }
 
     /**
@@ -477,8 +477,10 @@ public class CodeInterpreterClient implements AutoCloseable {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> parseMap(RequestResult result) {
+    /**
+     * Parse response into a typed POJO.
+     */
+    private <T> T parseResult(RequestResult result, Class<T> type) {
         if (result == null || !result.isSuccess()) {
             int status = result != null ? result.getStatusCode() : 0;
             String err = result != null ? result.getError() : "null response";
@@ -486,12 +488,17 @@ public class CodeInterpreterClient implements AutoCloseable {
         }
         try {
             JsonNode data = result.getDataAsJson();
-            if (data != null) return MAPPER.treeToValue(data, Map.class);
-            return Map.of();
+            if (data != null) return MAPPER.treeToValue(data, type);
+            return null;
         } catch (Exception e) {
             throw new APIException(result.getStatusCode(), "code_interpreter",
                     "Failed to parse response: " + e.getMessage(), e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseMap(RequestResult result) {
+        return parseResult(result, Map.class);
     }
 
     /**
