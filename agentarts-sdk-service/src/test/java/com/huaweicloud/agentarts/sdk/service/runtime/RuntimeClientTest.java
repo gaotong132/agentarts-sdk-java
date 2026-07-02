@@ -1,5 +1,7 @@
 package com.huaweicloud.agentarts.sdk.service.runtime;
 
+import com.huaweicloud.agentarts.sdk.service.runtime.model.CreateAgentRequest;
+import com.huaweicloud.agentarts.sdk.service.runtime.model.UpdateAgentRequest;
 import org.junit.jupiter.api.*;
 
 import java.lang.reflect.Method;
@@ -20,13 +22,10 @@ class RuntimeClientTest {
         @Test
         void controlPlaneMethodsExist() throws Exception {
             Class<?> cls = RuntimeClient.class;
+            assertNotNull(cls.getMethod("createAgent", CreateAgentRequest.class));
             assertNotNull(cls.getMethod("createAgent", String.class, String.class));
-            assertNotNull(cls.getMethod("updateAgent", String.class, String.class,
-                    Map.class, Map.class, Map.class, Map.class,
-                    String.class, String.class, List.class, List.class));
-            assertNotNull(cls.getMethod("createOrUpdateAgent", String.class, String.class,
-                    Map.class, Map.class, Map.class, Map.class, Map.class,
-                    String.class, String.class, List.class, List.class));
+            assertNotNull(cls.getMethod("updateAgent", String.class, UpdateAgentRequest.class));
+            assertNotNull(cls.getMethod("createOrUpdateAgent", String.class, CreateAgentRequest.class));
             assertNotNull(cls.getMethod("getAgents", String.class, int.class, int.class));
             assertNotNull(cls.getMethod("getAgents"));
             assertNotNull(cls.getMethod("findAgentByName", String.class));

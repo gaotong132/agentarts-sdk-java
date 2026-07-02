@@ -51,17 +51,11 @@ class RuntimeAgentLifecycleTest {
                     "url", "swr.cn-southwest-2.myhuaweicloud.com/agentarts/e2e-test:latest",
                     "commands", List.of());
             Map<String, Object> identityConfig = Map.of("authorizer_type", "IAM");
-            AgentInfo agent = client.createAgent(
-                    createdAgentName, "e2e test agent",
-                    artifactSource,    // artifact_source_config
-                    identityConfig,    // identity_configuration (required, empty dict)
-                    null,              // invoke_config
-                    null,              // network_config
-                    null,              // observability_config
-                    null,              // execution_agency_name
-                    null,              // agent_gateway_id
-                    null,              // env_vars
-                    null);             // tags_config
+            AgentInfo agent = client.createAgent(new CreateAgentRequest()
+                    .withName(createdAgentName)
+                    .withDescription("e2e test agent")
+                    .withArtifactSource(artifactSource)
+                    .withIdentityConfiguration(identityConfig));
             createdAgentId = agent != null ? agent.getId() : null;
             if (createdAgentId != null) {
                 registry.register(
@@ -124,9 +118,8 @@ class RuntimeAgentLifecycleTest {
     @DisplayName("update_agent changes the description")
     void testUpdateAgent() {
         requireSetup();
-        AgentInfo updated = client.updateAgent(
-                createdAgentId, "updated description",
-                null, null, null, null, null, null, null, null);
+        AgentInfo updated = client.updateAgent(createdAgentId,
+                new UpdateAgentRequest().withDescription("updated description"));
         assertNotNull(updated);
         assertEquals(createdAgentId, updated.getId());
     }

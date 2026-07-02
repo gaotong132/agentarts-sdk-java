@@ -1,5 +1,6 @@
 package com.huaweicloud.agentarts.sdk.tools;
 
+import com.huaweicloud.agentarts.sdk.tools.model.CreateCodeInterpreterRequest;
 import org.junit.jupiter.api.*;
 
 import java.util.List;
@@ -24,6 +25,7 @@ class ToolsModuleTest {
         void controlPlaneMethodsExist() throws Exception {
             // CodeInterpreter control plane methods
             Class<?> cls = CodeInterpreterClient.class;
+            assertNotNull(cls.getMethod("createCodeInterpreter", CreateCodeInterpreterRequest.class));
             assertNotNull(cls.getMethod("createCodeInterpreter", String.class, String.class));
             assertNotNull(cls.getMethod("createCodeInterpreter", String.class));
             assertNotNull(cls.getMethod("listCodeInterpreters", String.class, int.class, int.class));
@@ -141,22 +143,22 @@ class ToolsModuleTest {
         void createRejectsInvalidName() {
             // Python: regex [a-z][a-z0-9-]{0,38}[a-z0-9]$
             assertThrows(IllegalArgumentException.class,
-                    () -> client.createCodeInterpreter("INVALID", "IAM", null, null,
-                            null, null, null, null, null));
+                    () -> client.createCodeInterpreter(new CreateCodeInterpreterRequest()
+                            .withName("INVALID").withAuthType("IAM")));
             assertThrows(IllegalArgumentException.class,
-                    () -> client.createCodeInterpreter("a", "IAM", null, null,
-                            null, null, null, null, null));
+                    () -> client.createCodeInterpreter(new CreateCodeInterpreterRequest()
+                            .withName("a").withAuthType("IAM")));
             assertThrows(IllegalArgumentException.class,
-                    () -> client.createCodeInterpreter("has spaces", "IAM", null, null,
-                            null, null, null, null, null));
+                    () -> client.createCodeInterpreter(new CreateCodeInterpreterRequest()
+                            .withName("has spaces").withAuthType("IAM")));
         }
 
         @Test
         void createRejectsApiKeyWithoutKeyName() {
             // Python: API_KEY auth_type requires api_key_name
             assertThrows(IllegalArgumentException.class,
-                    () -> client.createCodeInterpreter("valid-name", "API_KEY", null, null,
-                            null, null, null, null, null));
+                    () -> client.createCodeInterpreter(new CreateCodeInterpreterRequest()
+                            .withName("valid-name").withAuthType("API_KEY")));
         }
 
         @Test

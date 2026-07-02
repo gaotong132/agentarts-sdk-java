@@ -99,67 +99,43 @@ public class CodeInterpreterClient implements AutoCloseable {
     // Control Plane: CRUD
     // ========================
 
-    /**
-     * Create a Code Interpreter with full configuration.
-     *
-     * @param name                 interpreter name (required)
-     * @param authType             auth type: "API_KEY" or "IAM" (default "API_KEY")
-     * @param apiKeyName           API key name (required for API_KEY auth)
-     * @param description          description
-     * @param executionAgencyName  IAM agency name
-     * @param observability        observability configuration
-     * @param networkConfig        network configuration
-     * @param agentGatewayId       agent gateway ID
-     * @param tags                 tag list of {key, value} maps
-     * @return created interpreter data
-     */
     private static final java.util.regex.Pattern NAME_PATTERN =
             java.util.regex.Pattern.compile("[a-z][a-z0-9-]{0,38}[a-z0-9]$");
 
-    public CodeInterpreterInfo createCodeInterpreter(String name, String authType, String apiKeyName,
-                                                       String description, String executionAgencyName,
-                                                       Map<String, Object> observability,
-                                                       Map<String, Object> networkConfig,
-                                                       String agentGatewayId,
-                                                       List<Map<String, String>> tags) {
+    /**
+     * Create a Code Interpreter with full configuration.
+     *
+     * @param req create request with all fields
+     * @return created interpreter info
+     */
+    public CodeInterpreterInfo createCodeInterpreter(CreateCodeInterpreterRequest req) {
+        Objects.requireNonNull(req, "CreateCodeInterpreterRequest must not be null");
+        String name = req.getName();
         if (!NAME_PATTERN.matcher(name).matches()) {
             throw new IllegalArgumentException(
                     "Name must start with lowercase letter, end with lowercase letter or digit, " +
                     "contain only lowercase letters, digits, and hyphens, and be 2-40 characters long.");
         }
-        String resolvedAuthType = authType != null ? authType : "API_KEY";
-        if ("API_KEY".equals(resolvedAuthType) && apiKeyName == null) {
+        String resolvedAuthType = req.getAuthType() != null ? req.getAuthType() : "API_KEY";
+        if ("API_KEY".equals(resolvedAuthType) && req.getApiKeyName() == null) {
             throw new IllegalArgumentException("API_KEY auth_type requires api_key_name.");
         }
-
-        CreateCodeInterpreterRequest req = new CreateCodeInterpreterRequest()
-                .withName(name)
-                .withAuthType(resolvedAuthType)
-                .withApiKeyName(apiKeyName)
-                .withDescription(description)
-                .withExecutionAgencyName(executionAgencyName)
-                .withObservability(observability)
-                .withNetworkConfig(networkConfig)
-                .withAgentGatewayId(agentGatewayId)
-                .withTags(tags);
+        req.setAuthType(resolvedAuthType);
 
         RequestResult r = getControlClient().post("/code-interpreters", null, req).block();
         return parseResult(r, CodeInterpreterInfo.class);
     }
 
-    /** Convenience overload: create with auth type and description. */
-    public CodeInterpreterInfo createCodeInterpreter(String name, String authType, String apiKeyName,
-                                                       String description) {
-        return createCodeInterpreter(name, authType, apiKeyName, description,
-                null, null, null, null, null);
-    }
-
-    public CodeInterpreterInfo createCodeInterpreter(String name, String description) {
-        return createCodeInterpreter(name, "IAM", null, description);
-    }
-
+    /** Convenience: create with name only (IAM auth). */
     public CodeInterpreterInfo createCodeInterpreter(String name) {
-        return createCodeInterpreter(name, null);
+        return createCodeInterpreter(new CreateCodeInterpreterRequest()
+                .withName(name).withAuthType("IAM"));
+    }
+
+    /** Convenience: create with name and description (IAM auth). */
+    public CodeInterpreterInfo createCodeInterpreter(String name, String description) {
+        return createCodeInterpreter(new CreateCodeInterpreterRequest()
+                .withName(name).withAuthType("IAM").withDescription(description));
     }
 
     public CodeInterpreterListResponse listCodeInterpreters(String name, int limit, int offset) {

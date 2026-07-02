@@ -2,6 +2,7 @@ package com.huaweicloud.agentarts.sdk.tests.e2e;
 
 import com.huaweicloud.agentarts.sdk.tools.CodeInterpreterClient;
 import com.huaweicloud.agentarts.sdk.tools.model.CodeInterpreterInfo;
+import com.huaweicloud.agentarts.sdk.tools.model.CreateCodeInterpreterRequest;
 import org.junit.jupiter.api.*;
 
 import java.util.Map;
@@ -38,8 +39,11 @@ class CodeInterpreterLifecycleTest {
         // Create code interpreter
         ciName = E2EHelpers.uniqueName("ci", runId);
         CodeInterpreterInfo result = client.createCodeInterpreter(
-                ciName, "API_KEY", ciName + "-ak", "e2e test CI",
-                null, null, null, null, null);
+                new CreateCodeInterpreterRequest()
+                        .withName(ciName)
+                        .withAuthType("API_KEY")
+                        .withApiKeyName(ciName + "-ak")
+                        .withDescription("e2e test CI"));
         assertNotNull(result);
         ciId = result.getId();
         if (ciId != null) {

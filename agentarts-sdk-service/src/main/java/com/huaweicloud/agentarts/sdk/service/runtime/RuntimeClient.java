@@ -90,80 +90,63 @@ public class RuntimeClient implements AutoCloseable {
     // Control Plane: Agent CRUD
     // ========================
 
-    public AgentInfo createAgent(String name, String description,
-                                  Map<String, Object> artifactSourceConfig,
-                                  Map<String, Object> identityConfig,
-                                  Map<String, Object> invokeConfig,
-                                  Map<String, Object> networkConfig,
-                                  Map<String, Object> observabilityConfig,
-                                  String executionAgencyName,
-                                  String agentGatewayId,
-                                  List<Map<String, String>> envVars,
-                                  List<Map<String, String>> tagsConfig) {
-        CreateAgentRequest req = new CreateAgentRequest()
-                .withName(name)
-                .withDescription(description)
-                .withArtifactSource(artifactSourceConfig)
-                .withIdentityConfiguration(identityConfig)
-                .withInvokeConfig(invokeConfig)
-                .withNetworkConfig(networkConfig)
-                .withObservability(observabilityConfig)
-                .withExecutionAgencyName(executionAgencyName)
-                .withAgentGatewayId(agentGatewayId)
-                .withEnvironmentVariables(envVars)
-                .withTags(tagsConfig);
-
+    /**
+     * Create a Runtime agent.
+     *
+     * @param req create agent request with all configuration fields
+     * @return created agent info
+     */
+    public AgentInfo createAgent(CreateAgentRequest req) {
+        Objects.requireNonNull(req, "CreateAgentRequest must not be null");
         RequestResult result = getControlClient().post("/runtimes", req).block();
         return parseResult(result, AgentInfo.class, "create_agent");
     }
 
+    /** Convenience: create an agent with name and description only. */
     public AgentInfo createAgent(String name, String description) {
-        return createAgent(name, description, null, null, null, null, null, null, null, null, null);
+        return createAgent(new CreateAgentRequest().withName(name).withDescription(description));
     }
 
-    public AgentInfo updateAgent(String agentId, String description,
-                                  Map<String, Object> artifactSourceConfig,
-                                  Map<String, Object> invokeConfig,
-                                  Map<String, Object> networkConfig,
-                                  Map<String, Object> observabilityConfig,
-                                  String executionAgencyName,
-                                  String agentGatewayId,
-                                  List<Map<String, String>> envVars,
-                                  List<Map<String, String>> tagsConfig) {
-        UpdateAgentRequest req = new UpdateAgentRequest()
-                .withDescription(description)
-                .withArtifactSource(artifactSourceConfig)
-                .withInvokeConfig(invokeConfig)
-                .withNetworkConfig(networkConfig)
-                .withObservability(observabilityConfig)
-                .withExecutionAgencyName(executionAgencyName)
-                .withAgentGatewayId(agentGatewayId)
-                .withEnvironmentVariables(envVars)
-                .withTags(tagsConfig);
-
+    /**
+     * Update a Runtime agent by ID.
+     *
+     * @param agentId agent ID to update
+     * @param req     update request with fields to change
+     * @return updated agent info
+     */
+    public AgentInfo updateAgent(String agentId, UpdateAgentRequest req) {
+        Objects.requireNonNull(agentId, "agentId must not be null");
+        Objects.requireNonNull(req, "UpdateAgentRequest must not be null");
         RequestResult result = getControlClient().put("/runtimes/" + agentId, req).block();
         return parseResult(result, AgentInfo.class, "update_agent");
     }
 
-    public AgentInfo createOrUpdateAgent(String agentName, String description,
-                                          Map<String, Object> artifactSourceConfig,
-                                          Map<String, Object> identityConfig,
-                                          Map<String, Object> invokeConfig,
-                                          Map<String, Object> networkConfig,
-                                          Map<String, Object> observabilityConfig,
-                                          String executionAgencyName,
-                                          String agentGatewayId,
-                                          List<Map<String, String>> envVars,
-                                          List<Map<String, String>> tagsConfig) {
+    /**
+     * Create or update an agent: find by name first, then create or update.
+     *
+     * @param agentName agent name to find
+     * @param req       create request (used for both create and update paths)
+     * @return agent info
+     */
+    public AgentInfo createOrUpdateAgent(String agentName, CreateAgentRequest req) {
+        Objects.requireNonNull(agentName, "agentName must not be null");
+        Objects.requireNonNull(req, "CreateAgentRequest must not be null");
         AgentInfo existing = findAgentByName(agentName);
         if (existing != null) {
-            return updateAgent(existing.getId(), description, artifactSourceConfig, invokeConfig,
-                    networkConfig, observabilityConfig, executionAgencyName, agentGatewayId,
-                    envVars, tagsConfig);
+            UpdateAgentRequest updateReq = new UpdateAgentRequest()
+                    .withDescription(req.getDescription())
+                    .withArtifactSource(req.getArtifactSource())
+                    .withInvokeConfig(req.getInvokeConfig())
+                    .withNetworkConfig(req.getNetworkConfig())
+                    .withObservability(req.getObservability())
+                    .withExecutionAgencyName(req.getExecutionAgencyName())
+                    .withAgentGatewayId(req.getAgentGatewayId())
+                    .withEnvironmentVariables(req.getEnvironmentVariables())
+                    .withTags(req.getTags());
+            return updateAgent(existing.getId(), updateReq);
         } else {
-            return createAgent(agentName, description, artifactSourceConfig, identityConfig,
-                    invokeConfig, networkConfig, observabilityConfig, executionAgencyName,
-                    agentGatewayId, envVars, tagsConfig);
+            req.setName(agentName);
+            return createAgent(req);
         }
     }
 
