@@ -3,6 +3,7 @@ package com.huaweicloud.agentarts.sdk.mcpgateway.model;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -25,6 +26,15 @@ public class CreateMcpGatewayRequest {
 
     @JsonProperty("agency_name")
     private String agencyName;
+
+    @JsonProperty("authorizer_configuration")
+    private Map<String, Object> authorizerConfiguration;
+
+    @JsonProperty("log_delivery_configuration")
+    private Map<String, Object> logDeliveryConfiguration;
+
+    @JsonProperty("outbound_network_configuration")
+    private Map<String, Object> outboundNetworkConfiguration;
 
     public CreateMcpGatewayRequest() {
     }
@@ -93,6 +103,18 @@ public class CreateMcpGatewayRequest {
         this.agencyName = agencyName;
         return this;
     }
+
+    public Map<String, Object> getAuthorizerConfiguration() { return authorizerConfiguration; }
+    public void setAuthorizerConfiguration(Map<String, Object> v) { this.authorizerConfiguration = v; }
+    public CreateMcpGatewayRequest withAuthorizerConfiguration(Map<String, Object> v) { this.authorizerConfiguration = v; return this; }
+
+    public Map<String, Object> getLogDeliveryConfiguration() { return logDeliveryConfiguration; }
+    public void setLogDeliveryConfiguration(Map<String, Object> v) { this.logDeliveryConfiguration = v; }
+    public CreateMcpGatewayRequest withLogDeliveryConfiguration(Map<String, Object> v) { this.logDeliveryConfiguration = v; return this; }
+
+    public Map<String, Object> getOutboundNetworkConfiguration() { return outboundNetworkConfiguration; }
+    public void setOutboundNetworkConfiguration(Map<String, Object> v) { this.outboundNetworkConfiguration = v; }
+    public CreateMcpGatewayRequest withOutboundNetworkConfiguration(Map<String, Object> v) { this.outboundNetworkConfiguration = v; return this; }
 
     @Override
     public boolean equals(Object o) {

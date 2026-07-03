@@ -2,6 +2,7 @@ package com.huaweicloud.agentarts.sdk.mcpgateway;
 
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
+import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.mcpgateway.model.CreateMcpGatewayRequest;
 import com.huaweicloud.agentarts.sdk.mcpgateway.model.CreateMcpGatewayTargetRequest;
 import com.huaweicloud.agentarts.sdk.mcpgateway.model.UpdateMcpGatewayRequest;
@@ -9,12 +10,20 @@ import com.huaweicloud.agentarts.sdk.mcpgateway.model.UpdateMcpGatewayTargetRequ
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * MCP Gateway client for managing gateways and targets via AK/SK signed requests.
  * Always uses AK/SK signing (SDK-HMAC-SHA256). Base URL is control plane + /v1/core.
+ *
+ * <p>When creating a gateway with {@code authorizerType="iam"} and no explicit
+ * {@code agencyName}, an IAM agency named {@value #DEFAULT_AGENCY_NAME} is
+ * automatically created (or reused if it already exists).</p>
  *
  * <h3>Gateway management:</h3>
  * create/update/delete/get/list_mcp_gateway
@@ -24,9 +33,30 @@ import java.util.Map;
  */
 public class MCPGatewayClient implements AutoCloseable {
 
+    private static final Logger LOG = LoggerFactory.getLogger(MCPGatewayClient.class);
+
+    /** Default IAM agency name for MCP Gateway. */
+    public static final String DEFAULT_AGENCY_NAME = "AgentArtsCoreGateway";
+
+    /**
+     * Build the IAM trust policy JSON string, matching Python json.dumps() format exactly.
+     */
+    private static String buildTrustPolicy() {
+        // Match Python json.dumps() output format exactly (spaces after : and ,)
+        return "{\"Version\": \"5.0\", \"Statement\": [{\"Action\": ["
+                + "\"csms:secret:getVersion\", "
+                + "\"agentIdentity::getResourceApiKey\", "
+                + "\"agentIdentity::getResourceOauth2Token\", "
+                + "\"agentIdentity::getResourceStsToken\""
+                + "], \"Effect\": \"Allow\", "
+                + "\"Principal\": {\"Service\": [\"service.WorkloadSandboxMetadata\"]}}]}";
+    }
+
     private final BaseHttpClient httpClient;
+    private final boolean verifySsl;
 
     public MCPGatewayClient(boolean verifySsl) {
+        this.verifySsl = verifySsl;
         String endpoint = Constants.getControlPlaneEndpoint() + "/v1/core";
         RequestConfig config = RequestConfig.builder()
                 .baseUrl(endpoint)
@@ -45,18 +75,31 @@ public class MCPGatewayClient implements AutoCloseable {
 
     /**
      * Create an MCP gateway with all parameters.
+     *
+     * <p>When {@code authorizerType} is "iam" and {@code agencyName} is null,
+     * an IAM agency named {@value #DEFAULT_AGENCY_NAME} is automatically created
+     * (or reused if it already exists), matching the Python SDK behavior.</p>
      */
     public RequestResult createMcpGateway(String name, String description,
                                            String protocolType, String authorizerType,
                                            String agencyName) {
         String protocol = protocolType != null ? protocolType : "mcp";
         String authorizer = authorizerType != null ? authorizerType : "iam";
+
+        // Auto-create IAM agency when using IAM auth and no agency name provided
+        String resolvedAgencyName = agencyName;
+        if ("iam".equals(authorizer) && agencyName == null) {
+            resolvedAgencyName = ensureIamAgency();
+        }
+
         CreateMcpGatewayRequest req = new CreateMcpGatewayRequest()
                 .withName(name)
                 .withDescription(description)
                 .withProtocolType(protocol)
                 .withAuthorizerType(authorizer)
-                .withAgencyName(agencyName);
+                .withAgencyName(resolvedAgencyName)
+                .withLogDeliveryConfiguration(Map.of("enabled", false))
+                .withOutboundNetworkConfiguration(Map.of("network_mode", "public"));
         return httpClient.post("/gateways", null, req).block();
     }
 
@@ -144,5 +187,62 @@ public class MCPGatewayClient implements AutoCloseable {
     @Override
     public void close() {
         httpClient.close();
+    }
+
+    // ========================
+    // Internal helpers
+    // ========================
+
+    /**
+     * Ensure the default IAM agency exists, creating it if necessary.
+     * Returns the agency name. Errors during creation are logged and
+     * the default name is still returned (the server may already have it).
+     */
+    private String ensureIamAgency() {
+        try {
+            // Use BasicCredentials directly for IAM v5 agency API
+            // (IAMServiceClient uses GlobalCredentials which doesn't work for v5)
+            com.huaweicloud.sdk.core.auth.BasicCredentials credentials =
+                    new com.huaweicloud.sdk.core.auth.BasicCredentials()
+                            .withAk(Constants.getAk())
+                            .withSk(Constants.getSk());
+            String securityToken = Constants.getSecurityToken();
+            if (JsonUtils.isNotBlank(securityToken)) {
+                credentials.withSecurityToken(securityToken);
+            }
+
+            com.huaweicloud.sdk.core.http.HttpConfig httpConfig =
+                    com.huaweicloud.sdk.core.http.HttpConfig.getDefaultHttpConfig();
+            httpConfig.setIgnoreSSLVerification(!verifySsl);
+
+            String endpoint = Constants.getIamEndpoint(Constants.getRegion());
+
+            com.huaweicloud.sdk.iam.v5.IamClient iamClient =
+                    new com.huaweicloud.sdk.core.ClientBuilder<>(com.huaweicloud.sdk.iam.v5.IamClient::new)
+                            .withCredential(credentials)
+                            .withHttpConfig(httpConfig)
+                            .withEndpoint(endpoint)
+                            .build();
+
+            com.huaweicloud.sdk.iam.v5.model.CreateAgencyReqBody body =
+                    new com.huaweicloud.sdk.iam.v5.model.CreateAgencyReqBody()
+                            .withAgencyName(DEFAULT_AGENCY_NAME)
+                            .withTrustPolicy(buildTrustPolicy());
+
+            com.huaweicloud.sdk.iam.v5.model.CreateAgencyV5Request request =
+                    new com.huaweicloud.sdk.iam.v5.model.CreateAgencyV5Request().withBody(body);
+
+            iamClient.createAgencyV5(request);
+            LOG.info("Created IAM agency: {}", DEFAULT_AGENCY_NAME);
+        } catch (Exception e) {
+            // 409 Conflict = agency already exists, which is fine
+            String msg = e.getMessage();
+            if (msg != null && msg.contains("409")) {
+                LOG.debug("IAM agency {} already exists", DEFAULT_AGENCY_NAME);
+            } else {
+                LOG.warn("Failed to create IAM agency {}: {}", DEFAULT_AGENCY_NAME, msg);
+            }
+        }
+        return DEFAULT_AGENCY_NAME;
     }
 }

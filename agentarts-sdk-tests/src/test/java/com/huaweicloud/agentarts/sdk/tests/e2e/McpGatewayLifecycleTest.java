@@ -35,7 +35,7 @@ class McpGatewayLifecycleTest {
         registry = new E2EResourceRegistry();
         runId = E2EConfig.getRunId();
 
-        // Create gateway (may fail due to IAM trust_policy bug)
+        // Create gateway
         String gwName = E2EHelpers.uniqueName("gw", runId);
         try {
             RequestResult result = client.createMcpGateway(gwName, "e2e test gateway");
