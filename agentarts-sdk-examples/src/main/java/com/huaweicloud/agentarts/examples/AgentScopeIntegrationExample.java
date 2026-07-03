@@ -15,7 +15,7 @@ import io.agentscope.core.state.InMemoryAgentStateStore;
 import io.agentscope.core.tool.Tool;
 import io.agentscope.core.tool.ToolParam;
 import io.agentscope.core.tool.Toolkit;
-import io.agentscope.extensions.model.openai.OpenAIChatModel;
+import io.agentscope.core.model.OpenAIChatModel;
 import reactor.core.publisher.Flux;
 
 /**
