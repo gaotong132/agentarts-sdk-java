@@ -10,6 +10,22 @@ import com.huaweicloud.agentarts.sdk.mcpgateway.model.UpdateMcpGatewayTargetRequ
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
+import com.huaweicloud.sdk.core.ClientBuilder;
+import com.huaweicloud.sdk.core.auth.BasicCredentials;
+import com.huaweicloud.sdk.core.http.HttpConfig;
+import com.huaweicloud.sdk.iam.v5.IamClient;
+import com.huaweicloud.sdk.iam.v5.model.Agency;
+import com.huaweicloud.sdk.iam.v5.model.AttachAgencyPolicyReqBody;
+import com.huaweicloud.sdk.iam.v5.model.AttachAgencyPolicyV5Request;
+import com.huaweicloud.sdk.iam.v5.model.CreateAgencyReqBody;
+import com.huaweicloud.sdk.iam.v5.model.CreateAgencyV5Request;
+import com.huaweicloud.sdk.iam.v5.model.CreateAgencyV5Response;
+import com.huaweicloud.sdk.iam.v5.model.ListAgenciesV5Request;
+import com.huaweicloud.sdk.iam.v5.model.ListAgenciesV5Response;
+import com.huaweicloud.sdk.iam.v5.model.ListPoliciesV5Request;
+import com.huaweicloud.sdk.iam.v5.model.ListPoliciesV5Response;
+import com.huaweicloud.sdk.iam.v5.model.PageInfo;
+import com.huaweicloud.sdk.iam.v5.model.Policy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,18 +54,28 @@ public class MCPGatewayClient implements AutoCloseable {
     /** Default IAM agency name for MCP Gateway. */
     public static final String DEFAULT_AGENCY_NAME = "AgentArtsCoreGateway";
 
+    /** System policy attached to the auto-created agency so it can fetch resource credentials. */
+    public static final String IDENTITY_AGENCY_POLICY_NAME = "AgentArtsCoreGatewayIdentityAgencyPolicy";
+
     /**
-     * Build the IAM trust policy JSON string, matching Python json.dumps() format exactly.
+     * Build the IAM trust policy JSON string granting the AgentArts sandbox service
+     * principal permission to assume the agency. Matches the reference implementation's
+     * {@code sts:agencies:assume} trust policy (not resource actions).
      */
     private static String buildTrustPolicy() {
-        // Match Python json.dumps() output format exactly (spaces after : and ,)
-        return "{\"Version\": \"5.0\", \"Statement\": [{\"Action\": ["
-                + "\"csms:secret:getVersion\", "
-                + "\"agentIdentity::getResourceApiKey\", "
-                + "\"agentIdentity::getResourceOauth2Token\", "
-                + "\"agentIdentity::getResourceStsToken\""
-                + "], \"Effect\": \"Allow\", "
-                + "\"Principal\": {\"Service\": [\"service.WorkloadSandboxMetadata\"]}}]}";
+        // Trust policy: allow service.WorkloadSandboxMetadata to assume the agency.
+        Map<String, Object> statement = new HashMap<>();
+        statement.put("Action", List.of("sts:agencies:assume"));
+        statement.put("Effect", "Allow");
+        statement.put("Principal", Map.of("Service", List.of("service.WorkloadSandboxMetadata")));
+        Map<String, Object> trustPolicy = new HashMap<>();
+        trustPolicy.put("Version", "5.0");
+        trustPolicy.put("Statement", List.of(statement));
+        try {
+            return JsonUtils.MAPPER.writeValueAsString(trustPolicy);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize IAM trust policy", e);
+        }
     }
 
     private final BaseHttpClient httpClient;
@@ -141,11 +167,17 @@ public class MCPGatewayClient implements AutoCloseable {
                                                   String description,
                                                   Map<String, Object> targetConfiguration,
                                                   Map<String, Object> credentialProviderConfiguration) {
+        // Default credential_provider_configuration to {"credential_provider_type": "none"}
+        // when not provided, matching the reference implementation (the backend rejects a
+        // target with neither a target_configuration nor a credential provider).
+        Map<String, Object> credConfig = credentialProviderConfiguration != null
+                ? credentialProviderConfiguration
+                : Map.of("credential_provider_type", "none");
         CreateMcpGatewayTargetRequest req = new CreateMcpGatewayTargetRequest()
                 .withName(name)
                 .withDescription(description)
                 .withTargetConfiguration(targetConfiguration)
-                .withCredentialProviderConfiguration(credentialProviderConfiguration);
+                .withCredentialProviderConfiguration(credConfig);
         return httpClient.post("/gateways/" + gatewayId + "/targets", null, req).block();
     }
 
@@ -194,55 +226,160 @@ public class MCPGatewayClient implements AutoCloseable {
     // ========================
 
     /**
-     * Ensure the default IAM agency exists, creating it if necessary.
-     * Returns the agency name. Errors during creation are logged and
-     * the default name is still returned (the server may already have it).
+     * Ensure the default IAM agency exists with the identity policy attached,
+     * mirroring the reference {@code create_agency_with_policy} flow: create the
+     * agency (or reuse it on 409), look up the system policy by name, attach it
+     * (ignore 409 if already attached). Returns the agency name; the agency is
+     * left in place (shared across gateways, intentionally not deleted).
      */
     private String ensureIamAgency() {
         try {
-            // Use BasicCredentials directly for IAM v5 agency API
-            // (IAMServiceClient uses GlobalCredentials which doesn't work for v5)
-            com.huaweicloud.sdk.core.auth.BasicCredentials credentials =
-                    new com.huaweicloud.sdk.core.auth.BasicCredentials()
-                            .withAk(Constants.getAk())
-                            .withSk(Constants.getSk());
-            String securityToken = Constants.getSecurityToken();
-            if (JsonUtils.isNotBlank(securityToken)) {
-                credentials.withSecurityToken(securityToken);
+            IamClient iamClient = buildIamClient();
+            String agencyId = resolveAgencyId(iamClient);
+            if (agencyId == null) {
+                LOG.warn("Could not resolve agency_id for {}; skipping policy attachment",
+                        DEFAULT_AGENCY_NAME);
+                return DEFAULT_AGENCY_NAME;
             }
-
-            com.huaweicloud.sdk.core.http.HttpConfig httpConfig =
-                    com.huaweicloud.sdk.core.http.HttpConfig.getDefaultHttpConfig();
-            httpConfig.setIgnoreSSLVerification(!verifySsl);
-
-            String endpoint = Constants.getIamEndpoint(Constants.getRegion());
-
-            com.huaweicloud.sdk.iam.v5.IamClient iamClient =
-                    new com.huaweicloud.sdk.core.ClientBuilder<>(com.huaweicloud.sdk.iam.v5.IamClient::new)
-                            .withCredential(credentials)
-                            .withHttpConfig(httpConfig)
-                            .withEndpoint(endpoint)
-                            .build();
-
-            com.huaweicloud.sdk.iam.v5.model.CreateAgencyReqBody body =
-                    new com.huaweicloud.sdk.iam.v5.model.CreateAgencyReqBody()
-                            .withAgencyName(DEFAULT_AGENCY_NAME)
-                            .withTrustPolicy(buildTrustPolicy());
-
-            com.huaweicloud.sdk.iam.v5.model.CreateAgencyV5Request request =
-                    new com.huaweicloud.sdk.iam.v5.model.CreateAgencyV5Request().withBody(body);
-
-            iamClient.createAgencyV5(request);
-            LOG.info("Created IAM agency: {}", DEFAULT_AGENCY_NAME);
+            attachIdentityPolicy(iamClient, agencyId);
         } catch (Exception e) {
-            // 409 Conflict = agency already exists, which is fine
-            String msg = e.getMessage();
-            if (msg != null && msg.contains("409")) {
-                LOG.debug("IAM agency {} already exists", DEFAULT_AGENCY_NAME);
+            if (isConflict(e)) {
+                LOG.debug("IAM agency {} already exists or policy already attached",
+                        DEFAULT_AGENCY_NAME);
             } else {
-                LOG.warn("Failed to create IAM agency {}: {}", DEFAULT_AGENCY_NAME, msg);
+                LOG.warn("Failed to ensure IAM agency {}: {}", DEFAULT_AGENCY_NAME, e.getMessage());
             }
         }
         return DEFAULT_AGENCY_NAME;
+    }
+
+    /** True if the exception is a 409 Conflict (agency/policy already exists). */
+    private static boolean isConflict(Exception e) {
+        if (e instanceof com.huaweicloud.sdk.core.exception.ServiceResponseException) {
+            return ((com.huaweicloud.sdk.core.exception.ServiceResponseException) e)
+                    .getHttpStatusCode() == 409;
+        }
+        String msg = e.getMessage() == null ? "" : e.getMessage();
+        return msg.contains("409") || msg.contains("already exists");
+    }
+
+    private IamClient buildIamClient() {
+        // BasicCredentials (not GlobalCredentials) — the IAM v5 agency API requires it.
+        BasicCredentials credentials = new BasicCredentials()
+                .withAk(Constants.getAk())
+                .withSk(Constants.getSk());
+        String securityToken = Constants.getSecurityToken();
+        if (JsonUtils.isNotBlank(securityToken)) {
+            credentials.withSecurityToken(securityToken);
+        }
+        HttpConfig httpConfig = HttpConfig.getDefaultHttpConfig();
+        httpConfig.setIgnoreSSLVerification(!verifySsl);
+        String endpoint = Constants.getIamEndpoint(Constants.getRegion());
+        return new ClientBuilder<>(IamClient::new)
+                .withCredential(credentials)
+                .withHttpConfig(httpConfig)
+                .withEndpoint(endpoint)
+                .build();
+    }
+
+    /**
+     * Create the agency, or — on 409 (already exists) — look it up by name.
+     * Returns the agency id, or null if it cannot be resolved.
+     */
+    private String resolveAgencyId(IamClient iamClient) {
+        CreateAgencyReqBody body = new CreateAgencyReqBody()
+                .withAgencyName(DEFAULT_AGENCY_NAME)
+                .withTrustPolicy(buildTrustPolicy());
+        CreateAgencyV5Request request = new CreateAgencyV5Request().withBody(body);
+        try {
+            CreateAgencyV5Response response = iamClient.createAgencyV5(request);
+            // CreateAgencyV5Response nests the agency under .agency (the bc280d3 fix:
+            // the create call succeeds but agency_id is on the nested agency object).
+            if (response != null && response.getAgency() != null) {
+                LOG.info("Created IAM agency: {}", DEFAULT_AGENCY_NAME);
+                return response.getAgency().getAgencyId();
+            }
+            return null;
+        } catch (Exception e) {
+            if (!isConflict(e)) {
+                throw e;
+            }
+            // Agency already exists — find its id via list_agencies.
+            LOG.debug("IAM agency {} already exists; resolving id", DEFAULT_AGENCY_NAME);
+            String marker = null;
+            while (true) {
+                ListAgenciesV5Request listReq = new ListAgenciesV5Request().withLimit(200);
+                if (marker != null) {
+                    listReq.withMarker(marker);
+                }
+                ListAgenciesV5Response listResp = iamClient.listAgenciesV5(listReq);
+                if (listResp == null || listResp.getAgencies() == null) {
+                    return null;
+                }
+                for (Agency agency : listResp.getAgencies()) {
+                    if (DEFAULT_AGENCY_NAME.equals(agency.getAgencyName())) {
+                        return agency.getAgencyId();
+                    }
+                }
+                PageInfo page = listResp.getPageInfo();
+                if (page == null || page.getNextMarker() == null) {
+                    return null;
+                }
+                marker = page.getNextMarker();
+            }
+        }
+    }
+
+    /**
+     * Find the system identity policy by name (paged) and attach it to the agency.
+     * A 409 on attach means it is already attached and is ignored.
+     */
+    private void attachIdentityPolicy(IamClient iamClient, String agencyId) {
+        String policyId = findSystemPolicyId(iamClient, IDENTITY_AGENCY_POLICY_NAME);
+        if (policyId == null) {
+            LOG.warn("System policy {} not found; skipping attachment",
+                    IDENTITY_AGENCY_POLICY_NAME);
+            return;
+        }
+        try {
+            AttachAgencyPolicyV5Request attachReq = new AttachAgencyPolicyV5Request()
+                    .withPolicyId(policyId)
+                    .withBody(new AttachAgencyPolicyReqBody().withAgencyId(agencyId));
+            iamClient.attachAgencyPolicyV5(attachReq);
+            LOG.info("Attached policy {} to agency {}", IDENTITY_AGENCY_POLICY_NAME, DEFAULT_AGENCY_NAME);
+        } catch (Exception e) {
+            if (isConflict(e)) {
+                LOG.debug("Policy {} already attached to agency {}",
+                        IDENTITY_AGENCY_POLICY_NAME, DEFAULT_AGENCY_NAME);
+            } else {
+                throw e;
+            }
+        }
+    }
+
+    private String findSystemPolicyId(IamClient iamClient, String policyName) {
+        String marker = null;
+        while (true) {
+            ListPoliciesV5Request req = new ListPoliciesV5Request()
+                    .withPolicyType(ListPoliciesV5Request.PolicyTypeEnum.SYSTEM)
+                    .withLimit(200);
+            if (marker != null) {
+                req.withMarker(marker);
+            }
+            ListPoliciesV5Response resp = iamClient.listPoliciesV5(req);
+            if (resp == null || resp.getPolicies() == null) {
+                return null;
+            }
+            for (Policy policy : resp.getPolicies()) {
+                if (policyName.equals(policy.getPolicyName())) {
+                    return policy.getPolicyId();
+                }
+            }
+            PageInfo page = resp.getPageInfo();
+            if (page == null || page.getNextMarker() == null) {
+                return null;
+            }
+            marker = page.getNextMarker();
+        }
     }
 }

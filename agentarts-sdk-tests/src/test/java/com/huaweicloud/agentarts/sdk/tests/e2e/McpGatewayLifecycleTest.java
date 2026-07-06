@@ -1,19 +1,28 @@
 package com.huaweicloud.agentarts.sdk.tests.e2e;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import org.junit.jupiter.api.*;
+
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * MCP Gateway lifecycle tests — (6 tests: gateway + target CRUD, xfail).
- * All tests are expected to fail (xfail) due to SDK trust_policy bug.
- * Requires AGENTARTS_TEST_ALLOW_CREATE=1.
+ * Gateway lifecycle tests — (6 tests: gateway + target CRUD).
+ *
+ * <p>{@code createMcpGateway} auto-creates (or reuses) the IAM agency
+ * {@code AgentArtsCoreGateway} with a {@code sts:agencies:assume} trust policy
+ * and attaches the {@code AgentArtsCoreGatewayIdentityAgencyPolicy} system
+ * policy, so gateway creation succeeds without a pre-existing agency.</p>
+ *
+ * <p>Requires {@code AGENTARTS_TEST_ALLOW_CREATE=1}. The shared IAM agency is
+ * intentionally not deleted (it is reused across gateways).</p>
  */
 @Tag("e2e")
-@DisplayName("MCP Gateway Lifecycle Tests (xfail)")
+@DisplayName("Gateway Lifecycle Tests")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class McpGatewayLifecycleTest {
 
@@ -22,7 +31,6 @@ class McpGatewayLifecycleTest {
     private static String runId;
     private static String gatewayId;
     private static String targetId;
-    private static boolean setupFailed = false;
 
     @BeforeAll
     static void setUp() {
@@ -35,41 +43,63 @@ class McpGatewayLifecycleTest {
         registry = new E2EResourceRegistry();
         runId = E2EConfig.getRunId();
 
-        // Create gateway
+        // Create gateway (auto-creates the IAM agency with policy on first run)
         String gwName = E2EHelpers.uniqueName("gw", runId);
-        try {
-            RequestResult result = client.createMcpGateway(gwName, "e2e test gateway");
-            if (result.isSuccess() && result.getData() != null) {
-                @SuppressWarnings("unchecked")
-                var data = (java.util.Map<String, Object>) result.getData();
-                gatewayId = data.get("id") != null ? data.get("id").toString() : null;
-                if (gatewayId != null) {
-                    registry.register(() -> client.deleteMcpGateway(gatewayId), "gateway:" + gatewayId);
-                }
-            } else {
-                setupFailed = true;
-            }
-        } catch (Exception e) {
-            setupFailed = true;
-        }
+        RequestResult result = client.createMcpGateway(gwName, "e2e test gateway");
+        assertTrue(result.isSuccess(),
+                "create_mcp_gateway failed: " + result.getError());
+        assertNotNull(result.getData(), "create_mcp_gateway returned no data");
+        gatewayId = extractId((JsonNode) result.getData(), "id", "gateway_id");
+        assertNotNull(gatewayId, "create_mcp_gateway returned no id");
+        registry.register(() -> client.deleteMcpGateway(gatewayId), "gateway:" + gatewayId);
 
-        // Create target (may fail if gateway creation failed)
-        if (gatewayId != null) {
-            String targetName = E2EHelpers.uniqueName("tgt", runId);
-            try {
-                RequestResult result = client.createMcpGatewayTarget(gatewayId, targetName, "e2e target");
-                if (result.isSuccess() && result.getData() != null) {
-                    @SuppressWarnings("unchecked")
-                    var data = (java.util.Map<String, Object>) result.getData();
-                    targetId = data.get("id") != null ? data.get("id").toString() : null;
-                    if (targetId != null) {
-                        registry.register(
-                                () -> client.deleteMcpGatewayTarget(gatewayId, targetId),
-                                "target:" + targetId);
-                    }
+        // Create target
+        String targetName = E2EHelpers.uniqueName("tgt", runId);
+        Map<String, Object> targetConfig = Map.of(
+                "mcp_server", Map.of(
+                        "endpoint", "https://example.com/mcp",
+                        "server_type", "sse"));
+        RequestResult tgtResult = client.createMcpGatewayTarget(
+                gatewayId, targetName, "e2e target", targetConfig, null);
+        assertTrue(tgtResult.isSuccess(),
+                "create_mcp_gateway_target failed: " + tgtResult.getError());
+        targetId = extractId((JsonNode) tgtResult.getData(), "id", "target_id");
+        assertNotNull(targetId, "create_mcp_gateway_target returned no id");
+        registry.register(
+                () -> client.deleteMcpGatewayTarget(gatewayId, targetId),
+                "target:" + targetId);
+    }
+
+    /** Pull a resource id out of a response node, trying common key names at
+     *  the top level and one level into nested objects/arrays (the gateway
+     *  target create wraps the id under {@code target.target_id}). */
+    private static String extractId(JsonNode node, String... keys) {
+        if (node == null) return null;
+        String top = findText(node, keys);
+        if (top != null) return top;
+        for (JsonNode child : node) {
+            if (child == null) continue;
+            String s = findText(child, keys);
+            if (s != null) return s;
+            if (child.isArray()) {
+                for (JsonNode item : child) {
+                    if (item == null) continue;
+                    String s2 = findText(item, keys);
+                    if (s2 != null) return s2;
                 }
-            } catch (Exception ignored) {}
+            }
         }
+        return null;
+    }
+
+    private static String findText(JsonNode node, String... keys) {
+        for (String k : keys) {
+            JsonNode v = node.get(k);
+            if (v != null && !v.isNull() && !v.asText("").isEmpty()) {
+                return v.asText();
+            }
+        }
+        return null;
     }
 
     @AfterAll
@@ -80,25 +110,16 @@ class McpGatewayLifecycleTest {
 
     // 1. test_get_gateway
     @Test @Order(1)
-    @DisplayName("get_mcp_gateway (xfail: trust_policy bug)")
+    @DisplayName("get_mcp_gateway returns the created gateway")
     void testGetGateway() {
-        // xfail: known SDK bug with IAM agency trust_policy
-        if (setupFailed || gatewayId == null) {
-            System.out.println("XFAIL: gateway creation failed (IAM trust_policy bug)");
-            return; // Expected failure
-        }
         RequestResult result = client.getMcpGateway(gatewayId);
         assertTrue(result.isSuccess(), result.getError());
     }
 
     // 2. test_list_gateways
     @Test @Order(2)
-    @DisplayName("list_mcp_gateways (xfail: trust_policy bug)")
+    @DisplayName("list_mcp_gateways returns a list")
     void testListGateways() {
-        if (setupFailed || gatewayId == null) {
-            System.out.println("XFAIL: gateway creation failed (IAM trust_policy bug)");
-            return;
-        }
         RequestResult result = client.listMcpGateways(null, 10, null);
         assertTrue(result.isSuccess(), result.getError());
         assertNotNull(result.getData());
@@ -106,36 +127,24 @@ class McpGatewayLifecycleTest {
 
     // 3. test_update_gateway
     @Test @Order(3)
-    @DisplayName("update_mcp_gateway (xfail: trust_policy bug)")
+    @DisplayName("update_mcp_gateway updates the description")
     void testUpdateGateway() {
-        if (setupFailed || gatewayId == null) {
-            System.out.println("XFAIL: gateway creation failed (IAM trust_policy bug)");
-            return;
-        }
         RequestResult result = client.updateMcpGateway(gatewayId, "updated description");
         assertTrue(result.isSuccess(), result.getError());
     }
 
     // 4. test_get_target
     @Test @Order(4)
-    @DisplayName("get_mcp_gateway_target (xfail: trust_policy bug)")
+    @DisplayName("get_mcp_gateway_target returns the created target")
     void testGetTarget() {
-        if (setupFailed || gatewayId == null || targetId == null) {
-            System.out.println("XFAIL: gateway/target creation failed (IAM trust_policy bug)");
-            return;
-        }
         RequestResult result = client.getMcpGatewayTarget(gatewayId, targetId);
         assertTrue(result.isSuccess(), result.getError());
     }
 
     // 5. test_list_targets
     @Test @Order(5)
-    @DisplayName("list_mcp_gateway_targets (xfail: trust_policy bug)")
+    @DisplayName("list_mcp_gateway_targets returns a list")
     void testListTargets() {
-        if (setupFailed || gatewayId == null || targetId == null) {
-            System.out.println("XFAIL: gateway/target creation failed (IAM trust_policy bug)");
-            return;
-        }
         RequestResult result = client.listMcpGatewayTargets(gatewayId, 10, null);
         assertTrue(result.isSuccess(), result.getError());
         assertNotNull(result.getData());
@@ -143,12 +152,8 @@ class McpGatewayLifecycleTest {
 
     // 6. test_update_target
     @Test @Order(6)
-    @DisplayName("update_mcp_gateway_target (xfail: trust_policy bug)")
+    @DisplayName("update_mcp_gateway_target updates the description")
     void testUpdateTarget() {
-        if (setupFailed || gatewayId == null || targetId == null) {
-            System.out.println("XFAIL: gateway/target creation failed (IAM trust_policy bug)");
-            return;
-        }
         RequestResult result = client.updateMcpGatewayTarget(
                 gatewayId, targetId, null, "updated target", null, null);
         assertTrue(result.isSuccess(), result.getError());
