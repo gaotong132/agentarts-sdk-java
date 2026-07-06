@@ -59,6 +59,12 @@ agentarts-sdk-java/
 | [MCP Gateway SDK](docs/cn/sdk_user_guide/mcp_gateway_user_guide.md) | MCPGatewayClient 网关/目标 CRUD、RequestResult |
 | [Agent Identity SDK](docs/cn/sdk_user_guide/agent_identity_guide.md) | IdentityClient、注解模式、OAuth2/API Key/STS 三种凭证 |
 
+### 测试指南（中文）
+
+| 文档 | 说明 |
+|---|---|
+| [E2E 测试指南](docs/cn/e2e_testing_guide.md) | 三层安全模型、运行方法、与 Python SDK 的用例逐条对比、覆盖范围、凭证安全约定 |
+
 ### CLI 工具指南（中文）
 
 | 文档 | 命令 |
@@ -318,30 +324,40 @@ mvn test
 mvn test -pl agentarts-sdk-core,agentarts-sdk-service,agentarts-sdk-runtime
 
 # E2E tests (read-only tier, requires AK/SK)
-export HUAWEICLOUD_SDK_AK=... HUAWEICLOUD_SDK_SK=...
+export HUAWEICLOUD_SDK_AK=<your-ak> HUAWEICLOUD_SDK_SK=<your-sk>
 mvn test -pl agentarts-sdk-tests
 
-# E2E tests (full lifecycle, creates real cloud resources)
+# E2E tests (full lifecycle, creates real cloud resources, auto-cleaned)
 export AGENTARTS_TEST_ALLOW_CREATE=1
 mvn test -pl agentarts-sdk-tests
+
+# E2E tests (billable tier — real money; needs pre-provisioned resources)
+export AGENTARTS_TEST_RUN_BILLABLE=1
+mvn test -pl agentarts-sdk-tests -Dtest='CodeInterpreterSessionTest,RuntimeSessionLifecycleTest'
 ```
+
+> See the [E2E 测试指南](docs/cn/e2e_testing_guide.md) for the full three-tier safety model, environment variables, and a per-case comparison with the Python SDK. **Never commit real credentials** — inject them via environment variables only.
 
 ## Testing
 
-The test suite includes **292 tests** across three tiers:
+The test suite includes **693 tests** across two layers:
 
-| Tier | Count | Description |
+| Layer | Count | Description |
 |---|---|---|
-| Unit tests | 223 | V11 signing (52), HTTP client (12), Runtime server (16), Runtime client (9), Identity (7), Memory (19), Tools (10), MCP Gateway (5), agentscope (35), CLI (27), Spring Boot (16), Cross-module (15) |
-| E2E tests | 69 | Identity (14), Memory (20), MCP Gateway (6), Code Interpreter (4), Runtime (18), Auth (3), Read-only lists (4) |
+| Unit + integration | 617 | V11 signing, HTTP client, Runtime server/client, Identity, Memory, Tools, MCP Gateway, agentscope, CLI, Spring Boot, cross-module — no cloud credentials needed |
+| E2E | 76 | Real cloud API calls (`agentarts-sdk-tests` e2e package), cross-validated against the Python SDK `tests/integration/` (`feature/test` branch) |
+
+E2E by module: Identity (14), Memory (29, incl. 7 Java-only state-store cases), MCP Gateway (6), Code Interpreter (4), Runtime (18), Auth decorators (3), read-only probes (4). Full per-case mapping in the [E2E 测试指南](docs/cn/e2e_testing_guide.md).
 
 ### E2E Three-Tier Safety Model
 
 | Tier | Switch | What runs | Cloud writes? |
 |---|---|---|---|
 | **Default (read-only)** | — | list/get + local RuntimeApp | none |
-| **Lifecycle** | `AGENTARTS_TEST_ALLOW_CREATE=1` | create→get→update→delete | yes, teardown-guaranteed |
+| **Lifecycle** | `AGENTARTS_TEST_ALLOW_CREATE=1` | create→get→update→delete | yes, LIFO teardown-guaranteed |
 | **Billable** | `AGENTARTS_TEST_RUN_BILLABLE=1` | code-interpreter sandbox, runtime invoke | real money |
+
+Tests whose prerequisites aren't met are silently skipped via `assumeTrue()` at `@BeforeAll` — they never report as failures.
 
 ## Dependency Versions
 
