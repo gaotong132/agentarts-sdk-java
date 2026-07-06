@@ -177,35 +177,30 @@ public class IdentityClient {
             String clientId, String clientSecret,
             String tenantId, Oauth2Discovery oauthDiscovery) {
         Oauth2ProviderConfigInput config = new Oauth2ProviderConfigInput();
-        switch (vendor) {
-            case GITHUBOAUTH2:
-                config.withGithubOauth2ProviderConfig(
-                        new GithubOauth2ProviderConfigInput()
-                                .withClientId(clientId)
-                                .withClientSecret(clientSecret));
-                break;
-            case GOOGLEOAUTH2:
-                config.withGoogleOauth2ProviderConfig(
-                        new GoogleOauth2ProviderConfigInput()
-                                .withClientId(clientId)
-                                .withClientSecret(clientSecret));
-                break;
-            case MICROSOFTOAUTH2:
-                config.withMicrosoftOauth2ProviderConfig(
-                        new MicrosoftOauth2ProviderConfigInput()
-                                .withClientId(clientId)
-                                .withClientSecret(clientSecret)
-                                .withTenantId(tenantId));
-                break;
-            case CUSTOMOAUTH2:
-                config.withCustomOauth2ProviderConfig(
-                        new CustomOauth2ProviderConfigInput()
-                                .withClientId(clientId)
-                                .withClientSecret(clientSecret)
-                                .withOauth2Discovery(oauthDiscovery));
-                break;
-            default:
-                throw new IllegalArgumentException("Unsupported OAuth2 vendor: " + vendor);
+        if (vendor == CredentialProviderVendor.GITHUBOAUTH2) {
+            config.withGithubOauth2ProviderConfig(
+                    new GithubOauth2ProviderConfigInput()
+                            .withClientId(clientId)
+                            .withClientSecret(clientSecret));
+        } else if (vendor == CredentialProviderVendor.GOOGLEOAUTH2) {
+            config.withGoogleOauth2ProviderConfig(
+                    new GoogleOauth2ProviderConfigInput()
+                            .withClientId(clientId)
+                            .withClientSecret(clientSecret));
+        } else if (vendor == CredentialProviderVendor.MICROSOFTOAUTH2) {
+            config.withMicrosoftOauth2ProviderConfig(
+                    new MicrosoftOauth2ProviderConfigInput()
+                            .withClientId(clientId)
+                            .withClientSecret(clientSecret)
+                            .withTenantId(tenantId));
+        } else if (vendor == CredentialProviderVendor.CUSTOMOAUTH2) {
+            config.withCustomOauth2ProviderConfig(
+                    new CustomOauth2ProviderConfigInput()
+                            .withClientId(clientId)
+                            .withClientSecret(clientSecret)
+                            .withOauth2Discovery(oauthDiscovery));
+        } else {
+            throw new IllegalArgumentException("Unsupported OAuth2 vendor: " + vendor);
         }
         CreateOauth2CredentialProviderRequest request = new CreateOauth2CredentialProviderRequest()
                 .withBody(new CreateOauth2CredentialProviderReqBody()
