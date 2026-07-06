@@ -10,14 +10,14 @@
 
 ## 1. 概述
 
-Java SDK 的测试体系共 **693 个测试**，分两层：
+Java SDK 的测试体系共 **703 个测试**，分两层：
 
 | 层次 | 数量 | 说明 |
 |---|---|---|
 | 单元 + 集成测试 | 552 | 各模块内部，无云凭证即可运行 |
-| E2E 测试 | 141 | `agentarts-sdk-tests` 的 `e2e` 包（76）+ `agentarts-toolkit-cli` 测试（65） |
+| E2E 测试 | 151 | `agentarts-sdk-tests` 的 `e2e` 包（86，含 10 个 CLI 云 E2E）+ `agentarts-toolkit-cli` 脚手架测试（65） |
 
-E2E 以 Python SDK 的 `tests/integration/`（`feature/test` 分支，`d130e21`）为基准。Python 基准含 **90 个用例**（顶层 69 + `toolkit/` 子目录 21）。Java 与 Python 的覆盖关系**并非单纯超集**：Java 在 SDK 云 E2E 与 Java 脚手架测试上覆盖更细，但**缺失 Python `toolkit/` 子目录的 CLI 云/Docker 端到端用例**——详见 §4。
+E2E 以 Python SDK 的 `tests/integration/`（`feature/test` 分支，`d130e21`）为基准。Python 基准含 **90 个用例**（顶层 69 + `toolkit/` 子目录 21）。Java 的覆盖关系：SDK 云 E2E 与 CLI 云 E2E 与 Python 对齐（gateway xfail 已修复、CLI gateway/memory 走真实 CLI 路径）；Java 额有脚手架与状态存储测试；剩余缺口主要是 Docker deploy 链（4 个 skip-gated 骨架）与 3 个 init 模板——详见 §4、§6。
 
 ---
 
@@ -202,9 +202,9 @@ Java 对应：`agentarts-sdk-tests/.../e2e/`（13 文件 76 用例）+ `agentart
 | `test_find_agent_by_name` | `testFindAgentByName` | 🟡 Python 复用预置/部署 agent；Java 自建 agent |
 | `test_find_agent_by_id` | `testFindAgentById` | 🟡 同上 |
 | `test_get_agents` | `testGetAgents` | 🟡 同上 |
-| `test_update_agent` | `testUpdateAgent` | 🟡 同上 |
-| `test_find_agent_endpoint` | `testFindAgentEndpoint` | 🟡 Java 仅创建 endpoint 未断言 find（API 返回 404） |
-| `test_update_agent_endpoint` | `testUpdateAgentEndpoint` | 🟡 Java 仅创建 endpoint 未断言 update |
+| `test_update_agent` | `testUpdateAgent` | ✅ re-`findAgentById` 断言 `version_detail.description` 已变更（新增 `VersionDetail` 模型使其可观测） |
+| `test_find_agent_endpoint` | `testFindAgentEndpoint` | ✅ 修复 `RuntimeClient` 用 endpoint UUID（非 name）拼路径，find 成功且 id 匹配 |
+| `test_update_agent_endpoint` | `testUpdateAgentEndpoint` | ✅ 同上，update 按 UUID 成功，re-find 断言 config 持久化 |
 
 #### Auth 装饰器（L2）
 | Python | Java | 状态 |
@@ -268,12 +268,11 @@ Python `tests/integration/toolkit/` 是 CLI 非模拟集成测试子目录，通
 
 | 维度 | Python (`d130e21`) | Java (当前) |
 |---|---|---|
-| 文件数 | 16 | 15 |
-| 用例数 | 90 | 141 |
-| SDK 云 E2E 对齐 ✅ | — | 60 条 |
-| 双方同状态跳过 / 机制差异 🟡 | — | 17 条 |
-| Gateway xfail 状态不一致 🔴 | — | 6 条（Python 已修复并移除 xfail，Java 仍 xfail） |
-| Python 有、Java 缺失 ❌ | — | 13 条（8 CLI 云/Docker + 3 模板 + init 路径 + dev server） |
+| 文件数 | 16 | 19（含 4 个 CLI E2E 类） |
+| 用例数 | 90 | 151 |
+| SDK 云 E2E 对齐 ✅ | — | 66 条（gateway xfail 已修复） |
+| 双方同状态跳过 / 机制差异 🟡 | — | 11 条 |
+| Python 有、Java 缺失 ❌ | — | 4 条（Docker deploy 链 skip-gated 骨架）+ 3 个 init 模板 |
 | Java 独有 ➕ | — | 72 条（7 状态存储 + 65 脚手架/命令树） |
 
 ---
@@ -283,40 +282,47 @@ Python `tests/integration/toolkit/` 是 CLI 非模拟集成测试子目录，通
 | 模块 | Java E2E 用例数 | 覆盖能力 |
 |---|---|---|
 | Identity | 14 | Workload Identity CRUD、API Key/OAuth2/STS 凭证 provider CRUD、access token 签发、`@Require*` 注解装饰器注入 |
-| Memory | 29 | Space CRUD（自带数据面 API Key）、Session/Messages/Memories 全数据面、同步+异步、`MemorySession` wrapper、状态存储 roundtrip（Java 独有） |
-| Gateway | 6 | Gateway/Target CRUD（**当前 xfail，待同步 Python 的 IAM agency 修复**） |
+| Memory | 29 | Space CRUD（自带数据面 API Key）、Session/Messages/Memories 全数据面、同步+异步（`MemoryClient` 真实 `Mono` 异步 API）、`MemorySession` wrapper、状态存储 roundtrip（Java 独有） |
+| Gateway | 6 | Gateway/Target CRUD（IAM agency 修复已同步，xfail 已移除，真实通过） |
 | Code Interpreter | 4 | 控制面 CRUD + 计费沙箱 session（execute/command/upload/download/get_session/clear_context） |
-| Runtime | 18 | Agent/Endpoint 控制面 CRUD、数据面 session（计费）、本地 RuntimeApp（ping/invocations/SSE/WebSocket） |
+| Runtime | 18 | Agent/Endpoint 控制面 CRUD（endpoint find/update 按 UUID 修复）、数据面 session（计费）、本地 RuntimeApp（ping/invocations/SSE/WebSocket） |
 | Auth | 3 | `@RequireApiKey` / `@RequireStsToken` / `@RequireAccessToken` 装饰器 |
-| 只读探测 | 4 | 各控制面 list 连通性 |
-| CLI 工具链（脚手架） | 65 | init/config 模板渲染、picocli 命令树与选项、Dockerfile 模板——**不含 CLI 云/Docker 端到端** |
+| 只读探测 | 4 | 各控制面 list 连通性（断言含 created 或 size==total 一致性） |
+| CLI 工具链（脚手架） | 65 | init/config 模板渲染、picocli 命令树与选项、Dockerfile 模板 |
+| CLI 云 E2E | 10 | gateway/memory 的 CLI create/list/get/update/delete 走 picocli 路径对真实云验证（CLI 命令调 SDK 客户端）；dev server 走 CLI `dev` 子命令；init --path / 非法名 |
 
 ---
 
-## 6. 已知缺口与限制
+## 6. 已修复的代码 bug（审计驱动）
 
-### 6.1 Gateway xfail 未同步（最优先）
-Python 在 `bc280d3`（IAM agency 修复：从 `CreateAgencyV5Response.agency` 读取 agency_id）与 `3486961`（移除 xfail + gateway 改名）后，gateway 生命周期用例已通过。Java 端 `McpGatewayLifecycleTest` 仍按 trust_policy bug 早退，6 个用例实际未执行。**需将 Python 的 IAM agency 修复同步到 Java `MCPGatewayClient` / `IdentityServiceClient`，并移除 xfail 早退逻辑。**
+E2E 测试审计发现一批"测试通过但掩盖真实代码 bug"的问题，已修复：
 
-### 6.2 CLI 云/Docker 端到端缺失
-Python `tests/integration/toolkit/` 通过子进程对真实 `agentarts` CLI 跑 init→config→deploy（Docker 构建 + SWR 推送）→invoke→destroy，以及 gateway/memory 的 CLI CRUD。Java `agentarts-toolkit-cli` 测试仅覆盖脚手架与命令树解析，**未对 Docker 或云执行任何 CLI 命令**。缺失 8 个用例：
-- `test_deploy_succeeds`、`test_invoke_deployed_agent`、`test_runtime_session_on_deployed_agent`、`test_runtime_file_transfer_on_deployed_agent`
-- `test_cli_gateway_list_readonly`、`test_cli_gateway_create`
-- `test_cli_memory_list_readonly`、`test_cli_memory_lifecycle`
+- **Gateway IAM agency**（`MCPGatewayClient`）：trust_policy 用了错误的资源动作（`csms:secret:getVersion` 等）被 IAM 拒收；缺策略附加；409 检测靠字符串匹配失效。已同步 Python `bc280d3` + `create_agency_with_policy`：trust policy 改 `sts:agencies:assume`，创建后查找并附加 `AgentArtsCoreGatewayIdentityAgencyPolicy`，409 改用 `ServiceResponseException.getHttpStatusCode()`。xfail 移除，6 用例真实通过。
+- **Runtime endpoint find/update 404**（`RuntimeClient`）：路径段用 endpoint name，后端按 UUID 解析 → 404。改用 `createAgentEndpoint` 返回的 UUID。`AgentInfo` 新增 `VersionDetail` 暴露 `version_detail.description`，使 `updateAgent` 的效果可观测。
+- **`InitCommand` 退出码**：原为 `Runnable`（恒返回 0），校验失败静默。改为 `Callable<Integer>`，校验失败返回 2。
+- **`DevOperation.runDevServer` 桩**：原仅 `println`。已实现：解析 `.agentarts_config.yaml`、反射加载 entrypoint 的 `createApp()` 工厂（无则回退默认 echo）、`app.run(port)`、打印 `DEV_SERVER_LISTENING on port N`、阻塞至中断。
+- **`MemoryClient` 无异步 API**：`MemoryAsyncTest` 用 `Mono.fromCallable(sync).block()` 假冒异步。已补真实 `Mono`-returning 异步方法（`createMemorySessionAsync`、`addMessagesAsync`、`listMessagesAsync`、`searchMemoriesAsync` 等 11 个），测试改为调真实异步 API。
+- **`IdentityClient` 缺 list provider wrapper**：补 `listApiKeyCredentialProviders` / `listOauth2CredentialProviders` / `listStsCredentialProviders`，测试改走高层 wrapper。
+- **`createMcpGatewayTarget` 缺默认 `credential_provider_configuration`**：后端拒收无 config 的 target。已默认 `{"credential_provider_type":"none"}`，对齐 Python。
+- **`delete_memory` skip 掩盖**：`is_force_extract=true` 仍无 memory 时原 `assumeTrue(false)` 跳过，掩盖 extraction 故障。改为 `assertTrue` 断言非空（polling 窗口 120s）。
+- **断言强化**：所有 update 测试改为 re-get + 断言变更字段；list 测试断言含 created 项或 `size==total` 一致性；取消 `total>=0` 永真断言。每个测试含成功路径断言。
 
-### 6.3 模板与本地 CLI 用例缺失
-- Java 无 `langgraph` / `langchain` / `google-adk` 三种 init 模板（Python 有）。
-- Java 无 `init -p` 路径选项行为测试。
-- Java 无 `dev` server 子进程测试（仅校验选项存在）。
+## 7. 剩余缺口与限制
 
-### 6.4 其他
-- **Runtime Agent 生命周期**：后端要求 `artifact_source_config` + `identity_configuration`，Java 自建 agent 可能被拒，各测试跳过断言。
+### 7.1 Docker deploy 链未实现（唯一 ❌ 缺口）
+`DeployOperation.deployProject`（Docker 构建 + SWR 推送 + 云端 runtime 创建）仍是桩；`CliDeployedRuntimeE2ETest` 的 4 个测试骨架（`test_deploy_succeeds`、`test_invoke_deployed_agent`、`test_runtime_session_on_deployed_agent`、`test_runtime_file_transfer_on_deployed_agent`）类级 `assumeTrue(false)` 跳过。断言已就绪，待 deploy 链落地后接通。这是较大的独立工程（需 Docker daemon + SWR 凭证 + V11 签名的 runtime create）。
+
+### 7.2 init 模板缺口
+Java 仅提供 `basic` / `agentscope` 两种 init 模板；Python 还支持 `langgraph` / `langchain` / `google-adk`。Java 用 `CliLocalE2ETest` 的三个 `test_*_template_not_supported` 测试记录该缺口（断言 init 抛 IOException）。
+
+### 7.3 其他
+- **Runtime Agent 生命周期**：后端要求 `artifact_source_config` + `identity_configuration`，Java 自建 agent 可能被拒；endpoint find/update 已修复为按 UUID 工作。
 - **计费层（L3）默认跳过**：CodeInterpreter session、Runtime invoke 产生实际费用，需显式 `AGENTARTS_TEST_RUN_BILLABLE=1` + 预置资源。
-- **OAuth2 / STS 凭证 provider 生命周期默认跳过**：需外部输入（OAuth2 client_id/secret/vendor、STS agency URN）。
+- **OAuth2 / STS 凭证 provider 生命周期默认跳过**：需外部输入（OAuth2 client_id/secret/vendor、STS agency URN）。Java 的 `createOauth2CredentialProvider` 已支持完整 vendor 分派（Github/Google/Microsoft/Custom），待提供凭证即可跑。
 
 ---
 
-## 7. 凭证安全约定
+## 8. 凭证安全约定
 
 - **绝不**将真实 AK/SK/API Key 写入源码、配置文件、测试资源或提交信息。
 - 所有凭证**仅通过环境变量**注入（`HUAWEICLOUD_SDK_AK` 等），进程结束即失效。

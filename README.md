@@ -340,15 +340,15 @@ mvn test -pl agentarts-sdk-tests -Dtest='CodeInterpreterSessionTest,RuntimeSessi
 
 ## Testing
 
-The test suite includes **693 tests** across three layers:
+The test suite includes **703 tests** across three layers:
 
 | Layer | Count | Description |
 |---|---|---|
 | Unit + integration | 552 | V11 signing, HTTP client, Runtime server/client, Identity, Memory, Tools, MCP Gateway, agentscope, Spring Boot, cross-module — no cloud credentials needed |
-| Cloud E2E | 76 | Real cloud API calls (`agentarts-sdk-tests` e2e package) |
+| Cloud E2E | 86 | Real cloud API calls (`agentarts-sdk-tests` e2e package), incl. 10 CLI cloud E2E that exercise the picocli CLI path against real cloud |
 | CLI scaffolding | 65 | `agentarts-toolkit-cli` template rendering, picocli command-tree/option parsing, init/config structure (no Docker/cloud) |
 
-Cloud E2E by area: Identity (14), Memory (29, incl. 7 Java-only state-store cases), Gateway (6, currently xfail — pending IAM agency fix sync), Code Interpreter (4), Runtime (18), Auth decorators (3), read-only probes (4). Cross-validated against the Python SDK `tests/integration/` (`feature/test` branch, commit `d130e21`, 90 cases). Full per-case mapping, known gaps (CLI cloud/Docker e2e, langgraph/langchain/google-adk templates), and the gateway xfail discrepancy are documented in the [E2E 测试指南](docs/cn/e2e_testing_guide.md).
+Cloud E2E by area: Identity (14), Memory (29, incl. 7 Java-only state-store cases), Gateway (6, IAM agency fix synced — xfail removed), Code Interpreter (4), Runtime (18), Auth decorators (3), read-only probes (4), CLI cloud (10: gateway/memory lifecycle + dev server). Cross-validated against the Python SDK `tests/integration/` (`feature/test` branch, commit `d130e21`, 90 cases). Full per-case mapping, code-bug fixes driven by the audit (RuntimeClient endpoint UUID, MemoryClient async API, DevOperation, InitCommand exit code), and remaining gaps (Docker deploy chain, langgraph/langchain/google-adk templates) are documented in the [E2E 测试指南](docs/cn/e2e_testing_guide.md).
 
 ### E2E Three-Tier Safety Model
 
