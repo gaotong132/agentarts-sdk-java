@@ -46,6 +46,9 @@ public class CreateAgentRequest {
     @JsonProperty("tags")
     private List<Map<String, String>> tags;
 
+    @JsonProperty("arch")
+    private String arch;
+
     public CreateAgentRequest withName(String name) {
         this.name = name;
         return this;
@@ -189,6 +192,19 @@ public class CreateAgentRequest {
         this.tags = tags;
     }
 
+    public String getArch() {
+        return arch;
+    }
+
+    public CreateAgentRequest withArch(String arch) {
+        this.arch = arch;
+        return this;
+    }
+
+    public void setArch(String arch) {
+        this.arch = arch;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -204,14 +220,15 @@ public class CreateAgentRequest {
                 && Objects.equals(executionAgencyName, that.executionAgencyName)
                 && Objects.equals(agentGatewayId, that.agentGatewayId)
                 && Objects.equals(environmentVariables, that.environmentVariables)
-                && Objects.equals(tags, that.tags);
+                && Objects.equals(tags, that.tags)
+                && Objects.equals(arch, that.arch);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(name, description, artifactSource, identityConfiguration,
                 invokeConfig, networkConfig, observability, executionAgencyName,
-                agentGatewayId, environmentVariables, tags);
+                agentGatewayId, environmentVariables, tags, arch);
     }
 
     @Override
@@ -228,6 +245,7 @@ public class CreateAgentRequest {
                 + ", agentGatewayId='" + agentGatewayId + "'"
                 + ", environmentVariables=" + environmentVariables
                 + ", tags=" + tags
+                + ", arch='" + arch + "'"
                 + "}";
     }
 }

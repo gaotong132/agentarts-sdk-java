@@ -40,7 +40,6 @@ public class DestroyCommand implements Runnable {
         }
         try {
             DestroyOperation.destroyAgent(agentName, region, skipSsl);
-            System.out.println("Agent '" + agentName + "' destroyed successfully.");
         } catch (Exception e) {
             System.err.println("Error destroying agent: " + e.getMessage());
         }

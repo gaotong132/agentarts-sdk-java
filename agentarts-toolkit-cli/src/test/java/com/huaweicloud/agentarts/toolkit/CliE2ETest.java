@@ -10,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -67,7 +68,11 @@ class CliE2ETest {
 
             String agent = Files.readString(
                     tempDir.resolve("demo/src/main/java/com/example/Agent.java"));
-            assertTrue(agent.contains("demoAgent"), "Agent class name should be {name}Agent");
+            // The public class is named `Agent` to match the file name (Agent.java),
+            // which is required for the generated project to compile.
+            assertTrue(agent.contains("public class Agent"),
+                    "Agent class should be named Agent to match its file");
+            assertTrue(agent.contains("demo"), "Agent should reference the project name");
             assertTrue(agent.contains("AgentArtsRuntimeApp"),
                     "Should reference AgentArtsRuntimeApp");
         }
@@ -132,7 +137,8 @@ class CliE2ETest {
     }
 
     // ============================================================
-    // Config Operation E2E (with temp directory)
+    // Config Operation E2E (picocli CLI path — mirrors
+    // tests/integration/toolkit/test_cli_local.py config tests)
     // ============================================================
 
     @Nested
@@ -142,191 +148,161 @@ class CliE2ETest {
         Path tempDir;
 
         private Path configFile;
+        private CommandLine cli;
+        private ByteArrayOutputStream outBuf;
+        private ByteArrayOutputStream errBuf;
+        private PrintStream origOut;
+        private PrintStream origErr;
 
         @BeforeEach
         void setUp() {
             configFile = tempDir.resolve(".agentarts_config.yaml");
+            // Redirect ConfigOperation's config file to the temp dir — the Java
+            // analog of the Python tests' monkeypatch.chdir(tmp_project).
+            ConfigOperation.setConfigFileOverride(configFile.toFile());
+            cli = new CommandLine(new AgentArtsCli());
+            // ConfigOperation writes through System.out/err (not picocli's
+            // PrintWriter), so capture the System streams directly.
+            outBuf = new ByteArrayOutputStream();
+            errBuf = new ByteArrayOutputStream();
+            origOut = System.out;
+            origErr = System.err;
+            System.setOut(new PrintStream(outBuf, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(errBuf, true, StandardCharsets.UTF_8));
         }
 
+        @AfterEach
+        void tearDown() {
+            ConfigOperation.clearConfigFileOverride();
+            System.setOut(origOut);
+            System.setErr(origErr);
+        }
+
+        private String stdout() {
+            return outBuf.toString(StandardCharsets.UTF_8);
+        }
+
+        private String readConfig() {
+            try {
+                return Files.readString(configFile);
+            } catch (IOException e) {
+                fail("Failed to read config file: " + e.getMessage());
+                return "";
+            }
+        }
+
+        /** Mirrors {@code test_config_add_writes_yaml_and_lists}: the
+         *  {@code config -n <name> -e ... -r ...} callback path adds an agent,
+         *  writes {@code .agentarts_config.yaml}, and {@code config list} exits 0. */
         @Test
-        void addAgentCreatesConfigFile() {
-            // ConfigOperation operates on CWD, so we test the operation directly
-            AgentArtsConfigList config = new AgentArtsConfigList();
-            AgentArtsConfig agent = new AgentArtsConfig();
-            agent.getBase().setName("test-agent");
-            agent.getBase().setEntrypoint("com.example.TestAgent");
-            agent.getBase().setRegion("cn-north-4");
-            agent.getSwrConfig().setOrganization("org1");
-            agent.getSwrConfig().setRepository("repo1");
-            config.addAgent("test-agent", agent);
-            config.setDefaultAgent("test-agent");
+        void configAddWritesYamlAndLists() {
+            int exit = cli.execute("config",
+                    "-n", "myagent",
+                    "-e", "com.example.MyAgent",
+                    "-r", "cn-southwest-2",
+                    "-d", "pom.xml",
+                    "--swr-org", "o",
+                    "--swr-repo", "r");
+            assertEquals(0, exit, "config -n should add an agent. err=" + errBuf);
+            assertTrue(Files.exists(configFile), "config file should be created");
+            String yaml = readConfig();
+            assertTrue(yaml.contains("myagent"), "config should contain the agent name");
 
-            // Write config to temp dir
-            writeYamlConfig(configFile, config);
-
-            assertTrue(Files.exists(configFile), "Config file should be created");
+            outBuf.reset();
+            int listExit = cli.execute("config", "list");
+            assertEquals(0, listExit, "config list should exit 0. err=" + errBuf);
+            assertTrue(stdout().contains("myagent"), "config list should list the agent");
         }
 
+        /** Mirrors {@code test_config_set_get_roundtrip}: {@code config set
+         *  base.description hello} persists to YAML and {@code config get
+         *  base.description} prints the value. */
         @Test
-        void fullCrudLifecycle() {
-            // 1. Create initial config
-            AgentArtsConfigList config = new AgentArtsConfigList();
-            config.setDefaultAgent("agent-a");
+        void configSetGetRoundtrip() {
+            assertEquals(0, cli.execute("config", "-n", "myagent",
+                    "-e", "com.example.MyAgent", "-r", "cn-southwest-2"),
+                    "add agent should exit 0. err=" + errBuf);
 
-            AgentArtsConfig agentA = createAgent("agent-a", "com.example.AAgent", "cn-southwest-2");
-            AgentArtsConfig agentB = createAgent("agent-b", "com.example.BAgent", "cn-north-4");
-            config.addAgent("agent-a", agentA);
-            config.addAgent("agent-b", agentB);
+            int setExit = cli.execute("config", "set", "base.description", "hello",
+                    "-a", "myagent");
+            assertEquals(0, setExit, "config set should exit 0. err=" + errBuf);
+            assertTrue(readConfig().contains("hello"),
+                    "config file should contain the set value");
 
-            writeYamlConfig(configFile, config);
-
-            // 2. Read back
-            AgentArtsConfigList loaded = readYamlConfig(configFile);
-            assertNotNull(loaded.getAgent("agent-a"));
-            assertNotNull(loaded.getAgent("agent-b"));
-            assertEquals("agent-a", loaded.getDefaultAgent());
-
-            // 3. Update agent-a region
-            loaded.getAgent("agent-a").getBase().setRegion("cn-east-3");
-            writeYamlConfig(configFile, loaded);
-
-            AgentArtsConfigList reloaded = readYamlConfig(configFile);
-            assertEquals("cn-east-3", reloaded.getAgent("agent-a").getBase().getRegion());
-
-            // 4. Set default to agent-b
-            reloaded.setDefaultAgent("agent-b");
-            writeYamlConfig(configFile, reloaded);
-
-            AgentArtsConfigList final_config = readYamlConfig(configFile);
-            assertEquals("agent-b", final_config.getDefaultAgent());
-
-            // 5. Remove agent-a
-            final_config.removeAgent("agent-a");
-            writeYamlConfig(configFile, final_config);
-
-            AgentArtsConfigList afterRemove = readYamlConfig(configFile);
-            assertNull(afterRemove.getAgent("agent-a"));
-            assertNotNull(afterRemove.getAgent("agent-b"));
-            assertEquals(1, afterRemove.getAgents().size());
+            outBuf.reset();
+            int getExit = cli.execute("config", "get", "base.description", "-a", "myagent");
+            assertEquals(0, getExit, "config get should exit 0. err=" + errBuf);
+            assertTrue(stdout().contains("hello"),
+                    "config get should print the persisted value");
         }
 
+        /** Mirrors {@code test_config_env_lifecycle}: set-env writes the var,
+         *  list-env exits 0, remove-env removes it from the YAML. */
         @Test
-        void environmentVariablesCrud() {
-            AgentArtsConfigList config = new AgentArtsConfigList();
-            AgentArtsConfig agent = createAgent("env-test", "com.example.EnvAgent", "cn-southwest-2");
-            config.addAgent("env-test", agent);
-            config.setDefaultAgent("env-test");
-            writeYamlConfig(configFile, config);
+        void configEnvLifecycle() {
+            cli.execute("config", "-n", "myagent", "-e", "com.example.MyAgent",
+                    "-r", "cn-southwest-2");
 
-            // Set env vars
-            AgentArtsConfigList loaded = readYamlConfig(configFile);
-            loaded.getAgent("env-test").getRuntime().setEnvironmentVariables(
-                    new java.util.HashMap<>());
-            loaded.getAgent("env-test").getRuntime().getEnvironmentVariables()
-                    .put("API_KEY", "secret123");
-            loaded.getAgent("env-test").getRuntime().getEnvironmentVariables()
-                    .put("LOG_LEVEL", "debug");
-            writeYamlConfig(configFile, loaded);
+            assertEquals(0, cli.execute("config", "set-env", "MY_VAR", "val", "-a", "myagent"),
+                    "set-env should exit 0. err=" + errBuf);
+            String yaml = readConfig();
+            assertTrue(yaml.contains("MY_VAR"), "config should contain the env var name");
+            assertTrue(yaml.contains("val"), "config should contain the env var value");
 
-            // Verify
-            AgentArtsConfigList reloaded = readYamlConfig(configFile);
-            assertEquals("secret123",
-                    reloaded.getAgent("env-test").getRuntime().getEnvironmentVariables().get("API_KEY"));
-            assertEquals("debug",
-                    reloaded.getAgent("env-test").getRuntime().getEnvironmentVariables().get("LOG_LEVEL"));
+            outBuf.reset();
+            assertEquals(0, cli.execute("config", "list-env", "-a", "myagent"),
+                    "list-env should exit 0. err=" + errBuf);
 
-            // Remove one
-            reloaded.getAgent("env-test").getRuntime().getEnvironmentVariables().remove("LOG_LEVEL");
-            writeYamlConfig(configFile, reloaded);
-
-            AgentArtsConfigList afterRemove = readYamlConfig(configFile);
-            assertNull(afterRemove.getAgent("env-test").getRuntime().getEnvironmentVariables()
-                    .get("LOG_LEVEL"));
-            assertEquals("secret123",
-                    afterRemove.getAgent("env-test").getRuntime().getEnvironmentVariables().get("API_KEY"));
+            assertEquals(0, cli.execute("config", "remove-env", "MY_VAR", "-a", "myagent"),
+                    "remove-env should exit 0. err=" + errBuf);
+            assertFalse(readConfig().contains("MY_VAR"),
+                    "config should no longer contain the removed env var");
         }
 
+        /** Mirrors {@code test_config_set_default_and_remove}: adding two agents,
+         *  setting the default, and removing one leaves the survivor in the YAML. */
         @Test
-        void dotNotationConfigAccess() {
-            AgentArtsConfigList config = new AgentArtsConfigList();
-            AgentArtsConfig agent = createAgent("dot-test", "com.example.DotAgent", "cn-southwest-2");
-            config.addAgent("dot-test", agent);
-            config.setDefaultAgent("dot-test");
-            writeYamlConfig(configFile, config);
+        void configSetDefaultAndRemove() {
+            cli.execute("config", "-n", "a1", "-e", "com.example.A1Agent",
+                    "-r", "cn-southwest-2");
+            cli.execute("config", "-n", "a2", "-e", "com.example.A2Agent",
+                    "-r", "cn-southwest-2");
 
-            AgentArtsConfigList loaded = readYamlConfig(configFile);
-            AgentArtsConfig a = loaded.getAgent("dot-test");
+            assertEquals(0, cli.execute("config", "set-default", "a2"),
+                    "set-default should exit 0. err=" + errBuf);
+            assertEquals(0, cli.execute("config", "remove", "a1"),
+                    "remove should exit 0. err=" + errBuf);
 
-            // base.name
-            assertEquals("dot-test", a.getBase().getName());
-            // base.entrypoint
-            assertEquals("com.example.DotAgent", a.getBase().getEntrypoint());
-            // base.region
-            assertEquals("cn-southwest-2", a.getBase().getRegion());
-
-            // Set base.region via setter
-            a.getBase().setRegion("ap-southeast-1");
-            writeYamlConfig(configFile, loaded);
-
-            AgentArtsConfigList reloaded = readYamlConfig(configFile);
-            assertEquals("ap-southeast-1", reloaded.getAgent("dot-test").getBase().getRegion());
+            String remaining = readConfig();
+            // Assert by agent map key (indented "  a2:" line), not bare substring:
+            // Java's default `language: java17` contains the substring "a1", so a
+            // naive `contains("a1")` would false-positive (Python avoids this only
+            // because its language default is `python3`).
+            assertTrue(remaining.contains("\n  a2:"), "remaining config should still contain agent a2. yaml=" + remaining);
+            assertFalse(remaining.contains("\n  a1:"), "remaining config should not contain agent a1. yaml=" + remaining);
         }
 
+        /** Verifies config persists across CLI-driven add/list/get cycles. */
         @Test
         void configPersistenceAcrossLoads() {
-            // Write, read, modify, write, read again
-            for (int i = 0; i < 3; i++) {
-                AgentArtsConfigList config;
-                if (Files.exists(configFile)) {
-                    config = readYamlConfig(configFile);
-                } else {
-                    config = new AgentArtsConfigList();
-                }
-                AgentArtsConfig agent = createAgent("agent-" + i,
-                        "com.example.Agent" + i, "cn-southwest-2");
-                config.addAgent("agent-" + i, agent);
-                if (i == 0) config.setDefaultAgent("agent-0");
-                writeYamlConfig(configFile, config);
-            }
+            cli.execute("config", "-n", "agent-0", "-e", "com.example.Agent0",
+                    "-r", "cn-southwest-2");
+            cli.execute("config", "-n", "agent-1", "-e", "com.example.Agent1",
+                    "-r", "cn-north-4");
+            cli.execute("config", "-n", "agent-2", "-e", "com.example.Agent2",
+                    "-r", "cn-east-3");
 
-            AgentArtsConfigList final_config = readYamlConfig(configFile);
-            assertEquals(3, final_config.getAgents().size());
-            assertNotNull(final_config.getAgent("agent-0"));
-            assertNotNull(final_config.getAgent("agent-1"));
-            assertNotNull(final_config.getAgent("agent-2"));
-            assertEquals("agent-0", final_config.getDefaultAgent());
-        }
+            outBuf.reset();
+            cli.execute("config", "list");
+            String listing = stdout();
+            assertTrue(listing.contains("agent-0"), "list should include agent-0");
+            assertTrue(listing.contains("agent-1"), "list should include agent-1");
+            assertTrue(listing.contains("agent-2"), "list should include agent-2");
 
-        // Helper methods
-
-        private AgentArtsConfig createAgent(String name, String entrypoint, String region) {
-            AgentArtsConfig agent = new AgentArtsConfig();
-            agent.getBase().setName(name);
-            agent.getBase().setEntrypoint(entrypoint);
-            agent.getBase().setRegion(region);
-            return agent;
-        }
-
-        private void writeYamlConfig(Path path, AgentArtsConfigList config) {
-            try {
-                com.fasterxml.jackson.databind.ObjectMapper yamlMapper = new com.fasterxml.jackson.databind.ObjectMapper(
-                        new com.fasterxml.jackson.dataformat.yaml.YAMLFactory()
-                                .disable(com.fasterxml.jackson.dataformat.yaml.YAMLGenerator.Feature.WRITE_DOC_START_MARKER));
-                yamlMapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), config);
-            } catch (Exception e) {
-                fail("Failed to write YAML: " + e.getMessage());
-            }
-        }
-
-        private AgentArtsConfigList readYamlConfig(Path path) {
-            try {
-                com.fasterxml.jackson.databind.ObjectMapper yamlMapper = new com.fasterxml.jackson.databind.ObjectMapper(
-                        new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
-                return yamlMapper.readValue(path.toFile(), AgentArtsConfigList.class);
-            } catch (Exception e) {
-                fail("Failed to read YAML: " + e.getMessage());
-                return null;
-            }
+            outBuf.reset();
+            cli.execute("config", "get", "base.region", "-a", "agent-1");
+            assertTrue(stdout().contains("cn-north-4"),
+                    "config get base.region should return the persisted region");
         }
     }
 
@@ -488,7 +464,11 @@ class CliE2ETest {
             TemplateManager.renderToFile("basic/Agent.java.tpl", output, "name", "weather");
 
             String content = Files.readString(output);
-            assertTrue(content.contains("weatherAgent"), "Class name should be {name}Agent");
+            // The public class is `Agent` (matches the file name); the project name is
+            // substituted into the welcome/invoke message.
+            assertTrue(content.contains("public class Agent"),
+                    "Class should be named Agent to match its file");
+            assertTrue(content.contains("weather"), "Project name should be substituted");
             assertFalse(content.contains("{{ name }}"), "Placeholder should be replaced");
             assertFalse(content.contains("{{name}}"), "Placeholder should be replaced");
         }

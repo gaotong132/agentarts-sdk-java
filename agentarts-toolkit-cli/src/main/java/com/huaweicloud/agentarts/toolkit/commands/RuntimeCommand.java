@@ -3,6 +3,7 @@ package com.huaweicloud.agentarts.toolkit.commands;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import com.huaweicloud.agentarts.sdk.service.runtime.RuntimeClient;
+import com.huaweicloud.agentarts.toolkit.operations.RuntimeResolver;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -85,7 +86,7 @@ public class RuntimeCommand implements Runnable {
             if (commandArray.isEmpty()) {
                 CliSupport.fail("Command cannot be empty");
             }
-            try (RuntimeClient client = new RuntimeClient(region, !skipSsl)) {
+            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
                 if (JsonUtils.isNotBlank(bearerToken)) {
                     client.setAuthToken(bearerToken);
                 }
@@ -149,7 +150,7 @@ public class RuntimeCommand implements Runnable {
                     CliSupport.fail("Failed to read file " + f + ": " + e.getMessage());
                 }
             }
-            try (RuntimeClient client = new RuntimeClient(region, !skipSsl)) {
+            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
                 if (JsonUtils.isNotBlank(bearerToken)) {
                     client.setAuthToken(bearerToken);
                 }
@@ -205,7 +206,7 @@ public class RuntimeCommand implements Runnable {
             if (remotePath == null || remotePath.isEmpty()) {
                 CliSupport.fail("Path is required (--path)");
             }
-            try (RuntimeClient client = new RuntimeClient(region, !skipSsl)) {
+            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
                 if (JsonUtils.isNotBlank(bearerToken)) {
                     client.setAuthToken(bearerToken);
                 }
@@ -277,7 +278,7 @@ public class RuntimeCommand implements Runnable {
 
         @Override
         public void run() {
-            try (RuntimeClient client = new RuntimeClient(region, !skipSsl)) {
+            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
                 if (JsonUtils.isNotBlank(bearerToken)) {
                     client.setAuthToken(bearerToken);
                 }
@@ -316,7 +317,7 @@ public class RuntimeCommand implements Runnable {
 
         @Override
         public void run() {
-            try (RuntimeClient client = new RuntimeClient(region, !skipSsl)) {
+            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
                 if (JsonUtils.isNotBlank(bearerToken)) {
                     client.setAuthToken(bearerToken);
                 }

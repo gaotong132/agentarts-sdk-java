@@ -4,7 +4,9 @@ import com.huaweicloud.agentarts.sdk.core.config.AgentArtsConfig;
 import com.huaweicloud.agentarts.sdk.core.config.AgentArtsConfigList;
 import com.huaweicloud.agentarts.sdk.core.config.BaseConfig;
 import com.huaweicloud.agentarts.sdk.core.config.SWRConfig;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 
@@ -24,13 +26,43 @@ public class ConfigOperation {
             new YAMLFactory().disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER));
 
     /**
+     * Thread-local override for the config file location.
+     *
+     * <p>Production code resolves the config file to {@code .agentarts_config.yaml}
+     * in the current working directory (matching the Python toolkit's
+     * {@code Path.cwd() / ".agentarts_config.yaml"}). Tests redirect this to a
+     * temp directory — the Java analog of the Python tests'
+     * {@code monkeypatch.chdir(tmp_project)}.</p>
+     */
+    private static final ThreadLocal<File> CONFIG_FILE_OVERRIDE = new ThreadLocal<>();
+
+    /**
+     * Redirect config file reads/writes to {@code file} for the current thread.
+     * Pass {@code null} (or call {@link #clearConfigFileOverride()}) to restore
+     * the default {@code .agentarts_config.yaml} location.
+     */
+    public static void setConfigFileOverride(File file) {
+        CONFIG_FILE_OVERRIDE.set(file);
+    }
+
+    /** Clear any thread-local config file override. */
+    public static void clearConfigFileOverride() {
+        CONFIG_FILE_OVERRIDE.remove();
+    }
+
+    private static File configFile() {
+        File override = CONFIG_FILE_OVERRIDE.get();
+        return override != null ? override : new File(CONFIG_FILE);
+    }
+
+    /**
      * Load agent configuration from {@code .agentarts_config.yaml}.
      * Creates a default config file if it does not exist.
      *
      * @return the loaded or newly created config list
      */
     public static AgentArtsConfigList loadConfig() {
-        File file = new File(CONFIG_FILE);
+        File file = configFile();
         if (!file.exists()) {
             AgentArtsConfigList config = new AgentArtsConfigList();
             saveConfig(config);
@@ -47,7 +79,7 @@ public class ConfigOperation {
     /** Save agent configuration to {@code .agentarts_config.yaml}. */
     public static void saveConfig(AgentArtsConfigList config) {
         try {
-            YAML_MAPPER.writerWithDefaultPrettyPrinter().writeValue(new File(CONFIG_FILE), config);
+            YAML_MAPPER.writerWithDefaultPrettyPrinter().writeValue(configFile(), config);
         } catch (IOException e) {
             System.err.println("Error saving config: " + e.getMessage());
         }
@@ -127,47 +159,106 @@ public class ConfigOperation {
         }
     }
 
-    /** Get a configuration value by dot-notation key (e.g. {@code base.region}). */
+    /**
+     * Get a configuration value by dot-notation key (e.g. {@code base.region},
+     * {@code base.description}). Operates on the raw YAML tree so arbitrary
+     * dotted paths under an agent are supported (matching the Python toolkit's
+     * generic dict-walking accessor, which leverages Pydantic {@code extra="allow"}).
+     *
+     * @param key        dotted config key
+     * @param agentName  agent name (defaults to the configured default agent)
+     */
     public static void getConfigValue(String key, String agentName) {
-        AgentArtsConfigList config = loadConfig();
-        String name = agentName != null ? agentName : config.getDefaultAgent();
-        AgentArtsConfig agent = config.getAgent(name);
-        if (agent == null) {
+        JsonNode root = loadConfigTree();
+        String name = agentName != null ? agentName : root.path("default_agent").asText(null);
+        JsonNode agent = root.path("agents").path(name);
+        if (name == null || agent.isMissingNode() || agent.isNull()) {
             System.err.println("Agent '" + name + "' not found.");
             return;
         }
-        // Simple dot-notation accessor
-        String[] parts = key.split("\\.");
-        if (parts.length == 2 && "base".equals(parts[0])) {
-            switch (parts[1]) {
-                case "name": System.out.println(agent.getBase().getName()); return;
-                case "entrypoint": System.out.println(agent.getBase().getEntrypoint()); return;
-                case "region": System.out.println(agent.getBase().getRegion()); return;
+        JsonNode value = agent;
+        for (String part : key.split("\\.")) {
+            if (value != null && value.isObject()) {
+                value = value.get(part);
+            } else {
+                value = null;
+                break;
             }
         }
-        System.err.println("Unknown key: " + key);
+        if (value == null || value.isMissingNode() || value.isNull()) {
+            System.err.println("Unknown key: " + key);
+        } else {
+            System.out.println(value.isTextual() ? value.asText() : value.toString());
+        }
     }
 
-    /** Set a configuration value by dot-notation key (e.g. {@code base.region}). */
+    /**
+     * Set a configuration value by dot-notation key (e.g. {@code base.region},
+     * {@code base.description}). Operates on the raw YAML tree so arbitrary
+     * dotted paths under an agent are persisted (matching the Python toolkit's
+     * generic dict-walking mutator).
+     *
+     * <p>TODO: renaming an agent via {@code base.name} (Python renames the agent
+     * key and updates the default selector) is not yet implemented; the leaf
+     * value is updated but the agents-map key is left unchanged.</p>
+     *
+     * @param key        dotted config key
+     * @param value      config value
+     * @param agentName  agent name (defaults to the configured default agent)
+     */
     public static void setConfigValue(String key, String value, String agentName) {
-        AgentArtsConfigList config = loadConfig();
-        String name = agentName != null ? agentName : config.getDefaultAgent();
-        AgentArtsConfig agent = config.getAgent(name);
-        if (agent == null) {
+        JsonNode root = loadConfigTree();
+        if (!root.isObject()) {
+            root = YAML_MAPPER.createObjectNode();
+        }
+        String name = agentName != null ? agentName : root.path("default_agent").asText(null);
+        JsonNode agentsNode = root.path("agents");
+        if (!agentsNode.isObject()) {
+            agentsNode = YAML_MAPPER.createObjectNode();
+            ((ObjectNode) root).set("agents", agentsNode);
+        }
+        JsonNode agent = agentsNode.get(name);
+        if (name == null || agent.isMissingNode() || agent.isNull() || !agent.isObject()) {
             System.err.println("Agent '" + name + "' not found.");
             return;
         }
         String[] parts = key.split("\\.");
-        if (parts.length == 2 && "base".equals(parts[0])) {
-            switch (parts[1]) {
-                case "name": agent.getBase().setName(value); break;
-                case "entrypoint": agent.getBase().setEntrypoint(value); break;
-                case "region": agent.getBase().setRegion(value); break;
-                default: System.err.println("Unknown key: " + key); return;
+        ObjectNode current = (ObjectNode) agent;
+        for (int i = 0; i < parts.length - 1; i++) {
+            JsonNode child = current.get(parts[i]);
+            if (child == null || !child.isObject()) {
+                child = YAML_MAPPER.createObjectNode();
+                current.set(parts[i], child);
             }
+            current = (ObjectNode) child;
         }
-        saveConfig(config);
+        current.put(parts[parts.length - 1], value);
+        saveConfigTree(root);
         System.out.println("Set " + key + " = " + value);
+    }
+
+    /** Load the config file as a raw {@link JsonNode} tree (preserves all keys). */
+    private static JsonNode loadConfigTree() {
+        File file = configFile();
+        if (!file.exists()) {
+            return YAML_MAPPER.createObjectNode();
+        }
+        try {
+            JsonNode tree = YAML_MAPPER.readTree(file);
+            return tree == null ? YAML_MAPPER.createObjectNode() : tree;
+        } catch (IOException e) {
+            System.err.println("Error loading config: " + e.getMessage());
+            return YAML_MAPPER.createObjectNode();
+        }
+    }
+
+    /** Save a raw {@link JsonNode} tree back to the config file. */
+    private static void saveConfigTree(JsonNode tree) {
+        try {
+            YAML_MAPPER.writerWithDefaultPrettyPrinter().writeValue(configFile(), tree);
+        } catch (IOException e) {
+            System.err.println("Error saving config: " + e.getMessage());
+        }
     }
 
     /** Remove an agent from the configuration. */

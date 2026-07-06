@@ -4,7 +4,7 @@ import com.huaweicloud.agentarts.sdk.runtime.AgentArtsRuntimeApp;
 import com.huaweicloud.agentarts.sdk.runtime.context.RequestContext;
 import java.util.Map;
 
-public class {{ name }}Agent {
+public class Agent {
 
     public static void main(String[] args) {
         AgentArtsRuntimeApp app = new AgentArtsRuntimeApp();

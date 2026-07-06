@@ -56,7 +56,8 @@ public class InvokeCommand implements Runnable {
             InvokeOperation.invokeAgent(payload, agentName, mode, region, port, endpoint,
                     sessionId, bearerToken, timeout, skipSsl, userId, customPath);
         } catch (Exception e) {
-            System.err.println("Error invoking agent: " + e.getMessage());
+            if (e instanceof CliSupport.CliFailure) throw e;
+            CliSupport.fail("Error invoking agent: " + e.getMessage());
         }
     }
 }

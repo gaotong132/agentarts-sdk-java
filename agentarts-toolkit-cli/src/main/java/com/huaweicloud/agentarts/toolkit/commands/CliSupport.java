@@ -27,7 +27,7 @@ public final class CliSupport {
      * Serialize and print a value as pretty JSON to stdout. Falls back to a
      * plain string representation if serialization fails.
      */
-    static void printJson(Object data) {
+    public static void printJson(Object data) {
         if (data == null) {
             System.out.println("{}");
             return;
@@ -51,6 +51,15 @@ public final class CliSupport {
     static void fail(String message) {
         System.err.println(message);
         throw new CliFailure(message);
+    }
+
+    /**
+     * Print an error message to stderr and raise a {@link CliFailure} so the
+     * CLI exits non-zero. Public for cross-package operations that drive the CLI
+     * flow but live outside {@code commands}.
+     */
+    public static void failCli(String message) {
+        fail(message);
     }
 
     /**

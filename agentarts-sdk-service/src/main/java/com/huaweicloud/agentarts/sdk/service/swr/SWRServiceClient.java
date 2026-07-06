@@ -10,6 +10,9 @@ import com.huaweicloud.agentarts.sdk.core.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -19,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
  * Provides namespace (organization), repository, and authorization token management
  * for deploying agent containers to SWR.</p>
  */
-public class SWRServiceClient {
+public class SWRServiceClient implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(SWRServiceClient.class);
 
@@ -228,6 +231,54 @@ public class SWRServiceClient {
         return swrHost + "/" + namespace + "/" + repository + ":" + tag;
     }
 
+    /**
+     * The SWR registry login server for this client's region
+     * (e.g. {@code swr.cn-southwest-2.myhuaweicloud.com}).
+     *
+     * @return login server host
+     */
+    public String getLoginServer() {
+        return "swr." + region + ".myhuaweicloud.com";
+    }
+
+    /**
+     * Create a long-lived SWR login secret and decode it into Docker credentials.
+     *
+     * <p>Mirrors the reference {@code create_swr_secret}: issues a
+     * {@link CreateSecretRequest} scoped to this region's project, then decodes
+     * the Base64 {@code auth} field of the returned {@link AuthInfo} into a
+     * {@code username:password} pair for {@code docker login}.</p>
+     *
+     * @return a three-element array {@code {loginServer, username, password}};
+     *         username/password are empty strings if the secret could not be created
+     */
+    public String[] createSwrSecret() {
+        String loginServer = getLoginServer();
+        try {
+            CreateSecretRequest request = new CreateSecretRequest().withProjectname(region);
+            CreateSecretResponse response = createSecret(request);
+            Map<String, AuthInfo> auths = response.getAuths();
+            if (auths == null) {
+                return new String[]{loginServer, "", ""};
+            }
+            AuthInfo info = auths.get(loginServer);
+            if (info == null || info.getAuth() == null) {
+                return new String[]{loginServer, "", ""};
+            }
+            String decoded = new String(Base64.getDecoder().decode(info.getAuth()), StandardCharsets.UTF_8);
+            int colon = decoded.indexOf(':');
+            if (colon <= 0) {
+                return new String[]{loginServer, "", ""};
+            }
+            String username = decoded.substring(0, colon);
+            String password = decoded.substring(colon + 1);
+            return new String[]{loginServer, username, password};
+        } catch (Exception e) {
+            LOG.warn("Failed to create SWR secret: {}", e.getMessage());
+            return new String[]{loginServer, "", ""};
+        }
+    }
+
     // ========================
     // Accessors
     // ========================
@@ -242,5 +293,16 @@ public class SWRServiceClient {
 
     public String getRegion() {
         return region;
+    }
+
+    /**
+     * No-op close satisfying {@link AutoCloseable} so that callers can manage
+     * the client lifetime with try-with-resources. The underlying Huawei Cloud
+     * SDK clients do not expose a close hook, so there are no resources to
+     * release here; the method exists to satisfy the {@code try (...)} contract.
+     */
+    @Override
+    public void close() {
+        // no-op: underlying SwrClient/SwrAsyncClient expose no close hook
     }
 }

@@ -320,7 +320,8 @@ class CliModuleTest {
             TemplateManager.renderToFile("basic/Agent.java.tpl", output, "name", "demo");
             assertTrue(Files.exists(output));
             String content = Files.readString(output);
-            assertTrue(content.contains("demoAgent"));
+            assertTrue(content.contains("public class Agent"));
+            assertTrue(content.contains("demo"));
         }
     }
 

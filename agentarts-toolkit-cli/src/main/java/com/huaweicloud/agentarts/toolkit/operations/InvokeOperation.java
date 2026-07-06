@@ -1,16 +1,25 @@
 package com.huaweicloud.agentarts.toolkit.operations;
 
+import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
+import com.huaweicloud.agentarts.sdk.service.runtime.RuntimeClient;
+import com.huaweicloud.agentarts.toolkit.commands.CliSupport;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.ext.web.client.WebClient;
 import io.vertx.ext.web.client.WebClientOptions;
 
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Invoke operation: send JSON payload to local or cloud agent.
- * Operation: invoke agent with JSON payload (local or cloud).
+ * Invoke operation: send a JSON payload to a local or cloud agent.
+ *
+ * <p>Operation: invoke an agent with a JSON payload (local or cloud).
+ * Cloud mode resolves the agent's data-plane endpoint and auth mode from
+ * {@code .agentarts_config.yaml} + a control-plane lookup, then calls
+ * {@link RuntimeClient#invokeAgent}.</p>
  */
 public class InvokeOperation {
 
@@ -18,13 +27,13 @@ public class InvokeOperation {
      * Invoke an agent with a JSON payload (local or cloud).
      *
      * @param payload      JSON payload string
-     * @param agentName    agent name (for cloud mode)
+     * @param agentName    agent name (for cloud mode, uses config default when null)
      * @param mode         invocation mode: "local" or "cloud"
-     * @param region       Huawei Cloud region (for cloud mode)
+     * @param region       Huawei Cloud region (for cloud mode, nullable)
      * @param port         local server port (for local mode, default 8080)
-     * @param endpoint     custom endpoint URL (for cloud mode, nullable)
-     * @param sessionId    session ID for context continuity (nullable)
-     * @param bearerToken  Bearer token for cloud auth (nullable)
+     * @param endpoint     custom endpoint name (nullable)
+     * @param sessionId    session ID for context continuity (nullable; auto-generated in cloud)
+     * @param bearerToken  bearer token for cloud auth (nullable for IAM agents)
      * @param timeout      request timeout in seconds
      * @param skipSsl      skip SSL verification
      * @param userId       user ID header (nullable)
@@ -34,13 +43,26 @@ public class InvokeOperation {
                                     String region, Integer port, String endpoint,
                                     String sessionId, String bearerToken, int timeout,
                                     boolean skipSsl, String userId, String customPath) throws Exception {
+        // Validate JSON payload (best-effort normalization for shell-quote stripping).
+        String normalized = normalizePayload(payload);
+        try {
+            JsonUtils.MAPPER.readTree(normalized);
+        } catch (Exception e) {
+            CliSupport.failCli("Payload must be valid JSON: " + e.getMessage());
+            return;
+        }
+
         if ("local".equals(mode)) {
             int p = port != null ? port : 8080;
-            invokeLocal(payload, p, sessionId, timeout);
-        } else {
-            invokeCloud(payload, agentName, region, endpoint, sessionId, bearerToken,
-                    timeout, skipSsl, userId, customPath);
+            invokeLocal(normalized, p, sessionId, timeout);
+            return;
         }
+        if (!"cloud".equals(mode)) {
+            CliSupport.failCli("mode must be 'local' or 'cloud'");
+            return;
+        }
+        invokeCloud(normalized, agentName, region, endpoint, sessionId, bearerToken,
+                timeout, skipSsl, userId, customPath);
     }
 
     private static void invokeLocal(String payload, int port, String sessionId, int timeout) throws Exception {
@@ -71,7 +93,38 @@ public class InvokeOperation {
                                      String endpoint, String sessionId, String bearerToken,
                                      int timeout, boolean skipSsl, String userId,
                                      String customPath) throws Exception {
-        System.out.println("Invoking cloud agent '" + agentName + "' in region " + region + "...");
-        // TODO: RuntimeServiceClient.invokeAgent with V11 signing
+        try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
+            String actualSessionId = (sessionId != null && !sessionId.isBlank())
+                    ? sessionId : UUID.randomUUID().toString();
+            Map<String, Object> result = client.invokeAgent(
+                    agentName, actualSessionId, payload, bearerToken, endpoint,
+                    timeout, userId, customPath);
+            CliSupport.printJson(result);
+        } catch (Exception e) {
+            CliSupport.failCli("Failed to invoke cloud agent: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Normalize a JSON payload that may have had its quotes stripped by a shell
+     * (e.g. PowerShell). Returns the payload unchanged when it already parses.
+     */
+    private static String normalizePayload(String payload) {
+        if (payload == null) return "{}";
+        payload = payload.trim();
+        if (payload.isEmpty()) return "{}";
+        try {
+            JsonUtils.MAPPER.readTree(payload);
+            return payload;
+        } catch (Exception ignored) {
+            // fall through to best-effort fixups
+        }
+        if (payload.startsWith("'") && payload.endsWith("'")) {
+            payload = payload.substring(1, payload.length() - 1);
+        }
+        if (payload.contains("\\\"")) {
+            payload = payload.replace("\\\"", "\"");
+        }
+        return payload;
     }
 }

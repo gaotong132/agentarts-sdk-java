@@ -44,14 +44,17 @@ public class DeployCommand implements Runnable {
     @Override
     public void run() {
         if (!"cloud".equals(mode) && !"local".equals(mode)) {
-            System.err.println("Error: mode must be 'cloud' or 'local'");
+            CliSupport.fail("mode must be 'cloud' or 'local'");
             return;
         }
         try {
-            DeployOperation.deployProject(agentName, mode, imageTag, localPort,
+            boolean ok = DeployOperation.deployProject(agentName, mode, imageTag, localPort,
                     swrOrg, swrRepo, description, skipBuild, skipSsl);
+            if (!ok) {
+                CliSupport.fail("deploy did not complete successfully");
+            }
         } catch (Exception e) {
-            System.err.println("Error deploying: " + e.getMessage());
+            CliSupport.fail("Error deploying: " + e.getMessage());
         }
     }
 }

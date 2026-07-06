@@ -35,6 +35,18 @@ public class RuntimeClient implements AutoCloseable {
     private BaseHttpClient controlClient;
     private BaseHttpClient dataClient;
 
+    /**
+     * Optional data-plane endpoint override. When set (e.g. from an agent's
+     * {@code access_endpoint} discovered via the control plane), the data client
+     * targets this URL instead of {@link Constants#getRuntimeDataPlaneEndpoint()}.
+     */
+    private String dataEndpointOverride;
+
+    public void setDataPlaneEndpoint(String endpoint) {
+        // Must be set before the first data-plane call (data client is lazy-initialized).
+        this.dataEndpointOverride = endpoint;
+    }
+
     public RuntimeClient(String region, boolean verifySsl, SignMode signMode) {
         this.region = region != null ? region : Constants.getRegion();
         this.verifySsl = verifySsl;
@@ -75,7 +87,9 @@ public class RuntimeClient implements AutoCloseable {
 
     private synchronized BaseHttpClient getDataClient() {
         if (dataClient == null) {
-            String endpoint = Constants.getRuntimeDataPlaneEndpoint();
+            String endpoint = dataEndpointOverride != null
+                    ? Constants.ensureHttps(dataEndpointOverride)
+                    : Constants.getRuntimeDataPlaneEndpoint();
             boolean useAkSk = (signMode == SignMode.V11_HMAC_SHA256);
             RequestConfig config = RequestConfig.builder()
                     .baseUrl(endpoint)
