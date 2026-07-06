@@ -102,11 +102,13 @@ class IdentityLifecycleTest {
     @Test @Order(4)
     @DisplayName("get_api_key_credential_provider returns the created provider")
     void testGetApiKeyCredentialProvider() {
-        var cp = identityClient.getServiceClient()
+        var resp = identityClient.getServiceClient()
                 .getApiKeyCredentialProvider(
                         new GetApiKeyCredentialProviderRequest()
                                 .withCredentialProviderName(createdApiKeyName));
-        assertNotNull(cp);
+        assertNotNull(resp);
+        assertNotNull(resp.getCredentialProvider());
+        assertEquals(createdApiKeyName, resp.getCredentialProvider().getName());
     }
 
     // 5. test_list_api_key_credential_providers_contains_created
@@ -116,6 +118,11 @@ class IdentityLifecycleTest {
         var req = new ListApiKeyCredentialProvidersRequest();
         var result = identityClient.getServiceClient().listApiKeyCredentialProviders(req);
         assertNotNull(result);
+        List<String> names = result.getCredentialProviders().stream()
+                .map(ApiKeyCredentialProviderSummary::getName)
+                .collect(Collectors.toList());
+        assertTrue(names.contains(createdApiKeyName),
+                "Created API key provider should appear in list");
     }
 
     // 6. test_create_workload_access_token
@@ -144,8 +151,16 @@ class IdentityLifecycleTest {
         assumeTrue(E2EConfig.hasOAuth2Config(),
                 "Set AGENTARTS_TEST_OAUTH2_CLIENT_ID / _CLIENT_SECRET / _VENDOR to exercise OAuth2 credential-provider lifecycle");
 
+        String clientId = E2EConfig.getOAuth2ClientId();
+        String clientSecret = E2EConfig.getOAuth2ClientSecret();
+        String vendorStr = E2EConfig.getOAuth2Vendor();
+        if (vendorStr == null || vendorStr.isEmpty()) {
+            vendorStr = "GITHUBOAUTH2";
+        }
+        CredentialProviderVendor vendor = CredentialProviderVendor.valueOf(vendorStr);
+
         String name = E2EHelpers.uniqueName("oauth2", runId);
-        identityClient.createOauth2CredentialProvider(name);
+        identityClient.createOauth2CredentialProvider(name, vendor, clientId, clientSecret);
         try {
             var cp = identityClient.getServiceClient()
                     .getOauth2CredentialProvider(

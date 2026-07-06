@@ -156,12 +156,73 @@ public class IdentityClient {
         return serviceClient.createApiKeyCredentialProvider(request);
     }
 
+    /**
+     * Create an OAuth2 credential provider.
+     *
+     * <p>Dispatches the vendor-specific config block (Github / Google / Microsoft /
+     * Custom) the same way the reference implementation does. {@code tenantId} is
+     * required for {@link CredentialProviderVendor#MICROSOFTOAUTH2}; an
+     * {@code oauthDiscovery} is required for
+     * {@link CredentialProviderVendor#CUSTOMOAUTH2}.</p>
+     *
+     * @param name            the credential provider name
+     * @param vendor          the OAuth2 vendor
+     * @param clientId        the OAuth2 client id
+     * @param clientSecret    the OAuth2 client secret
+     * @param tenantId        the tenant id (Microsoft only); {@code null} otherwise
+     * @param oauthDiscovery  the OAuth2 discovery config (Custom only); {@code null} otherwise
+     */
     public CreateOauth2CredentialProviderResponse createOauth2CredentialProvider(
-            String providerName) {
+            String name, CredentialProviderVendor vendor,
+            String clientId, String clientSecret,
+            String tenantId, Oauth2Discovery oauthDiscovery) {
+        Oauth2ProviderConfigInput config = new Oauth2ProviderConfigInput();
+        switch (vendor) {
+            case GITHUBOAUTH2:
+                config.withGithubOauth2ProviderConfig(
+                        new GithubOauth2ProviderConfigInput()
+                                .withClientId(clientId)
+                                .withClientSecret(clientSecret));
+                break;
+            case GOOGLEOAUTH2:
+                config.withGoogleOauth2ProviderConfig(
+                        new GoogleOauth2ProviderConfigInput()
+                                .withClientId(clientId)
+                                .withClientSecret(clientSecret));
+                break;
+            case MICROSOFTOAUTH2:
+                config.withMicrosoftOauth2ProviderConfig(
+                        new MicrosoftOauth2ProviderConfigInput()
+                                .withClientId(clientId)
+                                .withClientSecret(clientSecret)
+                                .withTenantId(tenantId));
+                break;
+            case CUSTOMOAUTH2:
+                config.withCustomOauth2ProviderConfig(
+                        new CustomOauth2ProviderConfigInput()
+                                .withClientId(clientId)
+                                .withClientSecret(clientSecret)
+                                .withOauth2Discovery(oauthDiscovery));
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported OAuth2 vendor: " + vendor);
+        }
         CreateOauth2CredentialProviderRequest request = new CreateOauth2CredentialProviderRequest()
                 .withBody(new CreateOauth2CredentialProviderReqBody()
-                        .withName(providerName));
+                        .withName(name)
+                        .withCredentialProviderVendor(vendor)
+                        .withOauth2ProviderConfigInput(config));
         return serviceClient.createOauth2CredentialProvider(request);
+    }
+
+    /**
+     * Create an OAuth2 credential provider (Github/Google shorthand without
+     * tenant id or discovery).
+     */
+    public CreateOauth2CredentialProviderResponse createOauth2CredentialProvider(
+            String name, CredentialProviderVendor vendor,
+            String clientId, String clientSecret) {
+        return createOauth2CredentialProvider(name, vendor, clientId, clientSecret, null, null);
     }
 
     /**
