@@ -7,6 +7,8 @@ import com.huaweicloud.sdk.agentidentity.v1.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+
 /**
  * High-level Identity client for AgentArts workload identity management.
  *
@@ -57,6 +59,38 @@ public class IdentityClient {
     public GetWorkloadIdentityResponse getWorkloadIdentity(String name) {
         return serviceClient.getWorkloadIdentity(
                 new GetWorkloadIdentityRequest().withWorkloadIdentityName(name));
+    }
+
+    /**
+     * Update an existing workload identity's configuration.
+     *
+     * @param name                              the workload identity name
+     * @param allowedResourceOauth2ReturnUrls   OAuth2 callback URLs to allow; may be {@code null}
+     * @param authorizerConfiguration           authorizer configuration; may be {@code null}
+     * @return the update response
+     */
+    public UpdateWorkloadIdentityResponse updateWorkloadIdentity(
+            String name, List<String> allowedResourceOauth2ReturnUrls,
+            AuthorizerConfiguration authorizerConfiguration) {
+        UpdateWorkloadIdentityReqBody body = new UpdateWorkloadIdentityReqBody();
+        if (allowedResourceOauth2ReturnUrls != null) {
+            body.withAllowedResourceOauth2ReturnUrls(allowedResourceOauth2ReturnUrls);
+        }
+        if (authorizerConfiguration != null) {
+            body.withAuthorizerConfiguration(authorizerConfiguration);
+        }
+        UpdateWorkloadIdentityRequest request = new UpdateWorkloadIdentityRequest()
+                .withWorkloadIdentityName(name)
+                .withBody(body);
+        return serviceClient.updateWorkloadIdentity(request);
+    }
+
+    /**
+     * Update an existing workload identity's OAuth2 return URLs.
+     */
+    public UpdateWorkloadIdentityResponse updateWorkloadIdentity(
+            String name, List<String> allowedResourceOauth2ReturnUrls) {
+        return updateWorkloadIdentity(name, allowedResourceOauth2ReturnUrls, null);
     }
 
     public ListWorkloadIdentitiesResponse listWorkloadIdentities() {
@@ -130,11 +164,18 @@ public class IdentityClient {
         return serviceClient.createOauth2CredentialProvider(request);
     }
 
+    /**
+     * Create an STS credential provider bound to an IAM agency URN.
+     *
+     * @param providerName the credential provider name
+     * @param agencyUrn    the IAM agency URN (iam::{agencyName})
+     */
     public CreateStsCredentialProviderResponse createStsCredentialProvider(
-            String providerName) {
+            String providerName, String agencyUrn) {
         CreateStsCredentialProviderRequest request = new CreateStsCredentialProviderRequest()
                 .withBody(new CreateStsCredentialProviderReqBody()
-                        .withName(providerName));
+                        .withName(providerName)
+                        .withAgencyUrn(agencyUrn));
         return serviceClient.createStsCredentialProvider(request);
     }
 

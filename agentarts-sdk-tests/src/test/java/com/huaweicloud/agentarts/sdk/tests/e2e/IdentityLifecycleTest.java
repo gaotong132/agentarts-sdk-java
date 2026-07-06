@@ -77,10 +77,12 @@ class IdentityLifecycleTest {
 
     // 2. test_update_workload_identity
     @Test @Order(2)
-    @DisplayName("update_workload_identity succeeds")
+    @DisplayName("update_workload_identity sets OAuth2 return URLs")
     void testUpdateWorkloadIdentity() {
-        var wi = identityClient.getWorkloadIdentity(createdWorkloadIdentityName);
-        assertNotNull(wi);
+        var updated = identityClient.updateWorkloadIdentity(
+                createdWorkloadIdentityName,
+                java.util.List.of("https://example.com/callback"));
+        assertNotNull(updated);
     }
 
     // 3. test_list_workload_identities_contains_created
@@ -166,7 +168,7 @@ class IdentityLifecycleTest {
                 "Set AGENTARTS_TEST_STS_AGENCY_URN (iam::<agency_name>) to exercise STS credential-provider lifecycle");
 
         String name = E2EHelpers.uniqueName("sts", runId);
-        identityClient.createStsCredentialProvider(name);
+        identityClient.createStsCredentialProvider(name, urn);
         try {
             var cp = identityClient.getServiceClient()
                     .getStsCredentialProvider(

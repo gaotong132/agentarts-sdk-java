@@ -24,9 +24,20 @@ import java.util.Map;
  *
  * <h3>Usage:</h3>
  * <pre>{@code
- * MyService proxy = AuthInterceptor.wrap(myService, MyService.class, identityClient);
- * proxy.doSomething(); // automatically injects access_token/apiKey/stsCredentials
+ * interface MyService {
+ *     @RequireApiKey(providerName = "myProvider")
+ *     String handle(Map<String, Object> payload, GetResourceApiKeyResponse apiKey);
+ * }
+ * MyService impl = (payload, apiKey) -> { ... };
+ * MyService proxy = AuthInterceptor.wrap(impl, MyService.class, identityClient);
+ * // pass null for the credential slot; the interceptor fetches and replaces it
+ * proxy.handle(payload, null);
  * }</pre>
+ *
+ * <p><b>Convention:</b> the credential is the <em>last</em> parameter of the
+ * annotated method. The caller passes {@code null} (or any placeholder) for
+ * that slot; the interceptor fetches the credential and replaces that argument
+ * before delegating to the target.</p>
  */
 public class AuthInterceptor implements InvocationHandler {
 
@@ -86,9 +97,7 @@ public class AuthInterceptor implements InvocationHandler {
 
         LOG.debug("Fetched OAuth2 access token for provider: {}", ann.providerName());
 
-        // The token value should be injected as a parameter named by ann.into()
-        // For simplicity, we append it as the last argument
-        Object[] newArgs = appendArg(args, response);
+        Object[] newArgs = replaceLastArg(args, response);
         return method.invoke(target, newArgs);
     }
 
@@ -101,7 +110,7 @@ public class AuthInterceptor implements InvocationHandler {
 
         LOG.debug("Fetched API key for provider: {}", ann.providerName());
 
-        Object[] newArgs = appendArg(args, response);
+        Object[] newArgs = replaceLastArg(args, response);
         return method.invoke(target, newArgs);
     }
 
@@ -114,7 +123,7 @@ public class AuthInterceptor implements InvocationHandler {
 
         LOG.debug("Fetched STS token for provider: {}", ann.providerName());
 
-        Object[] newArgs = appendArg(args, response);
+        Object[] newArgs = replaceLastArg(args, response);
         return method.invoke(target, newArgs);
     }
 
@@ -130,13 +139,16 @@ public class AuthInterceptor implements InvocationHandler {
         return identityClient.ensureLocalAuthToken("default");
     }
 
-    private static Object[] appendArg(Object[] args, Object newArg) {
-        if (args == null) {
+    /**
+     * Replace the last argument (the credential slot) with the fetched credential.
+     * If there are no arguments, the credential becomes the sole argument.
+     */
+    private static Object[] replaceLastArg(Object[] args, Object newArg) {
+        if (args == null || args.length == 0) {
             return new Object[]{newArg};
         }
-        Object[] newArgs = new Object[args.length + 1];
-        System.arraycopy(args, 0, newArgs, 0, args.length);
-        newArgs[args.length] = newArg;
+        Object[] newArgs = args.clone();
+        newArgs[newArgs.length - 1] = newArg;
         return newArgs;
     }
 }
