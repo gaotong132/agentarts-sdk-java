@@ -1,32 +1,30 @@
 package com.huaweicloud.agentarts.sdk.tests.e2e;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient;
-import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import com.huaweicloud.agentarts.toolkit.AgentArtsCli;
+import com.huaweicloud.agentarts.toolkit.commands.CliSupport;
 import org.junit.jupiter.api.*;
 import picocli.CommandLine;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Gateway CLI e2e tests — mirrors {@code tests/integration/toolkit/test_cli_gateway.py}.
+ * Gateway CLI e2e tests — exercises the picocli command path exclusively.
  *
- * <p>The read-only {@code list-mcp-gateways} runs in the default tier; the
- * {@code create-mcp-gateway} lifecycle exercises the auto-IAM-agency path and
- * requires {@code AGENTARTS_TEST_ALLOW_CREATE=1}.
- *
- * <p><b>Gap:</b> the Java {@code McpGatewayCommand} subcommands are currently
- * parse-only stubs — their {@code run()} prints a message but does not invoke
- * {@link MCPGatewayClient}. These tests therefore exercise the picocli command
- * path (verifying the CLI surface parses and returns 0) <em>and</em> drive the
- * SDK client directly to mirror the Python test's actual cloud side-effect.
- * Once the CLI command wires to the SDK client, the SDK calls below should be
- * replaced with the CLI path exclusively.</p>
+ * <p>Every assertion comes from the CLI's stdout JSON; the {@link MCPGatewayClient}
+ * is constructed only to register LIFO cleanup for resources the CLI creates (the
+ * cleanup path is not what is under test). The read-only {@code list-mcp-gateways}
+ * runs in the default tier; the {@code create → get → delete} lifecycle requires
+ * {@code AGENTARTS_TEST_ALLOW_CREATE=1}.</p>
  */
 @Tag("e2e")
 @DisplayName("CLI Gateway E2E Tests")
@@ -37,6 +35,10 @@ class CliGatewayE2ETest {
     private E2EResourceRegistry registry;
     private String runId;
 
+    /** Captured stdout/stderr from the last {@link #runCli(String...)} call. */
+    private String stdout;
+    private String stderr;
+
     @BeforeAll
     static void requireCredentials() {
         assumeTrue(E2EConfig.hasCloudCredentials(),
@@ -45,7 +47,8 @@ class CliGatewayE2ETest {
 
     @BeforeEach
     void setUp() {
-        cli = new CommandLine(new AgentArtsCli());
+        cli = CliSupport.withCleanExit(new CommandLine(new AgentArtsCli()));
+        // Suppress picocli's own usage/version output (command bodies use System.out).
         cli.setOut(new PrintWriter(new StringWriter()));
         cli.setErr(new PrintWriter(new StringWriter()));
         client = new MCPGatewayClient();
@@ -59,71 +62,105 @@ class CliGatewayE2ETest {
         if (client != null) client.close();
     }
 
-    /** Read-only {@code mcp-gateway list-mcp-gateways --limit 1} — no resources
-     *  created (default tier). Mirrors {@code test_cli_gateway_list_readonly}. */
+    /** Read-only {@code mcp-gateway list-mcp-gateways --limit 1} — no resources created. */
     @Test
-    @DisplayName("CLI mcp-gateway list-mcp-gateways --limit 1 succeeds")
+    @DisplayName("CLI mcp-gateway list-mcp-gateways --limit 1 prints JSON")
     void test_cli_gateway_list_readonly() {
-        // 1. Exercise the picocli command path (verifies CLI surface parses + exit 0)
-        int exitCode = cli.execute("mcp-gateway", "list-mcp-gateways", "--limit", "1");
-        assertEquals(0, exitCode, "CLI list-mcp-gateways should exit 0");
-
-        // 2. Verify the actual cloud list succeeds (mirrors Python's intent that
-        //    the CLI lists real gateways). TODO: remove once CLI command wires to SDK.
-        RequestResult result = client.listMcpGateways(null, 1, null);
-        // Tolerate 403 when the tenant hasn't enabled the MCP Gateway service
-        if (!result.isSuccess() && result.getStatusCode() == 403) {
+        int exit = runCli("mcp-gateway", "list-mcp-gateways", "--limit", "1");
+        // Tolerate 403 when the tenant hasn't enabled the MCP Gateway service.
+        if (exit != 0 && stderr.contains("403")) {
             assumeTrue(false, "MCP Gateway service not enabled for this tenant");
         }
-        assertTrue(result.isSuccess(), "listMcpGateways failed: " + result.getError());
-        assertNotNull(result.getData(), "listMcpGateways returned no data");
+        assertEquals(0, exit, "CLI list-mcp-gateways should exit 0; stderr=" + stderr);
+        JsonNode node = parseJson(stdout);
+        assertNotNull(node, "CLI list-mcp-gateways should print JSON; stdout=" + stdout);
+        // The list response is a JSON object (gateways array / total).
+        assertTrue(node.isObject(), "list response should be a JSON object; stdout=" + stdout);
     }
 
-    /** {@code mcp-gateway create-mcp-gateway} exercises the auto-agency path
-     *  end-to-end through the CLI. Mirrors {@code test_cli_gateway_create}. */
+    /** {@code create → get → list → delete} through the CLI, asserting the CLI's JSON output. */
     @Test
-    @DisplayName("CLI mcp-gateway create-mcp-gateway creates a gateway (cleanup registered)")
-    void test_cli_gateway_create() {
+    @DisplayName("CLI mcp-gateway create→get→delete lifecycle")
+    void test_cli_gateway_lifecycle() {
         assumeTrue(E2EConfig.allowCreate(),
                 "Set AGENTARTS_TEST_ALLOW_CREATE=1 to run create/delete lifecycle tests");
 
         String name = E2EHelpers.uniqueName("cli-gw", runId);
 
-        // 1. Exercise the picocli command path (verifies CLI surface parses + exit 0)
-        int exitCode = cli.execute(
-                "mcp-gateway", "create-mcp-gateway",
+        // 1. Create via CLI — parse the gateway id from the CLI's JSON stdout.
+        int createExit = runCli("mcp-gateway", "create-mcp-gateway",
                 "--name", name, "--description", "aa-it");
-        assertEquals(0, exitCode, "CLI create-mcp-gateway should exit 0");
-
-        // 2. Actually create the gateway via the SDK client so a real resource
-        //    exists to clean up (the CLI command is currently a stub).
-        //    TODO: replace with the CLI path once McpGatewayCommand wires to MCPGatewayClient.
-        RequestResult result = client.createMcpGateway(name, "aa-it");
-        assertTrue(result.isSuccess(), "createMcpGateway failed: " + result.getError());
-        assertNotNull(result.getData(), "createMcpGateway returned no data");
-        String gatewayId = extractId((JsonNode) result.getData(), "id", "gateway_id");
-        assertNotNull(gatewayId, "createMcpGateway returned no id");
+        assertEquals(0, createExit, "CLI create-mcp-gateway should exit 0; stderr=" + stderr);
+        JsonNode created = parseJson(stdout);
+        assertNotNull(created, "create should print JSON; stdout=" + stdout);
+        String gatewayId = extractId(created);
+        assertNotNull(gatewayId, "create response should contain an id; stdout=" + stdout);
+        // Register SDK cleanup as a safety net (CLI delete below should reclaim it).
         final String id = gatewayId;
-        registry.register(() -> client.deleteMcpGateway(id), "gateway:" + id);
+        registry.register(() -> {
+            try { client.deleteMcpGateway(id); } catch (Exception ignored) { /* already deleted */ }
+        }, "gateway:" + id);
+
+        // 2. Get via CLI — the returned id must match the created one.
+        int getExit = runCli("mcp-gateway", "get-mcp-gateway", id);
+        assertEquals(0, getExit, "CLI get-mcp-gateway should exit 0; stderr=" + stderr);
+        JsonNode got = parseJson(stdout);
+        assertNotNull(got, "get should print JSON; stdout=" + stdout);
+        assertEquals(id, extractId(got), "get response id should match; stdout=" + stdout);
+
+        // 3. List via CLI — must succeed and return a JSON object.
+        int listExit = runCli("mcp-gateway", "list-mcp-gateways", "--limit", "5");
+        assertEquals(0, listExit, "CLI list-mcp-gateways should exit 0; stderr=" + stderr);
+        JsonNode listed = parseJson(stdout);
+        assertNotNull(listed, "list should print JSON; stdout=" + stdout);
+        assertTrue(listed.isObject(), "list response should be a JSON object; stdout=" + stdout);
+
+        // 4. Delete via CLI.
+        int deleteExit = runCli("mcp-gateway", "delete-mcp-gateway", id);
+        assertEquals(0, deleteExit, "CLI delete-mcp-gateway should exit 0; stderr=" + stderr);
     }
 
-    /** Pull a resource id out of a response node, trying common key names at the
-     *  top level and one level into nested objects/arrays. */
-    private static String extractId(JsonNode node, String... keys) {
+    // ========================
+    // Helpers
+    // ========================
+
+    /** Execute the CLI while capturing System.out / System.err. */
+    private int runCli(String... args) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        PrintStream oldOut = System.out;
+        PrintStream oldErr = System.err;
+        System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
+        System.setErr(new PrintStream(err, true, StandardCharsets.UTF_8));
+        int exit;
+        try {
+            exit = cli.execute(args);
+        } finally {
+            System.setOut(oldOut);
+            System.setErr(oldErr);
+        }
+        stdout = out.toString(StandardCharsets.UTF_8);
+        stderr = err.toString(StandardCharsets.UTF_8);
+        return exit;
+    }
+
+    private static JsonNode parseJson(String text) {
+        try {
+            return JsonUtils.MAPPER.readTree(text);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Pull a resource id out of a response node, trying "id" then "gateway_id". */
+    private static String extractId(JsonNode node) {
         if (node == null) return null;
-        String top = findText(node, keys);
+        String top = findText(node, "id", "gateway_id");
         if (top != null) return top;
         for (JsonNode child : node) {
             if (child == null) continue;
-            String s = findText(child, keys);
+            String s = findText(child, "id", "gateway_id");
             if (s != null) return s;
-            if (child.isArray()) {
-                for (JsonNode item : child) {
-                    if (item == null) continue;
-                    String s2 = findText(item, keys);
-                    if (s2 != null) return s2;
-                }
-            }
         }
         return null;
     }

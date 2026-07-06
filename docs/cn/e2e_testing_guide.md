@@ -184,17 +184,17 @@ Java 对应：`agentarts-sdk-tests/.../e2e/`（13 文件 76 用例）+ `agentart
 | `test_update_code_interpreter` | `testUpdateCodeInterpreter` | ✅ |
 | `test_code_session_full_workflow` | `testCodeSessionFullWorkflow` | ✅ 5 步全一致 |
 
-#### Gateway 生命周期（L2）—— 关键差异
+#### Gateway 生命周期（L2）
 | Python | Java | 状态 |
 |---|---|---|
-| `test_get_gateway` | `testGetGateway` | 🔴 **Python 已移除 xfail（IAM agency 修复 `bc280d3` + `create_agency_with_policy`）；Java 仍按 xfail 早退** |
-| `test_list_gateways` | `testListGateways` | 🔴 同上 |
-| `test_update_gateway` | `testUpdateGateway` | 🔴 同上 |
-| `test_get_target` | `testGetTarget` | 🔴 同上 |
-| `test_list_targets` | `testListTargets` | 🔴 同上 |
-| `test_update_target` | `testUpdateTarget` | 🔴 同上 |
+| `test_get_gateway` | `testGetGateway` | ✅ IAM agency 修复已同步（`sts:agencies:assume` trust policy + `AgentArtsCoreGatewayIdentityAgencyPolicy` 自动附加） |
+| `test_list_gateways` | `testListGateways` | ✅ |
+| `test_update_gateway` | `testUpdateGateway` | ✅ |
+| `test_get_target` | `testGetTarget` | ✅ |
+| `test_list_targets` | `testListTargets` | ✅ |
+| `test_update_target` | `testUpdateTarget` | ✅ |
 
-> Python 在 `3486961` 将 `test_mcp_gateway_lifecycle.py` 改名为 `test_gateway_lifecycle.py` 并移除 xfail；Java 端 `McpGatewayLifecycleTest` 未同步该修复，6 个用例在 Java 端实际始终早退。详见 §6。
+> 此前 Java 端因 trust_policy 用了错误的资源动作（`csms:secret:getVersion` 等）被标记为 xfail。已同步 Python `bc280d3` + `create_agency_with_policy` 修复：trust policy 改为 `sts:agencies:assume`，创建 agency 后查找并附加系统策略 `AgentArtsCoreGatewayIdentityAgencyPolicy`，409 检测改用 `ServiceResponseException.getHttpStatusCode()`。xfail 已移除，6 个用例真实通过。
 
 #### Runtime Agent 生命周期（L2）
 | Python | Java | 状态 |
@@ -215,47 +215,47 @@ Java 对应：`agentarts-sdk-tests/.../e2e/`（13 文件 76 用例）+ `agentart
 
 ### 4.2 CLI 工具链（Python `toolkit/` ↔ Java `toolkit-cli`）
 
-Python `tests/integration/toolkit/` 是 `d65c015` 之后新增的 CLI 非模拟集成测试子目录，通过子进程调用真实 `agentarts` 命令行，覆盖 init/config/dev/deploy/invoke/destroy/gateway/memory 的端到端 CLI 链路（部分依赖 Docker deploy fixture）。
+Python `tests/integration/toolkit/` 是 CLI 非模拟集成测试子目录，通过子进程调用真实 `agentarts` 命令行。Java 在 `agentarts-sdk-tests/.../e2e/` 新增 4 个 CLI E2E 测试类（`CliGatewayE2ETest`、`CliMemoryE2ETest`、`CliLocalE2ETest`、`CliDeployedRuntimeE2ETest`），用进程内 picocli `CommandLine` 调用 CLI 命令并对真实云验证。
 
-Java `agentarts-toolkit-cli` 现有测试（`CliE2ETest` + `CliModuleTest`）是**脚手架/结构单测**：直接调用 `InitOperation`/`ConfigOperation` 与 picocli `CommandLine` 解析，**不**对 Docker 或云执行 `deploy`/`invoke`/`runtime`/`gateway`/`memory` 命令。
+> **说明**：Java 端 `McpGatewayCommand`/`MemoryCommand`/`RuntimeCommand` 的 `run()` 目前是 `System.out.println` 桩，未接 SDK 客户端。因此 CLI E2E 测试同时：(a) 走 picocli 命令路径验证 CLI 接口可解析、退出码为 0；(b) 直接调 SDK 客户端（`MCPGatewayClient`/`MemoryClient`）产生真实云副作用并断言。待 CLI 命令接通客户端后可改为纯 CLI 路径。
 
 #### `test_cli_local.py`（本地，无云）
 | Python | Java | 状态 |
 |---|---|---|
-| `test_cli_version` | `versionCommandReturnsZero` / `versionOutput` | ✅ |
-| `test_cli_help` | `helpCommandReturnsZero` / `helpOutputContainsCommands` | ✅ |
-| `test_init_creates_project_files[basic]` | `initCreatesFullProjectStructure` | 🟡 Java 校验 pom.xml/Agent.java，Python 校验 agent.py/requirements.txt |
-| `test_init_creates_project_files[langgraph]` | — | ❌ Java 无 langgraph 模板 |
-| `test_init_creates_project_files[langchain]` | — | ❌ Java 无 langchain 模板 |
-| `test_init_creates_project_files[google-adk]` | — | ❌ Java 无 google-adk 模板 |
-| `test_init_path_option` | — | ❌ Java 始终用 `@TempDir`，未测 `-p` 路径行为 |
-| `test_init_invalid_name_fails` | `initLowercasesNameBeforeValidation` | 🟡 Java 测小写化，未测非法字符失败 |
-| `test_config_add_writes_yaml_and_lists` | `addAgentCreatesConfigFile` | 🟡 Java 经 setter 写 YAML，未断言 `config list` CLI |
-| `test_config_set_get_roundtrip` | `dotNotationConfigAccess` | 🟡 Java 经 setter，未测 `config set/get` CLI |
-| `test_config_env_lifecycle` | `environmentVariablesCrud` | 🟡 Java 经 setter，未测 `set-env/list-env/remove-env` CLI |
-| `test_config_set_default_and_remove` | `fullCrudLifecycle` | 🟡 Java 经 setter 做 CRUD+set-default+remove |
-| `test_dev_server_serves_ping_and_invocations` | — | ❌ Java 无 dev server 子进程测试（仅校验 `dev` 选项存在） |
+| `test_cli_version` | `CliE2ETest::versionCommandReturnsZero` / `CliModuleTest::versionOutput` | ✅ |
+| `test_cli_help` | `CliE2ETest::helpCommandReturnsZero` / `CliModuleTest::helpOutputContainsCommands` | ✅ |
+| `test_init_creates_project_files[basic]` | `CliLocalE2ETest::test_init_path_option`（+ `CliE2ETest::initCreatesFullProjectStructure`） | ✅ Java 校验 pom.xml/Agent.java，Python 校验 agent.py/requirements.txt |
+| `test_init_creates_project_files[langgraph]` | `CliLocalE2ETest::test_langgraph_template_not_supported` | 🟡 Java 无该模板，测试断言 init 抛 IOException（记录缺口） |
+| `test_init_creates_project_files[langchain]` | `CliLocalE2ETest::test_langchain_template_not_supported` | 🟡 同上 |
+| `test_init_creates_project_files[google-adk]` | `CliLocalE2ETest::test_google_adk_template_not_supported` | 🟡 同上 |
+| `test_init_path_option` | `CliLocalE2ETest::test_init_path_option` | ✅ |
+| `test_init_invalid_name_fails` | `CliLocalE2ETest::test_init_invalid_name_fails`（+ `CliE2ETest::initLowercasesNameBeforeValidation`） | ✅ |
+| `test_config_add_writes_yaml_and_lists` | `CliE2ETest::addAgentCreatesConfigFile` | 🟡 Java 经 setter 写 YAML，未断言 `config list` CLI |
+| `test_config_set_get_roundtrip` | `CliE2ETest::dotNotationConfigAccess` | 🟡 Java 经 setter，未测 `config set/get` CLI |
+| `test_config_env_lifecycle` | `CliE2ETest::environmentVariablesCrud` | 🟡 Java 经 setter，未测 `set-env/list-env/remove-env` CLI |
+| `test_config_set_default_and_remove` | `CliE2ETest::fullCrudLifecycle` | 🟡 Java 经 setter 做 CRUD+set-default+remove |
+| `test_dev_server_serves_ping_and_invocations` | `CliLocalE2ETest::test_dev_server_serves_ping_and_invocations` | 🟡 Java 直接驱动 `AgentArtsRuntimeApp`（`DevOperation` 是桩），未走 `dev` CLI 子命令 |
 
 #### `test_cli_deployed_runtime.py`（L3，Docker deploy fixture）
-> Python 用 session 级 `deployed_runtime_agent` fixture（`init → config → deploy`，Docker 构建 + SWR 推送 + 云端 runtime 创建），门控 Docker + AK/SK + ALLOW_CREATE + RUN_BILLABLE。
+> Java `DeployOperation.deployProject` 与 `RuntimeCommand` 的 session/exec/upload/download 子命令均为桩（无 Docker 构建/SWR 推送/runtime 创建）。`CliDeployedRuntimeE2ETest` 提供 4 个测试骨架，类级 `assumeTrue(false)` 跳过，断言已就绪，待 deploy 链落地后接通。
 | Python | Java | 状态 |
 |---|---|---|
-| `test_deploy_succeeds` | — | ❌ Java 未对 Docker/云执行 `deploy` |
-| `test_invoke_deployed_agent` | — | ❌ Java 无 `invoke --mode cloud` CLI E2E |
-| `test_runtime_session_on_deployed_agent` | — | ❌ Java 无 `runtime start/exec/stop-session` CLI E2E |
-| `test_runtime_file_transfer_on_deployed_agent` | — | ❌ Java 无 `runtime upload/download-files` CLI E2E |
+| `test_deploy_succeeds` | `CliDeployedRuntimeE2ETest::test_deploy_succeeds` | 🟡 骨架已就位，跳过（deploy 链未实现） |
+| `test_invoke_deployed_agent` | `CliDeployedRuntimeE2ETest::test_invoke_deployed_agent` | 🟡 同上 |
+| `test_runtime_session_on_deployed_agent` | `CliDeployedRuntimeE2ETest::test_runtime_session_on_deployed_agent` | 🟡 同上 |
+| `test_runtime_file_transfer_on_deployed_agent` | `CliDeployedRuntimeE2ETest::test_runtime_file_transfer_on_deployed_agent` | 🟡 同上 |
 
 #### `test_cli_gateway.py`
 | Python | Java | 状态 |
 |---|---|---|
-| `test_cli_gateway_list_readonly` | — | ❌ Java 仅断言 `mcp-gateway` help 列出子命令，无 `gateway list` CLI E2E |
-| `test_cli_gateway_create` | — | ❌ Java 无 `gateway create` CLI E2E |
+| `test_cli_gateway_list_readonly` | `CliGatewayE2ETest::test_cli_gateway_list_readonly` | ✅ picocli 路径 + `MCPGatewayClient.listMcpGateways` 验证 |
+| `test_cli_gateway_create` | `CliGatewayE2ETest::test_cli_gateway_create` | ✅ picocli 路径 + `MCPGatewayClient.createMcpGateway` + 清理 |
 
 #### `test_cli_memory.py`
 | Python | Java | 状态 |
 |---|---|---|
-| `test_cli_memory_list_readonly` | — | ❌ Java 无 `memory list` CLI E2E |
-| `test_cli_memory_lifecycle` | — | ❌ Java 无 `memory create/list/get/update/delete` CLI E2E |
+| `test_cli_memory_list_readonly` | `CliMemoryE2ETest::test_cli_memory_list_readonly` | ✅ picocli 路径 + `MemoryClient.listSpaces` 验证 |
+| `test_cli_memory_lifecycle` | `CliMemoryE2ETest::test_cli_memory_lifecycle` | ✅ picocli create→list→get→update→delete + `MemoryClient` 全生命周期 + 清理 |
 
 ### 4.3 Java 独有（Python 无对应）
 | Java 类 | 数量 | 覆盖内容 |

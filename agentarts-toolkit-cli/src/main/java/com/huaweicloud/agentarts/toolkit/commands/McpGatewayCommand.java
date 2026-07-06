@@ -1,13 +1,19 @@
 package com.huaweicloud.agentarts.toolkit.commands;
 
+import com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient;
+import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+import java.util.Map;
+
 /**
  * MCP Gateway management subcommand group.
  *
- * <p>CLI command: manage MCP gateways and targets.</p>
+ * <p>CLI command: manage MCP gateways and targets. Each subcommand builds an
+ * {@link MCPGatewayClient} (AK/SK read from the environment via {@code Constants})
+ * and prints the API result as JSON to stdout.</p>
  */
 @Command(
     name = "mcp-gateway",
@@ -41,7 +47,21 @@ public class McpGatewayCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            System.out.println("Creating MCP gateway '" + name + "'...");
+            try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
+                RequestResult result = client.createMcpGateway(
+                        name, description, protocolType, authorizerType, agencyName);
+                if (!result.isSuccess()) {
+                    CliSupport.fail("Error creating MCP gateway (HTTP "
+                            + result.getStatusCode() + "): " + result.getError());
+                }
+                CliSupport.printJson(result.getData());
+            } catch (com.huaweicloud.agentarts.sdk.core.APIException e) {
+                CliSupport.fail("Error creating MCP gateway (HTTP "
+                        + e.getStatusCode() + "): " + e.getMessage());
+            } catch (Exception e) {
+                if (e instanceof CliSupport.CliFailure) throw e;
+                CliSupport.fail("Error creating MCP gateway: " + e.getMessage());
+            }
         }
     }
 
@@ -52,7 +72,17 @@ public class McpGatewayCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            System.out.println("Updating MCP gateway '" + gatewayId + "'...");
+            try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
+                RequestResult result = client.updateMcpGateway(gatewayId, description);
+                if (!result.isSuccess()) {
+                    CliSupport.fail("Error updating MCP gateway (HTTP "
+                            + result.getStatusCode() + "): " + result.getError());
+                }
+                CliSupport.printJson(result.getData());
+            } catch (Exception e) {
+                if (e instanceof CliSupport.CliFailure) throw e;
+                CliSupport.fail("Error updating MCP gateway: " + e.getMessage());
+            }
         }
     }
 
@@ -62,7 +92,21 @@ public class McpGatewayCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            System.out.println("Deleting MCP gateway '" + gatewayId + "'...");
+            try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
+                RequestResult result = client.deleteMcpGateway(gatewayId);
+                if (!result.isSuccess()) {
+                    CliSupport.fail("Error deleting MCP gateway (HTTP "
+                            + result.getStatusCode() + "): " + result.getError());
+                }
+                if (result.getData() != null) {
+                    CliSupport.printJson(result.getData());
+                } else {
+                    System.out.println("Gateway deleted successfully: " + gatewayId);
+                }
+            } catch (Exception e) {
+                if (e instanceof CliSupport.CliFailure) throw e;
+                CliSupport.fail("Error deleting MCP gateway: " + e.getMessage());
+            }
         }
     }
 
@@ -72,7 +116,17 @@ public class McpGatewayCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            System.out.println("Getting MCP gateway '" + gatewayId + "'...");
+            try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
+                RequestResult result = client.getMcpGateway(gatewayId);
+                if (!result.isSuccess()) {
+                    CliSupport.fail("Error getting MCP gateway (HTTP "
+                            + result.getStatusCode() + "): " + result.getError());
+                }
+                CliSupport.printJson(result.getData());
+            } catch (Exception e) {
+                if (e instanceof CliSupport.CliFailure) throw e;
+                CliSupport.fail("Error getting MCP gateway: " + e.getMessage());
+            }
         }
     }
 
@@ -86,7 +140,19 @@ public class McpGatewayCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            System.out.println("Listing MCP gateways...");
+            // TODO: --status and --gateway-id filters are not exposed by
+            // MCPGatewayClient.listMcpGateways (only name/limit/offset are wired).
+            try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
+                RequestResult result = client.listMcpGateways(name, limit, offset);
+                if (!result.isSuccess()) {
+                    CliSupport.fail("Error listing MCP gateways (HTTP "
+                            + result.getStatusCode() + "): " + result.getError());
+                }
+                CliSupport.printJson(result.getData());
+            } catch (Exception e) {
+                if (e instanceof CliSupport.CliFailure) throw e;
+                CliSupport.fail("Error listing MCP gateways: " + e.getMessage());
+            }
         }
     }
 
@@ -100,7 +166,20 @@ public class McpGatewayCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            System.out.println("Creating target for gateway '" + gatewayId + "'...");
+            Map<String, Object> targetConfigMap = CliSupport.parseJsonMap(targetConfig, "target-configuration");
+            Map<String, Object> credConfigMap = CliSupport.parseJsonMap(credProviderConfig, "credential-provider-configuration");
+            try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
+                RequestResult result = client.createMcpGatewayTarget(
+                        gatewayId, name, description, targetConfigMap, credConfigMap);
+                if (!result.isSuccess()) {
+                    CliSupport.fail("Error creating MCP gateway target (HTTP "
+                            + result.getStatusCode() + "): " + result.getError());
+                }
+                CliSupport.printJson(result.getData());
+            } catch (Exception e) {
+                if (e instanceof CliSupport.CliFailure) throw e;
+                CliSupport.fail("Error creating MCP gateway target: " + e.getMessage());
+            }
         }
     }
 
@@ -115,7 +194,20 @@ public class McpGatewayCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            System.out.println("Updating target '" + targetId + "' for gateway '" + gatewayId + "'...");
+            Map<String, Object> targetConfigMap = CliSupport.parseJsonMap(targetConfig, "target-configuration");
+            Map<String, Object> credConfigMap = CliSupport.parseJsonMap(credProviderConfig, "credential-provider-configuration");
+            try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
+                RequestResult result = client.updateMcpGatewayTarget(
+                        gatewayId, targetId, name, description, targetConfigMap, credConfigMap);
+                if (!result.isSuccess()) {
+                    CliSupport.fail("Error updating MCP gateway target (HTTP "
+                            + result.getStatusCode() + "): " + result.getError());
+                }
+                CliSupport.printJson(result.getData());
+            } catch (Exception e) {
+                if (e instanceof CliSupport.CliFailure) throw e;
+                CliSupport.fail("Error updating MCP gateway target: " + e.getMessage());
+            }
         }
     }
 
@@ -126,7 +218,21 @@ public class McpGatewayCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            System.out.println("Deleting target '" + targetId + "'...");
+            try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
+                RequestResult result = client.deleteMcpGatewayTarget(gatewayId, targetId);
+                if (!result.isSuccess()) {
+                    CliSupport.fail("Error deleting MCP gateway target (HTTP "
+                            + result.getStatusCode() + "): " + result.getError());
+                }
+                if (result.getData() != null) {
+                    CliSupport.printJson(result.getData());
+                } else {
+                    System.out.println("Target deleted successfully: " + targetId);
+                }
+            } catch (Exception e) {
+                if (e instanceof CliSupport.CliFailure) throw e;
+                CliSupport.fail("Error deleting MCP gateway target: " + e.getMessage());
+            }
         }
     }
 
@@ -137,7 +243,17 @@ public class McpGatewayCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            System.out.println("Getting target '" + targetId + "'...");
+            try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
+                RequestResult result = client.getMcpGatewayTarget(gatewayId, targetId);
+                if (!result.isSuccess()) {
+                    CliSupport.fail("Error getting MCP gateway target (HTTP "
+                            + result.getStatusCode() + "): " + result.getError());
+                }
+                CliSupport.printJson(result.getData());
+            } catch (Exception e) {
+                if (e instanceof CliSupport.CliFailure) throw e;
+                CliSupport.fail("Error getting MCP gateway target: " + e.getMessage());
+            }
         }
     }
 
@@ -149,7 +265,17 @@ public class McpGatewayCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            System.out.println("Listing targets for gateway '" + gatewayId + "'...");
+            try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
+                RequestResult result = client.listMcpGatewayTargets(gatewayId, limit, offset);
+                if (!result.isSuccess()) {
+                    CliSupport.fail("Error listing MCP gateway targets (HTTP "
+                            + result.getStatusCode() + "): " + result.getError());
+                }
+                CliSupport.printJson(result.getData());
+            } catch (Exception e) {
+                if (e instanceof CliSupport.CliFailure) throw e;
+                CliSupport.fail("Error listing MCP gateway targets: " + e.getMessage());
+            }
         }
     }
 }

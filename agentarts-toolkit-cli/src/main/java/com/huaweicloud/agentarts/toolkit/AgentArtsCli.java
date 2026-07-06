@@ -55,7 +55,8 @@ public class AgentArtsCli implements Runnable {
     }
 
     public static void main(String[] args) {
-        int exitCode = new CommandLine(new AgentArtsCli()).execute(args);
+        CommandLine cli = CliSupport.withCleanExit(new CommandLine(new AgentArtsCli()));
+        int exitCode = cli.execute(args);
         System.exit(exitCode);
     }
 }

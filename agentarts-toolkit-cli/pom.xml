@@ -28,6 +28,14 @@
             <groupId>com.huaweicloud.agentarts</groupId>
             <artifactId>agentarts-sdk-runtime</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-memory</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-mcpgateway</artifactId>
+        </dependency>
 
         <!-- Picocli CLI framework -->
         <dependency>
