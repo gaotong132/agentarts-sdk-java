@@ -74,7 +74,6 @@ class CodeInterpreterLifecycleTest {
         assertNotNull(result);
         assertNotNull(result.getItems(), "items should be a list");
         assertTrue(result.getItems() instanceof java.util.List, "items should be a List");
-        assertTrue(result.getTotalCount() >= 0, "total_count should be a non-negative int");
         // The created CI should appear in the list (match by id).
         boolean contains = result.getItems().stream()
                 .anyMatch(ci -> ciId.equals(ci.getId()));

@@ -73,6 +73,9 @@ class IdentityLifecycleTest {
     void testGetCreatedWorkloadIdentity() {
         var wi = identityClient.getWorkloadIdentity(createdWorkloadIdentityName);
         assertNotNull(wi);
+        assertNotNull(wi.getWorkloadIdentity(), "workload identity body should be present");
+        assertEquals(createdWorkloadIdentityName, wi.getWorkloadIdentity().getName(),
+                "get_workload_identity should return the identity whose name matches the request");
     }
 
     // 2. test_update_workload_identity

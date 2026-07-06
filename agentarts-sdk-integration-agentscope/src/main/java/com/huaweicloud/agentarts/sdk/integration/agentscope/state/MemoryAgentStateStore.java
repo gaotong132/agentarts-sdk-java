@@ -263,13 +263,20 @@ public class MemoryAgentStateStore implements AgentStateStore {
 
     /**
      * 从 MessageInfo 中提取文本内容。
+     *
+     * <p>每个 part 既可能是结构化对象（{@code {"type":"text","text":...}}），
+     * 也可能是后端在内容加密不可读时返回的字符串标记（如 {@code "_encrypted"}）。
+     * 非 Map 的 part 一律跳过。</p>
      */
+    @SuppressWarnings("unchecked")
     private String extractText(MessageInfo msg) {
         if (msg == null || msg.getParts() == null) return null;
         StringBuilder sb = new StringBuilder();
-        for (Map<String, Object> part : msg.getParts()) {
-            if ("text".equals(part.get("type")) && part.get("text") != null) {
-                sb.append(part.get("text"));
+        for (Object part : msg.getParts()) {
+            if (!(part instanceof Map)) continue;
+            Map<String, Object> p = (Map<String, Object>) part;
+            if ("text".equals(p.get("type")) && p.get("text") != null) {
+                sb.append(p.get("text"));
             }
         }
         return sb.isEmpty() ? null : sb.toString();

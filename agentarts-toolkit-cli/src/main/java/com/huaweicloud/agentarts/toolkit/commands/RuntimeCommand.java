@@ -95,7 +95,7 @@ public class RuntimeCommand implements Runnable {
                         bearerToken, endpoint, userId, timeout);
                 CliSupport.printJson(result);
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to execute command: " + e.getMessage());
             }
         }
@@ -159,7 +159,7 @@ public class RuntimeCommand implements Runnable {
                         null, null, null, bearerToken, endpoint, userId, timeout);
                 CliSupport.printJson(result);
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to upload files: " + e.getMessage());
             }
         }
@@ -243,7 +243,7 @@ public class RuntimeCommand implements Runnable {
                 outMap.put("path", remotePath);
                 CliSupport.printJson(outMap);
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to download files: " + e.getMessage());
             }
         }
@@ -286,7 +286,7 @@ public class RuntimeCommand implements Runnable {
                         agentName, bearerToken, endpoint, userId, 30);
                 CliSupport.printJson(result);
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to start session: " + e.getMessage());
             }
         }
@@ -325,7 +325,7 @@ public class RuntimeCommand implements Runnable {
                         agentName, sessionId, bearerToken, endpoint, userId, 30);
                 CliSupport.printJson(result);
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to stop session: " + e.getMessage());
             }
         }

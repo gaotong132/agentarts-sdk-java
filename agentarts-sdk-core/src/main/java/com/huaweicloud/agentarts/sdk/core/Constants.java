@@ -254,8 +254,12 @@ public final class Constants {
 
     /**
      * Ensure endpoint has https:// prefix.
+     *
+     * <p>Public because it is called from other packages (e.g. the runtime /
+     * code-interpreter / memory service clients) to normalize user-provided
+     * endpoint overrides before signing.</p>
      */
-    static String ensureHttps(String endpoint) {
+    public static String ensureHttps(String endpoint) {
         if (JsonUtils.isBlank(endpoint)) {
             return "";
         }

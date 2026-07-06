@@ -78,13 +78,27 @@ public class BaseHttpClient implements AutoCloseable {
 
     /**
      * Create a BaseHttpClient with its own Vert.x instance.
+     *
+     * <p>The Vert.x instance is configured with a hardened DNS address resolver:
+     * longer per-query timeout (10s vs the 5s default), more query attempts
+     * (8 vs the 2–4 default), and negative-result caching disabled. The default
+     * Netty async DNS resolver is unreliable on some networks (UDP queries to a
+     * single server can time out), which previously caused intermittent
+     * {@code UnknownHostException} on cloud endpoints that the system resolver
+     * could resolve fine.</p>
      */
     public BaseHttpClient(RequestConfig config, boolean openAkSk, SignMode signMode, String regionId) {
         this.config = config != null ? config : new RequestConfig();
         this.openAkSk = openAkSk;
         this.signMode = signMode != null ? signMode : SignMode.SDK_HMAC_SHA256;
         this.regionId = regionId != null ? regionId : Constants.getRegion();
-        this.vertx = Vertx.vertx();
+        io.vertx.core.VertxOptions vertxOptions = new io.vertx.core.VertxOptions()
+                .setAddressResolverOptions(new io.vertx.core.dns.AddressResolverOptions()
+                        .setQueryTimeout(10_000L)
+                        .setMaxQueries(8)
+                        .setCacheNegativeTimeToLive(0)
+                        .setRdFlag(true));
+        this.vertx = Vertx.vertx(vertxOptions);
         this.ownVertx = true;
         this.webClient = createWebClient(vertx);
     }
@@ -199,7 +213,30 @@ public class BaseHttpClient implements AutoCloseable {
                                         Object body,
                                         Map<String, List<String>> queryParams) {
         return Mono.fromFuture(() -> executeRequest(method, url, headers, body, queryParams))
-                .subscribeOn(Schedulers.boundedElastic());
+                .subscribeOn(Schedulers.boundedElastic())
+                // Retry on transient DNS resolution failures — the Netty async
+                // resolver can time out on networks where the system resolver
+                // would succeed. Each retry re-signs (fresh timestamp) via
+                // executeRequest.
+                .<RequestResult>flatMap(result -> {
+                    if (result != null && !result.isSuccess() && result.getError() != null
+                            && result.getError().contains("Failed to resolve")) {
+                        return Mono.error(new java.io.IOException("DNS resolution failed: "
+                                + result.getError()));
+                    }
+                    return Mono.just(result);
+                })
+                .retryWhen(reactor.util.retry.Retry
+                        .max(3)
+                        .filter(e -> e instanceof java.io.IOException
+                                && e.getMessage() != null
+                                && e.getMessage().contains("DNS resolution failed"))
+                        .doBeforeRetry(rc -> LOG.warn("Retrying after DNS failure (attempt {}): {}",
+                                rc.totalRetries() + 1, rc.failure().getMessage())))
+                .onErrorResume(e -> Mono.just(RequestResult.builder()
+                        .success(false)
+                        .error("Request error: " + e.getMessage())
+                        .build()));
     }
 
     private CompletableFuture<RequestResult> executeRequest(String method, String url,

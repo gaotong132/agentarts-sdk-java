@@ -59,7 +59,7 @@ public class McpGatewayCommand implements Runnable {
                 CliSupport.fail("Error creating MCP gateway (HTTP "
                         + e.getStatusCode() + "): " + e.getMessage());
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Error creating MCP gateway: " + e.getMessage());
             }
         }
@@ -80,7 +80,7 @@ public class McpGatewayCommand implements Runnable {
                 }
                 CliSupport.printJson(result.getData());
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Error updating MCP gateway: " + e.getMessage());
             }
         }
@@ -104,7 +104,7 @@ public class McpGatewayCommand implements Runnable {
                     System.out.println("Gateway deleted successfully: " + gatewayId);
                 }
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Error deleting MCP gateway: " + e.getMessage());
             }
         }
@@ -124,7 +124,7 @@ public class McpGatewayCommand implements Runnable {
                 }
                 CliSupport.printJson(result.getData());
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Error getting MCP gateway: " + e.getMessage());
             }
         }
@@ -150,7 +150,7 @@ public class McpGatewayCommand implements Runnable {
                 }
                 CliSupport.printJson(result.getData());
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Error listing MCP gateways: " + e.getMessage());
             }
         }
@@ -177,7 +177,7 @@ public class McpGatewayCommand implements Runnable {
                 }
                 CliSupport.printJson(result.getData());
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Error creating MCP gateway target: " + e.getMessage());
             }
         }
@@ -205,7 +205,7 @@ public class McpGatewayCommand implements Runnable {
                 }
                 CliSupport.printJson(result.getData());
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Error updating MCP gateway target: " + e.getMessage());
             }
         }
@@ -230,7 +230,7 @@ public class McpGatewayCommand implements Runnable {
                     System.out.println("Target deleted successfully: " + targetId);
                 }
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Error deleting MCP gateway target: " + e.getMessage());
             }
         }
@@ -251,7 +251,7 @@ public class McpGatewayCommand implements Runnable {
                 }
                 CliSupport.printJson(result.getData());
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Error getting MCP gateway target: " + e.getMessage());
             }
         }
@@ -273,7 +273,7 @@ public class McpGatewayCommand implements Runnable {
                 }
                 CliSupport.printJson(result.getData());
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Error listing MCP gateway targets: " + e.getMessage());
             }
         }

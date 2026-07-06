@@ -49,9 +49,11 @@ class RuntimeSessionLifecycleTest {
                     () -> client.stopSession(agentName, backendSid),
                     "runtime_session:" + agentName + ":" + backendSid);
 
-            // 2. Exec command
+            // 2. Exec command — assert the echoed stdout is present in the result
             Map<String, Object> cmd = client.execCommand(agentName, backendSid, "echo hello-aa-it");
             assertNotNull(cmd);
+            assertTrue(cmd.toString().contains("hello-aa-it"),
+                    "exec_command result should contain the echoed stdout, got: " + cmd);
 
             // 3. Upload file
             Map<String, Object> up = client.uploadFiles(agentName, backendSid,
@@ -61,10 +63,13 @@ class RuntimeSessionLifecycleTest {
                             "description", "e2e test file")));
             assertNotNull(up);
 
-            // 4. Download file
+            // 4. Download file — verify content round-trip, not just HTTP 200
             RequestResult dl = client.downloadFiles(agentName, backendSid, "/home/user/aa-it-test.txt");
             assertNotNull(dl);
             assertTrue(dl.isSuccess());
+            assertNotNull(dl.getDataAsString(), "download response body should not be null");
+            assertTrue(dl.getDataAsString().contains("hello-aa-it"),
+                    "downloaded content should contain the uploaded bytes, got: " + dl.getDataAsString());
 
             // 5. Stop session
             client.stopSession(agentName, backendSid);

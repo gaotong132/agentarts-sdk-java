@@ -98,8 +98,15 @@ public class MemoryUsageExample {
                 Map<String, String> entry = new HashMap<>();
                 entry.put("role", msg.getRole());
                 if (msg.getParts() != null && !msg.getParts().isEmpty()) {
-                    Map<String, Object> part = msg.getParts().get(0);
-                    Object content = part.getOrDefault("text", part.getOrDefault("content", ""));
+                    Object first = msg.getParts().get(0);
+                    Object content = "";
+                    if (first instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> part = (Map<String, Object>) first;
+                        content = part.getOrDefault("text", part.getOrDefault("content", ""));
+                    } else {
+                        content = String.valueOf(first);
+                    }
                     entry.put("content", String.valueOf(content));
                 }
                 historyList.add(entry);

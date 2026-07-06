@@ -43,15 +43,20 @@ class CodeInterpreterSessionTest {
             assertNotNull(codeResult);
             assertTrue(codeResult.toString().contains("2"));
 
-            // execute_command
+            // execute_command — echo the same string we will upload, so the shell
+            // output and the file content are tied by the same sentinel.
             Map<String, Object> cmdResult = client.executeCommand("echo hello-aa-it");
             assertNotNull(cmdResult);
+            assertTrue(cmdResult.toString().contains("hello-aa-it"),
+                    "execute_command result should contain the echoed stdout, got: " + cmdResult);
 
-            // upload_file + download_file round-trip
-            Map<String, Object> up = client.uploadFile("/home/user/aa-it-test.txt", "FILE_CONTENT", "test");
+            // upload_file + download_file round-trip on the same sentinel content
+            Map<String, Object> up = client.uploadFile("/home/user/aa-it-test.txt", "hello-aa-it", "test");
             assertNotNull(up);
             Object downloaded = client.downloadFile("/home/user/aa-it-test.txt");
-            assertTrue(downloaded.toString().contains("FILE_CONTENT"));
+            assertNotNull(downloaded);
+            assertTrue(downloaded.toString().contains("hello-aa-it"),
+                    "downloaded content should contain the uploaded sentinel bytes, got: " + downloaded);
 
             // get_session
             var sess = client.getSession(ciName, session.getSessionId());

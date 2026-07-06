@@ -85,6 +85,9 @@ class IdentityReadonlyTest {
         try {
             var wi = identityClient.getWorkloadIdentity(name);
             assertNotNull(wi);
+            assertNotNull(wi.getWorkloadIdentity(), "workload identity body should be present");
+            assertEquals(name, wi.getWorkloadIdentity().getName(),
+                    "get_workload_identity should return the identity whose name matches the request");
 
             String token = identityClient.createWorkloadAccessToken(name);
             assertNotNull(token);

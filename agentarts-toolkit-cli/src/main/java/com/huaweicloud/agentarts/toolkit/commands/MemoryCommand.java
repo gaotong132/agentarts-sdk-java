@@ -73,7 +73,7 @@ public class MemoryCommand implements Runnable {
                     System.out.println("  Status: " + (space.getStatus() != null ? space.getStatus() : "N/A"));
                 }
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to create memory space: " + e.getMessage());
             }
         }
@@ -98,7 +98,7 @@ public class MemoryCommand implements Runnable {
                     System.out.println("  Message TTL: " + space.getMessageTtlHours() + " hours");
                 }
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to get memory space: " + e.getMessage());
             }
         }
@@ -129,7 +129,7 @@ public class MemoryCommand implements Runnable {
                     }
                 }
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to list memory spaces: " + e.getMessage());
             }
         }
@@ -164,7 +164,7 @@ public class MemoryCommand implements Runnable {
                     System.out.println("  Space ID: " + spaceId);
                 }
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to update memory space: " + e.getMessage());
             }
         }
@@ -183,7 +183,7 @@ public class MemoryCommand implements Runnable {
                 System.out.println("Space deleted successfully!");
                 System.out.println("  Space ID: " + spaceId);
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to delete memory space: " + e.getMessage());
             }
         }
@@ -216,7 +216,7 @@ public class MemoryCommand implements Runnable {
                     System.out.println("  Health: " + computeHealth(space.getStatus()));
                 }
             } catch (Exception e) {
-                if (e instanceof CliSupport.CliFailure) throw e;
+                if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to get memory space status: " + e.getMessage());
             }
         }

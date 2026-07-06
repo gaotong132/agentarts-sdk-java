@@ -256,8 +256,10 @@ class RuntimeAppLocalTest {
                     })
                     .onFailure(err -> latch.countDown());
             assertTrue(latch.await(5, TimeUnit.SECONDS));
-            // WebSocket should have been closed by server (1011 or similar)
-            assertNotNull(closeCode.get());
+            // Server must close the socket with code 1011 (internal error) when no handler is registered.
+            assertNotNull(closeCode.get(), "server should have closed the websocket");
+            assertEquals((short) 1011, closeCode.get(),
+                    "websocket without handler must be closed with code 1011, got " + closeCode.get());
         } finally {
             app.stop();
         }

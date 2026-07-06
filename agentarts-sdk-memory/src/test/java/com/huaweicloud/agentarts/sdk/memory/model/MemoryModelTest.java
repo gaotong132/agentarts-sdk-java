@@ -715,7 +715,9 @@ class MemoryModelTest {
             assertEquals("user", info.getRole());
             assertNotNull(info.getParts());
             assertEquals(1, info.getParts().size());
-            assertEquals("text", info.getParts().get(0).get("type"));
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> firstPart = (java.util.Map<String, Object>) info.getParts().get(0);
+            assertEquals("text", firstPart.get("type"));
             assertEquals("key-1", info.getIdempotencyKey());
             assertEquals(1704067200000L, info.getMessageTime());
         }

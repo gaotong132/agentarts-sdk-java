@@ -118,19 +118,28 @@ class McpGatewayLifecycleTest {
 
     // 2. test_list_gateways
     @Test @Order(2)
-    @DisplayName("list_mcp_gateways returns a list")
+    @DisplayName("list_mcp_gateways returns a list containing the created gateway")
     void testListGateways() {
-        RequestResult result = client.listMcpGateways(null, 10, null);
+        RequestResult result = client.listMcpGateways(null, 100, null);
         assertTrue(result.isSuccess(), result.getError());
         assertNotNull(result.getData());
+        assertNotNull(result.getDataAsJson(), "list response body should be parseable JSON");
+        assertTrue(result.getDataAsJson().toString().contains(gatewayId),
+                "list_mcp_gateways response should contain the created gateway id " + gatewayId);
     }
 
     // 3. test_update_gateway
     @Test @Order(3)
-    @DisplayName("update_mcp_gateway updates the description")
+    @DisplayName("update_mcp_gateway persists the new description")
     void testUpdateGateway() {
-        RequestResult result = client.updateMcpGateway(gatewayId, "updated description");
+        RequestResult result = client.updateMcpGateway(gatewayId, "updated description by aa-it");
         assertTrue(result.isSuccess(), result.getError());
+        // Re-get and assert the description actually persisted.
+        RequestResult refetched = client.getMcpGateway(gatewayId);
+        assertTrue(refetched.isSuccess(), refetched.getError());
+        assertNotNull(refetched.getDataAsJson(), "get_mcp_gateway body should be parseable JSON");
+        assertTrue(refetched.getDataAsJson().toString().contains("updated description by aa-it"),
+                "updated description should be persisted on the gateway, got: " + refetched.getDataAsJson());
     }
 
     // 4. test_get_target
@@ -143,19 +152,28 @@ class McpGatewayLifecycleTest {
 
     // 5. test_list_targets
     @Test @Order(5)
-    @DisplayName("list_mcp_gateway_targets returns a list")
+    @DisplayName("list_mcp_gateway_targets returns a list containing the created target")
     void testListTargets() {
-        RequestResult result = client.listMcpGatewayTargets(gatewayId, 10, null);
+        RequestResult result = client.listMcpGatewayTargets(gatewayId, 100, null);
         assertTrue(result.isSuccess(), result.getError());
         assertNotNull(result.getData());
+        assertNotNull(result.getDataAsJson(), "list response body should be parseable JSON");
+        assertTrue(result.getDataAsJson().toString().contains(targetId),
+                "list_mcp_gateway_targets response should contain the created target id " + targetId);
     }
 
     // 6. test_update_target
     @Test @Order(6)
-    @DisplayName("update_mcp_gateway_target updates the description")
+    @DisplayName("update_mcp_gateway_target persists the new description")
     void testUpdateTarget() {
         RequestResult result = client.updateMcpGatewayTarget(
-                gatewayId, targetId, null, "updated target", null, null);
+                gatewayId, targetId, null, "updated target by aa-it", null, null);
         assertTrue(result.isSuccess(), result.getError());
+        // Re-get and assert the description actually persisted.
+        RequestResult refetched = client.getMcpGatewayTarget(gatewayId, targetId);
+        assertTrue(refetched.isSuccess(), refetched.getError());
+        assertNotNull(refetched.getDataAsJson(), "get_mcp_gateway_target body should be parseable JSON");
+        assertTrue(refetched.getDataAsJson().toString().contains("updated target by aa-it"),
+                "updated description should be persisted on the target, got: " + refetched.getDataAsJson());
     }
 }
