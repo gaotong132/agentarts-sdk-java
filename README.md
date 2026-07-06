@@ -340,14 +340,15 @@ mvn test -pl agentarts-sdk-tests -Dtest='CodeInterpreterSessionTest,RuntimeSessi
 
 ## Testing
 
-The test suite includes **693 tests** across two layers:
+The test suite includes **693 tests** across three layers:
 
 | Layer | Count | Description |
 |---|---|---|
-| Unit + integration | 617 | V11 signing, HTTP client, Runtime server/client, Identity, Memory, Tools, MCP Gateway, agentscope, CLI, Spring Boot, cross-module — no cloud credentials needed |
-| E2E | 76 | Real cloud API calls (`agentarts-sdk-tests` e2e package), cross-validated against the Python SDK `tests/integration/` (`feature/test` branch) |
+| Unit + integration | 552 | V11 signing, HTTP client, Runtime server/client, Identity, Memory, Tools, MCP Gateway, agentscope, Spring Boot, cross-module — no cloud credentials needed |
+| Cloud E2E | 76 | Real cloud API calls (`agentarts-sdk-tests` e2e package) |
+| CLI scaffolding | 65 | `agentarts-toolkit-cli` template rendering, picocli command-tree/option parsing, init/config structure (no Docker/cloud) |
 
-E2E by module: Identity (14), Memory (29, incl. 7 Java-only state-store cases), MCP Gateway (6), Code Interpreter (4), Runtime (18), Auth decorators (3), read-only probes (4). Full per-case mapping in the [E2E 测试指南](docs/cn/e2e_testing_guide.md).
+Cloud E2E by area: Identity (14), Memory (29, incl. 7 Java-only state-store cases), Gateway (6, currently xfail — pending IAM agency fix sync), Code Interpreter (4), Runtime (18), Auth decorators (3), read-only probes (4). Cross-validated against the Python SDK `tests/integration/` (`feature/test` branch, commit `d130e21`, 90 cases). Full per-case mapping, known gaps (CLI cloud/Docker e2e, langgraph/langchain/google-adk templates), and the gateway xfail discrepancy are documented in the [E2E 测试指南](docs/cn/e2e_testing_guide.md).
 
 ### E2E Three-Tier Safety Model
 
