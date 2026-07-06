@@ -109,6 +109,11 @@ class MemoryLifecycleTest {
         SpaceInfo updated = controlClient.updateSpace(
                 memorySpace.getId(), null, "updated description", null);
         assertEquals(memorySpace.getId(), updated.getId());
+        // Re-get and assert the mutated field equals what was sent.
+        SpaceInfo refetched = controlClient.getSpace(memorySpace.getId());
+        assertNotNull(refetched);
+        assertEquals("updated description", refetched.getDescription(),
+                "update_space should persist the new description");
     }
 
     // 4. test_session_created
@@ -161,37 +166,57 @@ class MemoryLifecycleTest {
 
     // 9. test_search_memories
     @Test @Order(9)
-    @DisplayName("search_memories returns results list")
+    @DisplayName("search_memories returns a consistent results list")
     void testSearchMemories() {
         MemorySearchResponse result = dataClient.searchMemories(memorySpace.getId());
-        assertNotNull(result.getResults());
-        assertTrue(result.getTotal() >= 0);
+        assertNotNull(result);
+        assertNotNull(result.getResults(), "results should be a list");
+        assertTrue(result.getResults() instanceof java.util.List, "results should be a List");
+        assertTrue(result.getTotal() >= 0, "total should be a non-negative int");
+        // Consistency check (not tautology): total must equal the number of results.
+        assertEquals(result.getResults().size(), result.getTotal(),
+                "total must match results.size() for a non-paginated search response");
     }
 
     // 10. test_list_memories
     @Test @Order(10)
-    @DisplayName("list_memories returns items list")
+    @DisplayName("list_memories returns a consistent items list")
     void testListMemories() {
         MemoryListResponse result = dataClient.listMemories(memorySpace.getId());
-        assertNotNull(result.getItems());
-        assertTrue(result.getTotal() >= 0);
+        assertNotNull(result);
+        assertNotNull(result.getItems(), "items should be a list");
+        assertTrue(result.getItems() instanceof java.util.List, "items should be a List");
+        assertTrue(result.getTotal() >= 0, "total should be a non-negative int");
+        // Consistency check (not tautology): total must equal the number of items returned
+        // for this page (the API returns total items for the page, not the global count).
+        assertEquals(result.getItems().size(), result.getTotal(),
+                "total must match items.size() for the returned page");
     }
 
     // 11. test_delete_memory_if_any
     @Test @Order(11)
-    @DisplayName("delete_memory if any exist, else skip")
+    @DisplayName("delete_memory removes an extracted memory (force_extract=true must yield memories)")
     void testDeleteMemoryIfAny() throws Exception {
-        // Poll for memory extraction (force_extract may still be async on the backend)
+        // force_extract=true was requested in setUp; memory extraction should produce
+        // memories to delete. Poll for extraction, then ASSERT non-empty (do not skip).
         MemoryListResponse result = null;
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 24; i++) {
             result = dataClient.listMemories(memorySpace.getId(), 10, 0, null);
             if (result.getItems() != null && !result.getItems().isEmpty()) break;
             Thread.sleep(5000);
         }
-        if (result == null || result.getItems() == null || result.getItems().isEmpty()) {
-            assumeTrue(false, "no extracted memories to delete after polling (10x5s)");
-        }
-        dataClient.deleteMemory(memorySpace.getId(), result.getItems().get(0).getId());
+        assertNotNull(result, "listMemories should return a response after polling");
+        assertNotNull(result.getItems(), "extracted memories list should not be null");
+        assertFalse(result.getItems().isEmpty(),
+                "is_force_extract=true but no memories extracted after polling (24x5s) — extraction may be broken");
+        String memoryId = result.getItems().get(0).getId();
+        assertNotNull(memoryId, "extracted memory should have an id");
+        dataClient.deleteMemory(memorySpace.getId(), memoryId);
+        // Re-list and assert the deleted memory is gone.
+        MemoryListResponse after = dataClient.listMemories(memorySpace.getId(), 20, 0, null);
+        boolean stillThere = after.getItems() == null
+                || after.getItems().stream().noneMatch(m -> memoryId.equals(m.getId()));
+        assertTrue(stillThere, "deleted memory " + memoryId + " should no longer appear in list");
     }
 
     // 12. test_memory_session_wrapper

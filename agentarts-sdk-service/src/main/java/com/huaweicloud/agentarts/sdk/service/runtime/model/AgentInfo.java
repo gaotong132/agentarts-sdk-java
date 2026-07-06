@@ -26,6 +26,8 @@ public class AgentInfo {
     @JsonProperty("workload_identity") private Map<String, Object> workloadIdentity;
     @JsonProperty("environment_variables") private List<Map<String, String>> environmentVariables;
     @JsonProperty("tags") private List<Map<String, String>> tags;
+    @JsonProperty("latest_version") private String latestVersion;
+    @JsonProperty("version_detail") private VersionDetail versionDetail;
 
     public String getId() { return id; }
     public String getName() { return name; }
@@ -43,4 +45,6 @@ public class AgentInfo {
     public Map<String, Object> getWorkloadIdentity() { return workloadIdentity; }
     public List<Map<String, String>> getEnvironmentVariables() { return environmentVariables; }
     public List<Map<String, String>> getTags() { return tags; }
+    public String getLatestVersion() { return latestVersion; }
+    public VersionDetail getVersionDetail() { return versionDetail; }
 }

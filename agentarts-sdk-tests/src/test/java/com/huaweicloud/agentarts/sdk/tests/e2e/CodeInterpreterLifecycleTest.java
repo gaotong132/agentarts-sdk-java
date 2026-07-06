@@ -68,19 +68,38 @@ class CodeInterpreterLifecycleTest {
 
     // 2. test_list_code_interpreters
     @Test @Order(2)
-    @DisplayName("list_code_interpreters returns a response")
+    @DisplayName("list_code_interpreters contains the created CI")
     void testListCodeInterpreters() {
-        var result = client.listCodeInterpreters(null, 10, 0);
+        var result = client.listCodeInterpreters(null, 100, 0);
         assertNotNull(result);
+        assertNotNull(result.getItems(), "items should be a list");
+        assertTrue(result.getItems() instanceof java.util.List, "items should be a List");
+        assertTrue(result.getTotalCount() >= 0, "total_count should be a non-negative int");
+        // The created CI should appear in the list (match by id).
+        boolean contains = result.getItems().stream()
+                .anyMatch(ci -> ciId.equals(ci.getId()));
+        assertTrue(contains, "created code interpreter " + ciId + " should appear in list");
     }
 
     // 3. test_update_code_interpreter
     @Test @Order(3)
-    @DisplayName("update_code_interpreter succeeds")
+    @DisplayName("update_code_interpreter persists the new tags")
     void testUpdateCodeInterpreter() {
         assertNotNull(ciId, "Code interpreter ID should be set from setup");
+        java.util.Map<String, String> tagPair = new java.util.LinkedHashMap<>();
+        tagPair.put("key", "env");
+        tagPair.put("value", "aa-it");
         CodeInterpreterInfo updated = client.updateCodeInterpreter(ciId,
-                null, java.util.List.of(Map.of("key", "env", "value", "aa-it")));
+                null, java.util.List.of(tagPair));
         assertNotNull(updated);
+        assertEquals(ciId, updated.getId());
+
+        // Re-get and assert the tags include the pair we sent.
+        CodeInterpreterInfo refetched = client.getCodeInterpreter(ciId);
+        assertNotNull(refetched);
+        assertNotNull(refetched.getTags(), "tags should be present on the CI after update");
+        boolean hasPair = refetched.getTags().stream()
+                .anyMatch(t -> "env".equals(t.get("key")) && "aa-it".equals(t.get("value")));
+        assertTrue(hasPair, "re-fetched CI tags should include {env=aa-it}: " + refetched.getTags());
     }
 }

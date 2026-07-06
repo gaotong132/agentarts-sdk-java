@@ -25,12 +25,14 @@ class ReadonlyListsTest {
 
     // 1. test_list_spaces
     @Test
-    @DisplayName("list_spaces returns items list")
+    @DisplayName("list_spaces returns a parseable response with a non-negative total")
     void testListSpaces() {
         try (MemoryClient client = new MemoryClient(E2EConfig.getRegion(), null)) {
             var result = client.listSpaces(1, 0);
             assertNotNull(result);
             assertNotNull(result.getItems(), "items should be a list");
+            assertTrue(result.getItems() instanceof java.util.List, "items should be a List");
+            assertTrue(result.getTotal() >= 0, "total should be a non-negative int");
         }
     }
 
@@ -52,21 +54,27 @@ class ReadonlyListsTest {
 
     // 3. test_list_runtime_agents
     @Test
-    @DisplayName("list_runtime_agents returns a list")
+    @DisplayName("list_runtime_agents returns a parseable response with a non-negative total")
     void testListRuntimeAgents() {
         try (RuntimeClient client = new RuntimeClient(E2EConfig.getRegion())) {
             var agents = client.getAgents(null, 1, 10);
-            assertNotNull(agents, "agents should be a list");
+            assertNotNull(agents, "agents response should not be null");
+            assertNotNull(agents.getItems(), "items should be a list");
+            assertTrue(agents.getItems() instanceof java.util.List, "items should be a List");
+            assertTrue(agents.getTotal() >= 0, "total should be a non-negative int");
         }
     }
 
     // 4. test_list_code_interpreters
     @Test
-    @DisplayName("list_code_interpreters returns a dict")
+    @DisplayName("list_code_interpreters returns a parseable response with a non-negative count")
     void testListCodeInterpreters() {
         try (CodeInterpreterClient client = new CodeInterpreterClient(E2EConfig.getRegion())) {
             var result = client.listCodeInterpreters(null, 1, 0);
-            assertNotNull(result, "result should be a dict");
+            assertNotNull(result, "result should not be null");
+            assertNotNull(result.getItems(), "items should be a list");
+            assertTrue(result.getItems() instanceof java.util.List, "items should be a List");
+            assertTrue(result.getTotalCount() >= 0, "total_count should be a non-negative int");
         }
     }
 }

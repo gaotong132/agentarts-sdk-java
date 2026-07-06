@@ -640,14 +640,15 @@ class CliE2ETest {
     class InputValidationE2E {
 
         @Test
-        void initPrintsErrorWhenNameMissing(@TempDir Path tempDir) {
-            // InitCommand is a Runnable, so exit code is always 0
-            // But it should print error and NOT create project directory
+        void initPrintsErrorWhenNameMissing(@TempDir Path tempDir) throws Exception {
+            // InitCommand returns a non-zero exit code on validation failure
+            // (missing --name), and must not create any project directory.
             CommandLine cli = new CommandLine(new AgentArtsCli());
             int exitCode = cli.execute("init", "--path", tempDir.toString());
-            assertEquals(0, exitCode); // Runnable always returns 0
+            assertNotEquals(0, exitCode, "init with missing --name should exit non-zero");
             // No project directory should be created since --name was not provided
-            // The command prints "Error: --name is required" and returns early
+            assertEquals(0, Files.list(tempDir).count(),
+                    "no files/dirs should be created when --name is missing");
         }
 
         @Test

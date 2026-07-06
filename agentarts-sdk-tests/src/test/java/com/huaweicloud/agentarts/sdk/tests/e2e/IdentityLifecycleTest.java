@@ -79,10 +79,19 @@ class IdentityLifecycleTest {
     @Test @Order(2)
     @DisplayName("update_workload_identity sets OAuth2 return URLs")
     void testUpdateWorkloadIdentity() {
+        String callback = "https://example.com/callback";
         var updated = identityClient.updateWorkloadIdentity(
                 createdWorkloadIdentityName,
-                java.util.List.of("https://example.com/callback"));
+                java.util.List.of(callback));
         assertNotNull(updated);
+        // Re-get and assert the OAuth2 return URLs include the URL we sent.
+        var refetched = identityClient.getWorkloadIdentity(createdWorkloadIdentityName);
+        assertNotNull(refetched);
+        assertNotNull(refetched.getWorkloadIdentity(), "workload identity body should be present");
+        List<String> urls = refetched.getWorkloadIdentity().getAllowedResourceOauth2ReturnUrls();
+        assertNotNull(urls, "allowed_resource_oauth2_return_urls should be present after update");
+        assertTrue(urls.contains(callback),
+                "OAuth2 return URLs should include the URL sent in update: " + urls);
     }
 
     // 3. test_list_workload_identities_contains_created
@@ -142,6 +151,8 @@ class IdentityLifecycleTest {
         assertNotNull(token);
         var result = identityClient.getResourceApiKey(createdApiKeyName, token);
         assertNotNull(result);
+        assertNotNull(result.getApiKey(), "resource API key must not be null");
+        assertFalse(result.getApiKey().isEmpty(), "resource API key must be non-empty");
     }
 
     // 8. test_create_and_delete_oauth2_credential_provider
@@ -167,6 +178,9 @@ class IdentityLifecycleTest {
                             new GetOauth2CredentialProviderRequest()
                                     .withCredentialProviderName(name));
             assertNotNull(cp);
+            assertNotNull(cp.getCredentialProvider(), "credential provider should be present");
+            assertEquals(name, cp.getCredentialProvider().getName(),
+                    "created OAuth2 provider name should match");
         } finally {
             identityClient.getServiceClient().deleteOauth2CredentialProvider(
                     new DeleteOauth2CredentialProviderRequest()
@@ -190,6 +204,9 @@ class IdentityLifecycleTest {
                             new GetStsCredentialProviderRequest()
                                     .withCredentialProviderName(name));
             assertNotNull(cp);
+            assertNotNull(cp.getCredentialProvider(), "credential provider should be present");
+            assertEquals(name, cp.getCredentialProvider().getName(),
+                    "created STS provider name should match");
         } finally {
             identityClient.getServiceClient().deleteStsCredentialProvider(
                     new DeleteStsCredentialProviderRequest()

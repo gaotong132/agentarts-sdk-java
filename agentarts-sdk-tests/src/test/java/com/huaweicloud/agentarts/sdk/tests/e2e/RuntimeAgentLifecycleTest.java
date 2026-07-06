@@ -119,25 +119,36 @@ class RuntimeAgentLifecycleTest {
     void testUpdateAgent() {
         requireSetup();
         AgentInfo updated = client.updateAgent(createdAgentId,
-                new UpdateAgentRequest().withDescription("updated description"));
+                new UpdateAgentRequest().withDescription("updated by aa-it"));
         assertNotNull(updated);
         assertEquals(createdAgentId, updated.getId());
+        // Re-get and assert the mutated field equals what was sent. The backend
+        // applies the description to the new version's version_detail, so assert
+        // the latest version's description was persisted.
+        AgentInfo refetched = client.findAgentById(createdAgentId);
+        assertNotNull(refetched, "findAgentById after update should return the agent");
+        assertNotNull(refetched.getVersionDetail(),
+                "agent response should expose version_detail after update");
+        assertEquals("updated by aa-it", refetched.getVersionDetail().getDescription(),
+                "update_agent should persist the new description on the latest version");
     }
 
     // 5. test_find_agent_endpoint
     @Test @Order(5)
-    @DisplayName("create and find agent endpoint")
+    @DisplayName("create and find agent endpoint by id")
     void testFindAgentEndpoint() {
         requireSetup();
         createdEndpointName = E2EHelpers.uniqueName("ep", runId);
         AgentEndpointInfo ep = client.createAgentEndpoint(createdAgentId, createdEndpointName);
         assertNotNull(ep);
         assertNotNull(ep.getId(), "endpoint should have an id");
+        String endpointId = ep.getId();
 
-        // Note: GET /runtimes/{id}/endpoints/{name} returns 404 in current API version.
-        // The endpoint was created successfully (verified above), but the lookup API
-        // may require the endpoint UUID instead of name. This matches Python SDK behavior
-        // which also doesn't test endpoint CRUD against real backend.
+        // Find by endpoint ID and assert the found endpoint matches the created one.
+        AgentEndpointInfo found = client.findAgentEndpoint(createdAgentId, endpointId);
+        assertNotNull(found, "findAgentEndpoint should return the endpoint");
+        assertEquals(endpointId, found.getId(), "found endpoint id must match created id");
+        assertEquals(createdEndpointName, found.getName(), "found endpoint name must match created name");
     }
 
     // 6. test_update_agent_endpoint
@@ -149,8 +160,21 @@ class RuntimeAgentLifecycleTest {
         AgentEndpointInfo ep = client.createAgentEndpoint(createdAgentId, epName);
         assertNotNull(ep);
         assertNotNull(ep.getId(), "endpoint should have an id");
+        String endpointId = ep.getId();
 
-        // Note: PUT /runtimes/{id}/endpoints/{name} returns 404 in current API version.
-        // Same limitation as findAgentEndpoint — the API may require endpoint UUID.
+        // Update by endpoint ID, then re-find and assert the update persisted.
+        Map<String, Object> newConfig = Map.of("note", "updated by aa-it");
+        AgentEndpointInfo updated = client.updateAgentEndpoint(createdAgentId, endpointId, newConfig);
+        assertNotNull(updated, "updateAgentEndpoint should return the updated endpoint");
+        assertEquals(endpointId, updated.getId(), "updated endpoint id must match created id");
+
+        AgentEndpointInfo refound = client.findAgentEndpoint(createdAgentId, endpointId);
+        assertNotNull(refound, "re-find after update should return the endpoint");
+        assertEquals(endpointId, refound.getId(), "refound endpoint id must match created id");
+        // Backend may not echo config back; assert it when present.
+        if (refound.getConfig() != null) {
+            assertEquals("updated by aa-it", refound.getConfig().get("note"),
+                    "updateAgentEndpoint should persist the new config");
+        }
     }
 }

@@ -31,33 +31,41 @@ class IdentityReadonlyTest {
         var result = identityClient.listWorkloadIdentities();
         assertNotNull(result);
         assertNotNull(result.getWorkloadIdentities(), "items should be a list");
+        assertTrue(result.getWorkloadIdentities() instanceof java.util.List,
+                "workload identities should be a List");
     }
 
     // 2. test_list_api_key_credential_providers
     @Test
-    @DisplayName("list_api_key_credential_providers returns a list")
+    @DisplayName("list_api_key_credential_providers returns a parseable response")
     void testListApiKeyCredentialProviders() {
-        var result = identityClient.getServiceClient()
-                .listApiKeyCredentialProviders(new ListApiKeyCredentialProvidersRequest());
+        var result = identityClient.listApiKeyCredentialProviders();
         assertNotNull(result);
+        assertNotNull(result.getCredentialProviders(), "items should be a list");
+        assertTrue(result.getCredentialProviders() instanceof java.util.List,
+                "api key providers should be a List");
     }
 
     // 3. test_list_oauth2_credential_providers
     @Test
-    @DisplayName("list_oauth2_credential_providers returns a list")
+    @DisplayName("list_oauth2_credential_providers returns a parseable response")
     void testListOauth2CredentialProviders() {
-        var result = identityClient.getServiceClient()
-                .listOauth2CredentialProviders(new ListOauth2CredentialProvidersRequest());
+        var result = identityClient.listOauth2CredentialProviders();
         assertNotNull(result);
+        assertNotNull(result.getCredentialProviders(), "items should be a list");
+        assertTrue(result.getCredentialProviders() instanceof java.util.List,
+                "oauth2 providers should be a List");
     }
 
     // 4. test_list_sts_credential_providers
     @Test
-    @DisplayName("list_sts_credential_providers returns a list")
+    @DisplayName("list_sts_credential_providers returns a parseable response")
     void testListStsCredentialProviders() {
-        var result = identityClient.getServiceClient()
-                .listStsCredentialProviders(new ListStsCredentialProvidersRequest());
+        var result = identityClient.listStsCredentialProviders();
         assertNotNull(result);
+        assertNotNull(result.getCredentialProviders(), "items should be a list");
+        assertTrue(result.getCredentialProviders() instanceof java.util.List,
+                "sts providers should be a List");
     }
 
     // 5. test_get_and_token_for_workload_identity

@@ -11,6 +11,8 @@ import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 
 import java.util.*;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 /**
  * Memory client with dual-plane architecture (AK/SK control + API Key data).
@@ -423,4 +425,77 @@ public class MemoryClient implements AutoCloseable {
     }
 
     public String getRegionName() { return regionName; }
+
+    // ========================
+    // Async (Reactor) variants
+    // ========================
+    //
+    // Each async method returns a cold Mono that, when subscribed, runs the
+    // corresponding synchronous call on a bounded-elastic scheduler. Subscribing
+    // (or .block() in tests) triggers execution; the production API never blocks.
+
+    private <T> Mono<T> async(java.util.concurrent.Callable<T> callable) {
+        return Mono.fromCallable(callable).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /** Async variant of {@link #createMemorySession(String, String, String, String)}. */
+    public Mono<SessionInfo> createMemorySessionAsync(String spaceId, String id,
+                                                       String actorId, String assistantId) {
+        return async(() -> createMemorySession(spaceId, id, actorId, assistantId));
+    }
+
+    /** Async variant of {@link #addMessages(String, String, List, Long, String, boolean)}. */
+    public Mono<MessageBatchResponse> addMessagesAsync(String spaceId, String sessionId,
+                                                        List<?> messages, Long timestamp,
+                                                        String idempotencyKey, boolean isForceExtract) {
+        return async(() -> addMessages(spaceId, sessionId, messages, timestamp, idempotencyKey, isForceExtract));
+    }
+
+    /** Async variant of {@link #addMessages(String, String, List)}. */
+    public Mono<MessageBatchResponse> addMessagesAsync(String spaceId, String sessionId,
+                                                        List<?> messages) {
+        return async(() -> addMessages(spaceId, sessionId, messages));
+    }
+
+    /** Async variant of {@link #getLastKMessages(String, int, String)}. */
+    public Mono<List<MessageInfo>> getLastKMessagesAsync(String sessionId, int k, String spaceId) {
+        return async(() -> getLastKMessages(sessionId, k, spaceId));
+    }
+
+    /** Async variant of {@link #getMessage(String, String, String)}. */
+    public Mono<MessageInfo> getMessageAsync(String messageId, String spaceId, String sessionId) {
+        return async(() -> getMessage(messageId, spaceId, sessionId));
+    }
+
+    /** Async variant of {@link #listMessages(String, String, int, int)}. */
+    public Mono<MessageListResponse> listMessagesAsync(String spaceId, String sessionId,
+                                                        int limit, int offset) {
+        return async(() -> listMessages(spaceId, sessionId, limit, offset));
+    }
+
+    /** Async variant of {@link #searchMemories(String, MemorySearchFilter)}. */
+    public Mono<MemorySearchResponse> searchMemoriesAsync(String spaceId, MemorySearchFilter filters) {
+        return async(() -> searchMemories(spaceId, filters));
+    }
+
+    /** Async variant of {@link #searchMemories(String)}. */
+    public Mono<MemorySearchResponse> searchMemoriesAsync(String spaceId) {
+        return async(() -> searchMemories(spaceId));
+    }
+
+    /** Async variant of {@link #listMemories(String, int, int, MemoryListFilter)}. */
+    public Mono<MemoryListResponse> listMemoriesAsync(String spaceId, int limit, int offset,
+                                                       MemoryListFilter filters) {
+        return async(() -> listMemories(spaceId, limit, offset, filters));
+    }
+
+    /** Async variant of {@link #listMemories(String)}. */
+    public Mono<MemoryListResponse> listMemoriesAsync(String spaceId) {
+        return async(() -> listMemories(spaceId));
+    }
+
+    /** Async variant of {@link #deleteMemory(String, String)}. */
+    public Mono<Void> deleteMemoryAsync(String spaceId, String memoryId) {
+        return async(() -> { deleteMemory(spaceId, memoryId); return null; }).then();
+    }
 }

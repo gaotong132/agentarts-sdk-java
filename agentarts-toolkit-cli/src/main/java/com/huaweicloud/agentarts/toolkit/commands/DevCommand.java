@@ -24,13 +24,16 @@ public class DevCommand implements Runnable {
     @Option(names = {"-c", "--config"}, description = "Configuration file path")
     String configPath;
 
+    @Option(names = "--path", description = "Project path containing .agentarts_config.yaml")
+    String projectPath;
+
     @Option(names = {"-e", "--env"}, description = "Environment variables (KEY=VALUE). Repeatable.")
     String[] envVars;
 
     @Override
     public void run() {
         try {
-            DevOperation.runDevServer(port, host, reload, configPath, envVars);
+            DevOperation.runDevServer(port, host, reload, configPath, projectPath, envVars);
         } catch (Exception e) {
             System.err.println("Error starting dev server: " + e.getMessage());
         }

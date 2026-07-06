@@ -212,25 +212,45 @@ public class RuntimeClient implements AutoCloseable {
         return createAgentEndpoint(agentId, endpointName, "invocations", null, "v1");
     }
 
-    public AgentEndpointInfo updateAgentEndpoint(String agentId, String endpointName,
+    /**
+     * Update an existing agent endpoint's config.
+     *
+     * @param agentId    agent the endpoint belongs to
+     * @param endpointId endpoint ID (the UUID returned by {@link #createAgentEndpoint})
+     * @param config     new endpoint configuration
+     */
+    public AgentEndpointInfo updateAgentEndpoint(String agentId, String endpointId,
                                                    Map<String, Object> config) {
         UpdateAgentEndpointRequest req = new UpdateAgentEndpointRequest()
                 .withConfig(config);
 
         RequestResult result = getControlClient().put(
-                "/runtimes/" + agentId + "/endpoints/" + endpointName, req).block();
+                "/runtimes/" + agentId + "/endpoints/" + endpointId, req).block();
         return parseResult(result, AgentEndpointInfo.class, "update_agent_endpoint");
     }
 
-    public AgentEndpointInfo deleteAgentEndpoint(String agentId, String endpointName) {
+    /**
+     * Delete an agent endpoint.
+     *
+     * @param agentId    agent the endpoint belongs to
+     * @param endpointId endpoint ID (the UUID returned by {@link #createAgentEndpoint})
+     */
+    public AgentEndpointInfo deleteAgentEndpoint(String agentId, String endpointId) {
         RequestResult result = getControlClient().delete(
-                "/runtimes/" + agentId + "/endpoints/" + endpointName).block();
+                "/runtimes/" + agentId + "/endpoints/" + endpointId).block();
         return parseResult(result, AgentEndpointInfo.class, "delete_agent_endpoint");
     }
 
-    public AgentEndpointInfo findAgentEndpoint(String agentId, String endpointName) {
+    /**
+     * Find an agent endpoint by ID.
+     *
+     * @param agentId    agent the endpoint belongs to
+     * @param endpointId endpoint ID (the UUID returned by {@link #createAgentEndpoint})
+     * @return the endpoint info
+     */
+    public AgentEndpointInfo findAgentEndpoint(String agentId, String endpointId) {
         RequestResult result = getControlClient().get(
-                "/runtimes/" + agentId + "/endpoints/" + endpointName).block();
+                "/runtimes/" + agentId + "/endpoints/" + endpointId).block();
         return parseResult(result, AgentEndpointInfo.class, "find_agent_endpoint");
     }
 

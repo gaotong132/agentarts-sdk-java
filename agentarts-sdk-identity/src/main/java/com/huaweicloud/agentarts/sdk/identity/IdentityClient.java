@@ -97,6 +97,21 @@ public class IdentityClient {
         return serviceClient.listWorkloadIdentities(new ListWorkloadIdentitiesRequest());
     }
 
+    /** List API key credential providers (convenience wrapper). */
+    public ListApiKeyCredentialProvidersResponse listApiKeyCredentialProviders() {
+        return serviceClient.listApiKeyCredentialProviders(new ListApiKeyCredentialProvidersRequest());
+    }
+
+    /** List OAuth2 credential providers (convenience wrapper). */
+    public ListOauth2CredentialProvidersResponse listOauth2CredentialProviders() {
+        return serviceClient.listOauth2CredentialProviders(new ListOauth2CredentialProvidersRequest());
+    }
+
+    /** List STS credential providers (convenience wrapper). */
+    public ListStsCredentialProvidersResponse listStsCredentialProviders() {
+        return serviceClient.listStsCredentialProviders(new ListStsCredentialProvidersRequest());
+    }
+
     public DeleteWorkloadIdentityResponse deleteWorkloadIdentity(String name) {
         return serviceClient.deleteWorkloadIdentity(
                 new DeleteWorkloadIdentityRequest().withWorkloadIdentityName(name));

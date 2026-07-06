@@ -2,14 +2,15 @@ package com.huaweicloud.agentarts.sdk.tests.e2e;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
-import com.huaweicloud.agentarts.sdk.runtime.AgentArtsRuntimeApp;
 import com.huaweicloud.agentarts.toolkit.AgentArtsCli;
 import com.huaweicloud.agentarts.toolkit.operations.InitOperation;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.HttpURLConnection;
@@ -17,7 +18,6 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -26,9 +26,9 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * <p>Default tier — no credentials, no Docker, no cloud. Invokes the picocli
  * {@link AgentArtsCli} in-process for {@code init} (asserting on generated
- * files) and drives the runtime app directly for the {@code dev} server
- * equivalent (the Java {@code DevOperation} is currently a stub — see TODO on
- * {@link #test_dev_server_serves_ping_and_invocations}).</p>
+ * files and non-zero exit on validation failure) and drives the {@code dev}
+ * subcommand (backed by {@link com.huaweicloud.agentarts.toolkit.operations.DevOperation})
+ * to assert {@code /ping} and {@code POST /invocations} succeed.</p>
  */
 @Tag("e2e")
 @DisplayName("CLI Local E2E Tests")
@@ -73,8 +73,8 @@ class CliLocalE2ETest {
     }
 
     /** Mirrors {@code test_init_invalid_name_fails}: a name with invalid chars
-     *  must not create a project. The Java {@code InitCommand} lowercases the
-     *  name then validates against {@code [a-z0-9-]+}. */
+     *  must exit non-zero and not create a project. The Java {@code InitCommand}
+     *  lowercases the name then validates against {@code [a-z0-9-]+}. */
     @Test
     @DisplayName("CLI init with invalid name does not create a project")
     void test_init_invalid_name_fails(@TempDir Path tmp) {
@@ -83,9 +83,8 @@ class CliLocalE2ETest {
                 "--template", "basic",
                 "--region", "cn-southwest-2",
                 "--path", tmp.toString());
-        // InitCommand prints an error and returns early (Runnable → exit 0),
-        // but no project directory should be created.
-        assertEquals(0, exitCode);
+        // InitCommand now returns a non-zero exit code on validation failure.
+        assertNotEquals(0, exitCode, "init with an invalid name should exit non-zero");
         assertFalse(Files.isDirectory(tmp.resolve("Bad_Name!")),
                 "invalid-name project should not be created");
         // The lowercased+validated form must also be absent
@@ -94,41 +93,67 @@ class CliLocalE2ETest {
     }
 
     // ---------------------------------------------------------------
-    // dev (blocking server — driven via AgentArtsRuntimeApp directly)
+    // dev (blocking server — driven via the `dev` CLI subcommand)
     // ---------------------------------------------------------------
 
     /** Mirrors {@code test_dev_server_serves_ping_and_invocations}.
      *
-     * <p><b>Gap:</b> the Java {@code DevOperation.runDevServer} is currently a
-     * stub (TODO: instantiate {@link AgentArtsRuntimeApp} from the config
-     * entrypoint and run). This test therefore drives
-     * {@link AgentArtsRuntimeApp} directly — scaffolding a basic project via
-     * {@link InitOperation}, then starting the runtime app with an echo
-     * entrypoint on a random port, hitting {@code /ping} and
-     * {@code POST /invocations}, and stopping it. Once {@code DevOperation}
-     * wires to {@link AgentArtsRuntimeApp}, this test should launch the
-     * {@code dev} CLI subcommand in-process instead.</p>
+     * <p>Drives the {@code dev} CLI subcommand in a background thread (which runs
+     * {@link com.huaweicloud.agentarts.toolkit.operations.DevOperation#runDevServer}),
+     * polls {@code /ping} on the bound port, POSTs {@code /invocations}, asserts the
+     * echo, then stops the dev server by interrupting the thread.</p>
      */
     @Test
     @DisplayName("dev server serves /ping and POST /invocations")
     void test_dev_server_serves_ping_and_invocations(@TempDir Path tmp) throws Exception {
-        // 1. Scaffold a basic project (mirrors the Python init step)
+        // 1. Scaffold a basic project so .agentarts_config.yaml exists for DevOperation.
         InitOperation.initProject("basic", "myagent", tmp.toString(),
                 "cn-southwest-2", null, null);
         assertTrue(Files.isRegularFile(tmp.resolve("myagent/pom.xml")));
 
-        // 2. Start the runtime app directly on a random port (DevOperation is a
-        //    stub). app.run(0) starts the Vert.x server asynchronously and returns.
-        AgentArtsRuntimeApp app = new AgentArtsRuntimeApp();
-        app.setEntrypoint((Map<String, Object> payload) ->
-                Map.of("response", payload.getOrDefault("message", "")));
-        app.run(0);
+        // 2. Launch the dev subcommand in a background thread. DevOperation loads the
+        //    config, falls back to a default echo entrypoint (the scaffolded class is
+        //    not compiled onto the test classpath), binds to an ephemeral port, and
+        //    prints "DEV_SERVER_LISTENING on port N" to stdout. picocli only redirects
+        //    its own writer output, so capture System.out directly.
+        CommandLine devCli = new CommandLine(new AgentArtsCli());
+        ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
+        ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
+        PrintStream capturedOut = new PrintStream(outBuf, true, StandardCharsets.UTF_8);
+        PrintStream capturedErr = new PrintStream(errBuf, true, StandardCharsets.UTF_8);
+        PrintStream origOut = System.out;
+        PrintStream origErr = System.err;
+        System.setOut(capturedOut);
+        System.setErr(capturedErr);
+
+        Thread devThread = new Thread(() -> devCli.execute("dev",
+                "--port", "0",
+                "--host", "127.0.0.1",
+                "--path", tmp.resolve("myagent").toString()));
+        devThread.setDaemon(true);
+        devThread.start();
 
         try {
-            int port = app.getPort();
-            assertTrue(port > 0, "runtime app should bind to a port");
+            // 3. Discover the bound port from stdout.
+            int port = -1;
+            String prefix = "DEV_SERVER_LISTENING on port ";
+            for (int i = 0; i < 80 && port < 0; i++) {
+                String soFar = outBuf.toString(StandardCharsets.UTF_8);
+                int idx = soFar.indexOf(prefix);
+                if (idx >= 0) {
+                    String rest = soFar.substring(idx + prefix.length()).trim();
+                    try { port = Integer.parseInt(rest.split("\\s+")[0]); }
+                    catch (NumberFormatException ignored) { }
+                }
+                if (port < 0) Thread.sleep(250);
+            }
+            capturedOut.flush();
+            capturedErr.flush();
+            String outStr = outBuf.toString(StandardCharsets.UTF_8);
+            String errStr = errBuf.toString(StandardCharsets.UTF_8);
+            assertTrue(port > 0, "dev server did not announce port. stdout=" + outStr + " err=" + errStr);
 
-            // 3. Poll /ping until healthy (~10s startup window)
+            // 4. Poll /ping until healthy.
             boolean pingOk = false;
             for (int i = 0; i < 40; i++) {
                 try {
@@ -148,22 +173,27 @@ class CliLocalE2ETest {
             }
             assertTrue(pingOk, "dev server did not come up (GET /ping)");
 
-            // 4. POST /invocations
+            // 5. POST /invocations and assert the echo.
             HttpURLConnection conn = (HttpURLConnection)
                     new URL("http://127.0.0.1:" + port + "/invocations").openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setDoOutput(true);
-            String body = "{\"message\":\"hello from deployed e2e\"}";
+            String body = "{\"message\":\"hello from dev e2e\"}";
             conn.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));
             assertEquals(200, conn.getResponseCode(), "POST /invocations should return 200");
             JsonNode resp = JsonUtils.MAPPER.readTree(
                     new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
             assertTrue(resp.has("response"), "response body should contain 'response'");
-            assertEquals("hello from deployed e2e", resp.get("response").asText());
+            assertEquals("hello from dev e2e", resp.get("response").asText(),
+                    "dev server should echo the message under 'response'");
             conn.disconnect();
         } finally {
-            app.stop();
+            // 6. Stop the dev server and restore streams.
+            devThread.interrupt();
+            devThread.join(5000);
+            System.setOut(origOut);
+            System.setErr(origErr);
         }
     }
 
