@@ -10,11 +10,11 @@ AgentArts Java SDK 端到端测试的运行方法、三层安全模型、Python 
 
 ## 1. 概述
 
-`mvn test`（无云凭证时 E2E 云用例自动跳过）：**638 用例，0 失败，2 跳过**。
+`mvn test`（无云凭证时 E2E 云用例自动跳过）：**639 用例，0 失败，2 跳过**。
 
 | 层次 | 数量 | 说明 |
 |---|---|---|
-| 单元 + 集成 | 552 | 各模块内部（537）+ `CrossModuleIntegrationTest`（15），无云凭证即可运行 |
+| 单元 + 集成 | 553 | 各模块内部（538）+ `CrossModuleIntegrationTest`（15），无云凭证即可运行 |
 | E2E | 150 | `agentarts-sdk-tests/e2e` 包（90）+ `agentarts-toolkit-cli` 脚手架（60） |
 
 E2E 与 Python 全面对齐：SDK 云 E2E 69、CLI 云 E2E 21（与 Python `toolkit/` 21:21）、Java 独有 60（脚手架）。**无 mock/桩**——全部驱动真实云 HTTP 或真实本地 Vert.x 服务器。
