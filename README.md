@@ -165,24 +165,35 @@ curl -X POST http://localhost:8080/invocations \
 
 ```java
 import io.agentscope.core.ReActAgent;
+import io.agentscope.core.model.OpenAIChatModel;
 import io.agentscope.core.tool.Toolkit;
-import com.huaweicloud.agentarts.sdk.integration.agentscope.*;
+import com.huaweicloud.agentarts.sdk.integration.agentscope.tool.MCPGatewayTool;
+import com.huaweicloud.agentarts.sdk.integration.agentscope.tool.CodeInterpreterTool;
+import com.huaweicloud.agentarts.sdk.integration.agentscope.state.MemoryAgentStateStore;
+import com.huaweicloud.agentarts.sdk.integration.agentscope.runtime.AgentscopeRuntimeHost;
+import com.huaweicloud.agentarts.sdk.runtime.AgentArtsRuntimeApp;
 
-// Build agent with AgentArts tools
+// Register AgentArts tools (MCP Gateway, Code Interpreter) as agentscope AgentTools
 Toolkit toolkit = new Toolkit();
 toolkit.registerAgentTool(new MCPGatewayTool(gatewayClient));
 toolkit.registerAgentTool(new CodeInterpreterTool(interpreterClient));
 
+// Use AgentArts Memory as the agent's state store (needs spaceId)
+OpenAIChatModel model = OpenAIChatModel.builder()
+    .apiKey(System.getenv("OPENAI_API_KEY")).modelName("gpt-4o").build();
+
 ReActAgent agent = ReActAgent.builder()
-    .name("my-agent")
-    .model("openai:gpt-4o")
-    .toolkit(toolkit)
-    .stateStore(new MemoryAgentStateStore(memoryClient))
+    .name("my-agent").model(model).toolkit(toolkit)
+    .stateStore(new MemoryAgentStateStore(memoryClient, spaceId))
     .build();
 
-// Host via AgentArts Runtime — SSE streaming from Flux<AgentEvent>
+// Host the agent behind AgentArts Runtime — POST /invocations dispatches to it
 AgentArtsRuntimeApp app = new AgentArtsRuntimeApp();
-new AgentscopeRuntimeHost(app, agent);
+new AgentscopeRuntimeHost(app, (payload, ctx) -> {
+    String message = (String) payload.getOrDefault("message", "");
+    var reply = agent.call(message, ctx).block();
+    return java.util.Map.of("reply", reply != null ? reply.getTextContent() : "");
+});
 app.run(8080);
 ```
 
@@ -234,7 +245,7 @@ curl -X POST http://localhost:8080/invocations \
 
 ### agentscope Integration Example
 
-Bridges AgentArts Runtime with agentscope's agent pattern, using `MemoryAgentStateStore` for state persistence and `MessageConverter` for message conversion:
+Builds a `ReActAgent` with an OpenAI-compatible model, `@Tool`-annotated tools, optional `MemoryAgentStateStore` persistence, streaming events, and HTTP Runtime hosting via `AgentscopeRuntimeHost`:
 
 ```bash
 export AGENTARTS_MEMORY_API_KEY=your-api-key
