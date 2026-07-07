@@ -3,12 +3,14 @@ package com.huaweicloud.agentarts.sdk.tests.e2e;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.toolkit.AgentArtsCli;
+import com.huaweicloud.agentarts.toolkit.operations.ConfigOperation;
 import com.huaweicloud.agentarts.toolkit.operations.InitOperation;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
@@ -44,8 +46,64 @@ class CliLocalE2ETest {
     }
 
     // ---------------------------------------------------------------
+    // Smoke (mirrors test_cli_version / test_cli_help)
+    // ---------------------------------------------------------------
+
+    /** Mirrors {@code test_cli_version}: {@code --version} exits 0 and the
+     *  output mentions {@code agentarts} or a {@code 0.} version string. */
+    @Test
+    @DisplayName("CLI --version exits 0 and prints the version")
+    void test_cli_version() {
+        StringWriter out = new StringWriter();
+        StringWriter err = new StringWriter();
+        CommandLine versionCli = new CommandLine(new AgentArtsCli());
+        versionCli.setOut(new PrintWriter(out, true));
+        versionCli.setErr(new PrintWriter(err, true));
+        int exitCode = versionCli.execute("--version");
+        String combined = out.toString() + err.toString();
+        assertEquals(0, exitCode, "--version should exit 0; out=" + combined);
+        assertTrue(combined.toLowerCase().contains("agentarts") || combined.contains("0."),
+                "--version output should mention 'agentarts' or a version, got: " + combined);
+    }
+
+    /** Mirrors {@code test_cli_help}: {@code --help} exits 0. */
+    @Test
+    @DisplayName("CLI --help exits 0")
+    void test_cli_help() {
+        StringWriter out = new StringWriter();
+        StringWriter err = new StringWriter();
+        CommandLine helpCli = new CommandLine(new AgentArtsCli());
+        helpCli.setOut(new PrintWriter(out, true));
+        helpCli.setErr(new PrintWriter(err, true));
+        int exitCode = helpCli.execute("--help");
+        assertEquals(0, exitCode, "--help should exit 0; out=" + out + err);
+    }
+
+    // ---------------------------------------------------------------
     // init
     // ---------------------------------------------------------------
+
+    /** Mirrors {@code test_init_creates_project_files} (basic template). The
+     *  Java toolkit only ships {@code basic}/{@code agentscope} templates, so
+     *  only {@code basic} is asserted here; the unsupported-template gap is
+     *  covered by the dedicated tests below. */
+    @Test
+    @DisplayName("CLI init creates the expected project files (basic template)")
+    void test_init_creates_project_files(@TempDir Path tmp) throws Exception {
+        int exitCode = cli.execute("init",
+                "--name", "myagent",
+                "--template", "basic",
+                "--region", "cn-southwest-2",
+                "--path", tmp.toString());
+        assertEquals(0, exitCode, "init should exit 0");
+        Path project = tmp.resolve("myagent");
+        assertTrue(Files.isRegularFile(project.resolve("pom.xml")), "pom.xml missing");
+        assertTrue(Files.isRegularFile(project.resolve(".agentarts_config.yaml")),
+                ".agentarts_config.yaml missing");
+        assertTrue(Files.isRegularFile(project.resolve("Dockerfile")), "Dockerfile missing");
+        assertTrue(Files.isRegularFile(
+                project.resolve("src/main/java/com/example/Agent.java")), "Agent.java missing");
+    }
 
     /** Mirrors {@code test_init_path_option}: {@code init --path <target>}
      *  creates the project in the target dir (not cwd). */
@@ -90,6 +148,132 @@ class CliLocalE2ETest {
         // The lowercased+validated form must also be absent
         assertFalse(Files.isDirectory(tmp.resolve("bad_name!")),
                 "invalid-name project (lowercased) should not be created");
+    }
+
+    // ---------------------------------------------------------------
+    // config (mirrors test_config_*)
+    // ---------------------------------------------------------------
+
+    /** Redirect {@link ConfigOperation}'s config file to a temp path for the
+     *  duration of one test (the Java analog of the Python tests'
+     *  {@code monkeypatch.chdir(tmp_project)}). picocli executes synchronously
+     *  on the calling thread, so the thread-local override is visible to the
+     *  {@code config} subcommand's {@link ConfigOperation} calls. */
+    private void withConfigOverride(Path tmp, Runnable body) {
+        File cfg = tmp.resolve(".agentarts_config.yaml").toFile();
+        ConfigOperation.setConfigFileOverride(cfg);
+        try {
+            body.run();
+        } finally {
+            ConfigOperation.clearConfigFileOverride();
+        }
+    }
+
+    /** Mirrors {@code test_config_add_writes_yaml_and_lists}: {@code config -n}
+     *  writes {@code .agentarts_config.yaml} containing the agent name, and
+     *  {@code config list} exits 0. */
+    @Test
+    @DisplayName("config add writes YAML and config list exits 0")
+    void test_config_add_writes_yaml_and_lists(@TempDir Path tmp) {
+        withConfigOverride(tmp, () -> {
+            int add = cli.execute("config",
+                    "-n", "myagent",
+                    "-e", "com.example.MyAgent",
+                    "-r", "cn-southwest-2",
+                    "-d", "pom.xml",
+                    "--swr-org", "o",
+                    "--swr-repo", "r");
+            assertEquals(0, add, "config add should exit 0");
+            Path cfg = tmp.resolve(".agentarts_config.yaml");
+            assertTrue(Files.exists(cfg), ".agentarts_config.yaml should be created");
+            String yaml = readString(cfg);
+            assertTrue(yaml.contains("myagent"), "YAML should contain the agent name; got:\n" + yaml);
+            int list = cli.execute("config", "list");
+            assertEquals(0, list, "config list should exit 0");
+        });
+    }
+
+    /** Mirrors {@code test_config_set_get_roundtrip}: {@code config set} writes
+     *  the value into the YAML and {@code config get} exits 0. */
+    @Test
+    @DisplayName("config set/get round-trips a dotted value")
+    void test_config_set_get_roundtrip(@TempDir Path tmp) {
+        withConfigOverride(tmp, () -> {
+            assertEquals(0, cli.execute("config",
+                    "-n", "myagent", "-e", "com.example.MyAgent",
+                    "-r", "cn-southwest-2", "-d", "pom.xml",
+                    "--swr-org", "o", "--swr-repo", "r"),
+                    "config add should exit 0");
+            int set = cli.execute("config", "set", "base.description", "hello", "-a", "myagent");
+            assertEquals(0, set, "config set should exit 0");
+            String yaml = readString(tmp.resolve(".agentarts_config.yaml"));
+            assertTrue(yaml.contains("hello"), "YAML should contain the set value; got:\n" + yaml);
+            int get = cli.execute("config", "get", "base.description", "-a", "myagent");
+            assertEquals(0, get, "config get should exit 0");
+        });
+    }
+
+    /** Mirrors {@code test_config_env_lifecycle}: {@code set-env} writes the
+     *  var, {@code list-env} exits 0, {@code remove-env} removes it. */
+    @Test
+    @DisplayName("config set-env / list-env / remove-env lifecycle")
+    void test_config_env_lifecycle(@TempDir Path tmp) {
+        withConfigOverride(tmp, () -> {
+            assertEquals(0, cli.execute("config",
+                    "-n", "myagent", "-e", "com.example.MyAgent",
+                    "-r", "cn-southwest-2", "-d", "pom.xml",
+                    "--swr-org", "o", "--swr-repo", "r"),
+                    "config add should exit 0");
+            assertEquals(0, cli.execute("config", "set-env", "MY_VAR", "val", "-a", "myagent"),
+                    "set-env should exit 0");
+            String yaml = readString(tmp.resolve(".agentarts_config.yaml"));
+            assertTrue(yaml.contains("MY_VAR"), "YAML should contain MY_VAR; got:\n" + yaml);
+            assertTrue(yaml.contains("val"), "YAML should contain the env value; got:\n" + yaml);
+            assertEquals(0, cli.execute("config", "list-env", "-a", "myagent"),
+                    "list-env should exit 0");
+            assertEquals(0, cli.execute("config", "remove-env", "MY_VAR", "-a", "myagent"),
+                    "remove-env should exit 0");
+            String after = readString(tmp.resolve(".agentarts_config.yaml"));
+            assertFalse(after.contains("MY_VAR"), "MY_VAR should be gone after remove-env; got:\n" + after);
+        });
+    }
+
+    /** Mirrors {@code test_config_set_default_and_remove}: add two agents,
+     *  {@code set-default a2}, {@code remove a1}; a2 remains, a1 is gone. */
+    @Test
+    @DisplayName("config set-default / remove manage multiple agents")
+    void test_config_set_default_and_remove(@TempDir Path tmp) {
+        withConfigOverride(tmp, () -> {
+            assertEquals(0, cli.execute("config",
+                    "-n", "a1", "-e", "com.example.A1Agent",
+                    "-r", "cn-southwest-2", "-d", "pom.xml",
+                    "--swr-org", "o", "--swr-repo", "r"),
+                    "config add a1 should exit 0");
+            assertEquals(0, cli.execute("config",
+                    "-n", "a2", "-e", "com.example.A2Agent",
+                    "-r", "cn-southwest-2", "-d", "pom.xml",
+                    "--swr-org", "o", "--swr-repo", "r"),
+                    "config add a2 should exit 0");
+            assertEquals(0, cli.execute("config", "set-default", "a2"),
+                    "set-default should exit 0");
+            assertEquals(0, cli.execute("config", "remove", "a1"),
+                    "remove should exit 0");
+            // Assert the semantic intent (a1's agent entry is gone, a2 remains)
+            // rather than a raw substring: the YAML carries fields like
+            // `language: "java17"` whose text contains "a1" as a substring.
+            var cfgList = ConfigOperation.loadConfig();
+            assertNotNull(cfgList.getAgent("a2"), "a2 should remain after remove");
+            assertNull(cfgList.getAgent("a1"), "a1 should be removed from the agents map");
+        });
+    }
+
+    private static String readString(Path p) {
+        try {
+            return Files.readString(p, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            fail("Could not read " + p + ": " + e.getMessage());
+            return "";
+        }
     }
 
     // ---------------------------------------------------------------

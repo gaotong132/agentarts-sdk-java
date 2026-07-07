@@ -37,7 +37,7 @@ class ReadonlyListsTest {
 
     // 2. test_list_mcp_gateways
     @Test
-    @DisplayName("list_mcp_gateways succeeds")
+    @DisplayName("list_mcp_gateways succeeds and returns a parseable JSON body")
     void testListMcpGateways() {
         try (MCPGatewayClient client = new MCPGatewayClient()) {
             RequestResult result = client.listMcpGateways(null, 1, null);
@@ -48,6 +48,9 @@ class ReadonlyListsTest {
                 assumeTrue(false, "MCP Gateway service not enabled for this tenant");
             }
             assertTrue(result.isSuccess(), result.getError());
+            // Body must parse as JSON (not just an empty 200) — a real
+            // connectivity + auth + deserialization probe.
+            assertNotNull(result.getDataAsJson(), "list_mcp_gateways body should be parseable JSON");
         }
     }
 

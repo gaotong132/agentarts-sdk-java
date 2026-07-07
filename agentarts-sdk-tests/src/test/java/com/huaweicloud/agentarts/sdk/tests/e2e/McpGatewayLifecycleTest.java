@@ -110,10 +110,14 @@ class McpGatewayLifecycleTest {
 
     // 1. test_get_gateway
     @Test @Order(1)
-    @DisplayName("get_mcp_gateway returns the created gateway")
+    @DisplayName("get_mcp_gateway returns the created gateway with a matching id")
     void testGetGateway() {
         RequestResult result = client.getMcpGateway(gatewayId);
         assertTrue(result.isSuccess(), result.getError());
+        assertNotNull(result.getDataAsJson(), "get_mcp_gateway body should be parseable JSON");
+        assertTrue(result.getDataAsJson().toString().contains(gatewayId),
+                "get_mcp_gateway response should contain the requested gateway id " + gatewayId
+                        + ", got: " + result.getDataAsJson());
     }
 
     // 2. test_list_gateways
@@ -144,10 +148,14 @@ class McpGatewayLifecycleTest {
 
     // 4. test_get_target
     @Test @Order(4)
-    @DisplayName("get_mcp_gateway_target returns the created target")
+    @DisplayName("get_mcp_gateway_target returns the created target with a matching id")
     void testGetTarget() {
         RequestResult result = client.getMcpGatewayTarget(gatewayId, targetId);
         assertTrue(result.isSuccess(), result.getError());
+        assertNotNull(result.getDataAsJson(), "get_mcp_gateway_target body should be parseable JSON");
+        assertTrue(result.getDataAsJson().toString().contains(targetId),
+                "get_mcp_gateway_target response should contain the requested target id " + targetId
+                        + ", got: " + result.getDataAsJson());
     }
 
     // 5. test_list_targets
