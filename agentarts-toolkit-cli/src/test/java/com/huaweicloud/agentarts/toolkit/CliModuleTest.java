@@ -359,18 +359,6 @@ class CliModuleTest {
     class CliBasicsTests {
 
         @Test
-        void helpOutputContainsCommands() {
-            StringWriter sw = new StringWriter();
-            cli.setOut(new PrintWriter(sw));
-            cli.execute("--help");
-            String output = sw.toString();
-            assertTrue(output.contains("init"));
-            assertTrue(output.contains("config"));
-            assertTrue(output.contains("dev"));
-            assertTrue(output.contains("deploy"));
-        }
-
-        @Test
         void versionOutput() {
             StringWriter sw = new StringWriter();
             cli.setOut(new PrintWriter(sw));

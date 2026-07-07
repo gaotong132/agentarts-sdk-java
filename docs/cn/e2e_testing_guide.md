@@ -10,14 +10,14 @@ AgentArts Java SDK 端到端测试的运行方法、三层安全模型、Python 
 
 ## 1. 概述
 
-`mvn test`（无云凭证时 E2E 云用例自动跳过）：**643 用例，0 失败，2 跳过**。
+`mvn test`（无云凭证时 E2E 云用例自动跳过）：**638 用例，0 失败，2 跳过**。
 
 | 层次 | 数量 | 说明 |
 |---|---|---|
-| 单元 + 集成 | 537 | 各模块内部，无云凭证即可运行 |
-| E2E | 155 | `agentarts-sdk-tests/e2e` 包（90）+ `agentarts-toolkit-cli` 脚手架（65） |
+| 单元 + 集成 | 552 | 各模块内部（537）+ `CrossModuleIntegrationTest`（15），无云凭证即可运行 |
+| E2E | 150 | `agentarts-sdk-tests/e2e` 包（90）+ `agentarts-toolkit-cli` 脚手架（60） |
 
-E2E 与 Python 全面对齐：SDK 云 E2E 69、CLI 云 E2E 21（与 Python `toolkit/` 21:21）、Java 独有 65（脚手架）。**无 mock/桩**——全部驱动真实云 HTTP 或真实本地 Vert.x 服务器。
+E2E 与 Python 全面对齐：SDK 云 E2E 69、CLI 云 E2E 21（与 Python `toolkit/` 21:21）、Java 独有 60（脚手架）。**无 mock/桩**——全部驱动真实云 HTTP 或真实本地 Vert.x 服务器。
 
 ---
 
@@ -184,7 +184,7 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 | `test_cli_memory_list_readonly` | `test_cli_memory_list_readonly` | ✅ | 退出码 0 + 含 `spaces`/`total` |
 | `test_cli_memory_lifecycle` | `test_cli_memory_lifecycle` | ✅ | create→list→get→update→status→delete，id 匹配 |
 
-> Java 独有（Python 无对应）：`CliE2ETest` 38 + `CliModuleTest` 27（脚手架，65 用例）。
+> Java 独有（Python 无对应）：`CliE2ETest` 34 + `CliModuleTest` 26（脚手架，60 用例）。
 
 ### 4.1 SDK 云 E2E — 补充说明
 
@@ -199,23 +199,23 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 
 - **`CliLocalE2ETest`** 与 Python `test_cli_local.py` **1:1（13:13）**。config 类用 `ConfigOperation.setConfigFileOverride` 重定向到 `@TempDir`（等价 Python `monkeypatch.chdir`）。
 - **`CliDeployedRuntimeE2ETest`** 4 用例在 L3 + Docker 满足时真实运行 deploy 链，LIFO 清理（`deleteAgentByName` + `docker rmi -f`）；SWR org/repo/image 残留为已知项。
-- `CliE2ETest`/`CliModuleTest`（65 用例）提供等价细粒度脚手架断言。
+- `CliE2ETest`/`CliModuleTest`（60 用例）提供等价细粒度脚手架断言。
 
 ### 4.3 Java 独有
 
 | Java 类 | 数量 | 覆盖 |
 |---|---|---|
-| `CliE2ETest` | 38 | 脚手架细粒度（pom.xml/Agent.java/config/Dockerfile/模板/help/选项） |
-| `CliModuleTest` | 27 | 命令树、选项默认值/别名、模板存在性、配置格式 |
+| `CliE2ETest` | 34 | 脚手架细粒度（pom.xml/Agent.java/config/Dockerfile/模板/help/选项） |
+| `CliModuleTest` | 26 | 命令树、选项默认值/别名、模板存在性、配置格式 |
 
 ### 4.4 汇总
 
 | 维度 | Python | Java |
 |---|---|---|
-| 用例数 | 90 | 155（90 e2e 包 + 65 脚手架） |
+| 用例数 | 90 | 150（90 e2e 包 + 60 脚手架） |
 | SDK 云 E2E | 69 | 69（58 ✅ + 11 🟡） |
 | CLI 云 E2E | 21 | 21（17 ✅ + 4 🟡） |
-| Java 独有 | — | 65 脚手架 |
+| Java 独有 | — | 60 脚手架 |
 | Python 有 Java 缺失 | — | 0 |
 
 > **真实 AK/SK 验证**：L1 + L2 + CLI 云 E2E 全绿。e2e 包 90 用例，启用 AK/SK + ALLOW_CREATE（不含 L3）时 86 计入（**78 通过 + 8 软跳过**），另 4 个 `CliDeployedRuntime` 缺 Docker+L3 类级跳过。**0 失败 0 错误**。8 跳过：OAuth2/STS 4、`delete_memory` 2（后端未产出 memory）、CI/Runtime 计费 2（无 RUN_BILLABLE）。
@@ -227,13 +227,13 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 | 模块 | E2E 用例 | 覆盖 |
 |---|---|---|
 | Identity | 14 | Workload Identity CRUD、API Key/OAuth2/STS provider CRUD、access token、`@Require*` 装饰器 |
-| Memory | 22 | Space CRUD、Session/Messages/Memories 全数据面（`parts` 为 `List<Object>` 容忍加密）、同步+异步、`MemorySession` wrapper |
+| Memory | 20 | Space CRUD、Session/Messages/Memories 全数据面（`parts` 为 `List<Object>` 容忍加密）、同步+异步、`MemorySession` wrapper |
 | Gateway | 6 | Gateway/Target CRUD |
 | Code Interpreter | 4 | 控制面 CRUD + 计费沙箱 session |
 | Runtime | 18 | Agent/Endpoint CRUD、数据面 session（计费）、本地 RuntimeApp（ping/invocations/SSE/WS） |
 | Auth | 3 | `@RequireApiKey`/`@RequireStsToken`/`@RequireAccessToken` |
 | 只读探测 | 4 | 各控制面 list 连通性 |
-| CLI 脚手架 | 65 | init/config 模板、命令树、选项、Dockerfile |
+| CLI 脚手架 | 60 | init/config 模板、命令树、选项、Dockerfile |
 | CLI 云 E2E | 21 | gateway/memory CLI CRUD、dev server、`CliLocalE2ETest` 13（1:1 Python）、Docker deploy 4 |
 
 ---

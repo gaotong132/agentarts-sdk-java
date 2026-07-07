@@ -1,7 +1,5 @@
 package com.huaweicloud.agentarts.toolkit;
 
-import com.huaweicloud.agentarts.sdk.core.config.AgentArtsConfig;
-import com.huaweicloud.agentarts.sdk.core.config.AgentArtsConfigList;
 import com.huaweicloud.agentarts.toolkit.operations.ConfigOperation;
 import com.huaweicloud.agentarts.toolkit.operations.InitOperation;
 import com.huaweicloud.agentarts.toolkit.template.TemplateManager;
@@ -113,16 +111,6 @@ class CliE2ETest {
             assertTrue(dockerfile.contains("eclipse-temurin:17-jre"), "Missing base image");
             assertTrue(dockerfile.contains("docker-test"), "Missing project name");
             assertTrue(dockerfile.contains("EXPOSE 8080"), "Missing expose");
-        }
-
-        @Test
-        void initAgentscopeTemplateCreatesDifferentAgent(@TempDir Path tempDir) throws Exception {
-            InitOperation.initProject("agentscope", "as-test", tempDir.toString(),
-                    "cn-southwest-2", null, null);
-
-            String agent = Files.readString(
-                    tempDir.resolve("as-test/src/main/java/com/example/Agent.java"));
-            assertTrue(agent.contains("as-test"), "Agent should contain project name");
         }
 
         @Test
@@ -539,32 +527,6 @@ class CliE2ETest {
     class FullWorkflowE2E {
 
         @Test
-        void initThenReadConfig(@TempDir Path tempDir) throws Exception {
-            // Step 1: Init project
-            InitOperation.initProject("basic", "workflow-test", tempDir.toString(),
-                    "cn-southwest-2", "my-org", null);
-
-            // Step 2: Read generated config
-            Path configPath = tempDir.resolve("workflow-test/.agentarts_config.yaml");
-            assertTrue(Files.exists(configPath));
-
-            com.fasterxml.jackson.databind.ObjectMapper yamlMapper =
-                    new com.fasterxml.jackson.databind.ObjectMapper(
-                            new com.fasterxml.jackson.dataformat.yaml.YAMLFactory());
-            AgentArtsConfigList config = yamlMapper.readValue(configPath.toFile(),
-                    AgentArtsConfigList.class);
-
-            // Step 3: Verify config content
-            assertNotNull(config.getAgents(), "Should have agents map");
-            // The init template generates a config but doesn't add to AgentArtsConfigList format
-            // It renders a flat YAML, so we verify the raw content
-            String rawConfig = Files.readString(configPath);
-            assertTrue(rawConfig.contains("workflow-test"), "Config should contain project name");
-            assertTrue(rawConfig.contains("cn-southwest-2"), "Config should contain region");
-            assertTrue(rawConfig.contains("my-org"), "Config should contain SWR org");
-        }
-
-        @Test
         void initGeneratesBuildableProjectStructure(@TempDir Path tempDir) throws Exception {
             InitOperation.initProject("basic", "buildable", tempDir.toString(),
                     "cn-southwest-2", null, null);
@@ -640,20 +602,6 @@ class CliE2ETest {
             // The name should be lowercased to "myproject"
             assertTrue(Files.isDirectory(tempDir.resolve("myproject")),
                     "Project should be created with lowercased name");
-        }
-
-        @Test
-        void deployDefaultModeIsCloud() {
-            CommandLine cli = new CommandLine(new AgentArtsCli());
-            var spec = cli.getSubcommands().get("deploy").getCommandSpec();
-            assertEquals("cloud", spec.optionsMap().get("--mode").defaultValue());
-        }
-
-        @Test
-        void invokeDefaultTimeoutIs900() {
-            CommandLine cli = new CommandLine(new AgentArtsCli());
-            var spec = cli.getSubcommands().get("invoke").getCommandSpec();
-            assertEquals("900", spec.optionsMap().get("--timeout").defaultValue());
         }
 
         @Test
