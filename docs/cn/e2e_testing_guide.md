@@ -55,10 +55,7 @@ L2/L3 用 `E2EResourceRegistry` 按**注册逆序（LIFO）**在 `@AfterAll` 清
 ### 3.2 常用命令
 
 ```bash
-# 系统 Maven + JDK 26（路径见 CLAUDE.md）
-export JAVA_HOME="/c/Program Files/Java/jdk-26.0.1"
-export PATH="$JAVA_HOME/bin:/d/apache-maven-3.9.16/bin:$PATH"
-
+# 需 JDK 17+ 与 Maven 3.9+（确认：java -version / mvn -version）
 mvn test                                                    # 全量（无凭证 E2E 跳过）
 export HUAWEICLOUD_SDK_AK=<ak> HUAWEICLOUD_SDK_SK=<sk>
 mvn test -pl agentarts-sdk-tests -am                        # L1 只读
