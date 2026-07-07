@@ -75,7 +75,7 @@ Map<String, Object> result = client.executeCode("print('Hello World')", "python"
 Map<String, Object> cmdResult = client.executeCommand("ls -la");
 
 // 获取会话状态
-Map<String, Object> session = client.getSession("my-ci-name", sessionId);
+CodeInterpreterSessionInfo session = client.getSession("my-ci-name", sessionId);
 
 // 关闭会话
 client.stopSession();
@@ -109,28 +109,28 @@ CodeInterpreterClient client = new CodeInterpreterClient(region, dataEndpoint, a
 #### createCodeInterpreter — 创建代码解释器
 
 ```java
-Map<String, Object> ci = client.createCodeInterpreter("my-ci", "描述");
-// ci.get("id") → 代码解释器 ID
+CodeInterpreterInfo ci = client.createCodeInterpreter("my-ci", "描述");
+// ci.getId() → 代码解释器 ID
 ```
 
 #### listCodeInterpreters — 列出代码解释器
 
 ```java
-Map<String, Object> result = client.listCodeInterpreters(null, 10, 0);
+CodeInterpreterListResponse result = client.listCodeInterpreters(null, 10, 0);
 // name, limit, offset
 ```
 
 #### getCodeInterpreter — 获取代码解释器
 
 ```java
-Map<String, Object> ci = client.getCodeInterpreter("ci-id-123");
+CodeInterpreterInfo ci = client.getCodeInterpreter("ci-id-123");
 ```
 
 #### updateCodeInterpreter — 更新代码解释器
 
 ```java
 Map<String, Object> updates = Map.of("tags", List.of(Map.of("key", "env", "value", "test")));
-Map<String, Object> updated = client.updateCodeInterpreter("ci-id-123", updates);
+CodeInterpreterInfo updated = client.updateCodeInterpreter("ci-id-123", updates);
 ```
 
 #### deleteCodeInterpreter — 删除代码解释器
@@ -151,7 +151,7 @@ String sessionId = client.startSession("ci-name", "session-name", 900);
 #### getSession — 获取会话状态
 
 ```java
-Map<String, Object> session = client.getSession("ci-name", "session-id");
+CodeInterpreterSessionInfo session = client.getSession("ci-name", "session-id");
 ```
 
 #### stopSession — 关闭会话

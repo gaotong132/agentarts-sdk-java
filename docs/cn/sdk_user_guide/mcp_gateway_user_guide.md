@@ -18,15 +18,25 @@ export HUAWEICLOUD_SDK_SK="your-secret-key"
 ## 快速入门
 
 ```java
+import com.fasterxml.jackson.databind.JsonNode;
 import com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
+import java.util.Map;
 
 try (MCPGatewayClient client = new MCPGatewayClient()) {
     // 创建网关
     RequestResult gw = client.createMcpGateway("my-gateway", "测试网关");
+    JsonNode gwData = (JsonNode) gw.getData();
+    String gatewayId = gwData.has("id") ? gwData.get("id").asText()
+            : gwData.get("gateway_id").asText();
 
-    // 创建目标
-    RequestResult target = client.createMcpGatewayTarget(gatewayId, "my-target", "测试目标");
+    // 创建目标（targetConfiguration 必填）
+    RequestResult target = client.createMcpGatewayTarget(
+            gatewayId, "my-target", "测试目标",
+            Map.of("mcp_server", Map.of(
+                    "endpoint", "https://example.com/mcp",
+                    "server_type", "sse")),
+            null);
 
     // 列出网关
     RequestResult list = client.listMcpGateways();

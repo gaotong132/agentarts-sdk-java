@@ -30,20 +30,22 @@ agentarts mcp-gateway create-mcp-gateway \
 
 ### update-mcp-gateway — 更新网关
 
+`gatewayId` 为位置参数（不是 `--gateway-id` 选项）：
+
 ```bash
-agentarts mcp-gateway update-mcp-gateway --gateway-id gw-123 --description "更新后的描述"
+agentarts mcp-gateway update-mcp-gateway gw-123 --description "更新后的描述"
 ```
 
 ### delete-mcp-gateway — 删除网关
 
 ```bash
-agentarts mcp-gateway delete-mcp-gateway --gateway-id gw-123
+agentarts mcp-gateway delete-mcp-gateway gw-123
 ```
 
 ### get-mcp-gateway — 获取网关
 
 ```bash
-agentarts mcp-gateway get-mcp-gateway --gateway-id gw-123
+agentarts mcp-gateway get-mcp-gateway gw-123
 ```
 
 ### list-mcp-gateways — 列出网关
@@ -63,20 +65,21 @@ agentarts mcp-gateway list-mcp-gateways --limit 10 --offset 0
 
 ### create-mcp-gateway-target — 创建目标
 
+`gatewayId` 为位置参数；`--target-configuration`（JSON）为必填：
+
 ```bash
-# 基本创建
-agentarts mcp-gateway create-mcp-gateway-target \
-  --gateway-id gw-123 \
+agentarts mcp-gateway create-mcp-gateway-target gw-123 \
   --name my-target \
-  --description "测试目标"
+  --description "测试目标" \
+  --target-configuration '{"mcp_server":{"endpoint":"https://example.com/mcp","server_type":"sse"}}'
 ```
 
 ### update-mcp-gateway-target — 更新目标
 
+`gatewayId` 与 `targetId` 均为位置参数（前两个位置参数）：
+
 ```bash
-agentarts mcp-gateway update-mcp-gateway-target \
-  --gateway-id gw-123 \
-  --target-id tgt-456 \
+agentarts mcp-gateway update-mcp-gateway-target gw-123 tgt-456 \
   --name new-name \
   --description "新描述"
 ```
@@ -84,27 +87,25 @@ agentarts mcp-gateway update-mcp-gateway-target \
 ### delete-mcp-gateway-target — 删除目标
 
 ```bash
-agentarts mcp-gateway delete-mcp-gateway-target \
-  --gateway-id gw-123 \
-  --target-id tgt-456
+agentarts mcp-gateway delete-mcp-gateway-target gw-123 tgt-456
 ```
 
 ### get-mcp-gateway-target — 获取目标
 
 ```bash
-agentarts mcp-gateway get-mcp-gateway-target \
-  --gateway-id gw-123 \
-  --target-id tgt-456
+agentarts mcp-gateway get-mcp-gateway-target gw-123 tgt-456
 ```
 
 ### list-mcp-gateway-targets — 列出目标
 
+`gatewayId` 为位置参数：
+
 ```bash
 # 列出网关下所有目标
-agentarts mcp-gateway list-mcp-gateway-targets --gateway-id gw-123
+agentarts mcp-gateway list-mcp-gateway-targets gw-123
 
 # 分页
-agentarts mcp-gateway list-mcp-gateway-targets --gateway-id gw-123 --limit 10 --offset 0
+agentarts mcp-gateway list-mcp-gateway-targets gw-123 --limit 10 --offset 0
 ```
 
 ## 最佳实践

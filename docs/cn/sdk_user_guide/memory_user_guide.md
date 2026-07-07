@@ -150,9 +150,9 @@ client.deleteSpace("space-id-123");
 #### createApiKey — 创建 API Key
 
 ```java
-Map<String, Object> key = client.createApiKey();
-// key.get("api_key") → API Key 字符串
-// key.get("api_key_id") → Key ID
+ApiKeyInfo key = client.createApiKey();
+// key.getApiKey() → API Key 字符串
+// key.getId() → Key ID
 ```
 
 ### 数据平面：会话管理
@@ -287,7 +287,7 @@ session.close();
 | `getName()` | String | 空间名称 |
 | `getDescription()` | String | 描述 |
 | `getStatus()` | String | 状态 |
-| `getApiKey()` | String | API Key |
+| `getApiKey()` | Object | API Key（创建时返回明文，get 时可能为加密标记） |
 | `getApiKeyId()` | String | API Key ID |
 | `getPublicDomain()` | String | 公网域名 |
 | `getCreatedAt()` | String | 创建时间 |

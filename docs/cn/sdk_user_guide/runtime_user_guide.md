@@ -304,44 +304,42 @@ client.setAuthToken("your-bearer-token");
 
 ```java
 // 创建 Agent（仅必填参数）
-Map<String, Object> agent = client.createAgent("my-agent", "my agent description");
-String agentId = (String) agent.get("id");
+AgentInfo agent = client.createAgent("my-agent", "my agent description");
+String agentId = agent.getId();
 
-// 创建 Agent（完整参数）
-Map<String, Object> agent = client.createAgent(
-    "my-agent", "description",
-    artifactSourceConfig,   // Map: 制品源配置（可 null）
-    identityConfig,         // Map: 身份配置（可 null）
-    invokeConfig,           // Map: 调用配置（可 null）
-    networkConfig,          // Map: 网络配置（可 null）
-    observabilityConfig,    // Map: 可观测性配置（可 null）
-    "agency-name",          // 执行 Agency（可 null）
-    "gateway-id",           // Agent 网关 ID（可 null）
-    envVars,                // List<Map>: 环境变量（可 null）
-    tagsConfig              // List<Map>: 标签（可 null）
-);
+// 创建 Agent（完整参数，用 CreateAgentRequest 构造）
+CreateAgentRequest req = new CreateAgentRequest()
+    .withName("my-agent")
+    .withDescription("description")
+    .withArtifactSource(artifactSourceConfig)      // Map: 制品源配置（可省略）
+    .withIdentityConfiguration(identityConfig)     // Map: 身份配置（可省略）
+    .withInvokeConfig(invokeConfig)                // Map: 调用配置（可省略）
+    .withNetworkConfig(networkConfig)              // Map: 网络配置（可省略）
+    .withObservability(observabilityConfig)        // Map: 可观测性配置（可省略）
+    .withExecutionAgencyName("agency-name")        // 执行 Agency（可省略）
+    .withAgentGatewayId("gateway-id")              // Agent 网关 ID（可省略）
+    .withEnvironmentVariables(envVars)             // List<Map<String,String>>: 环境变量（可省略）
+    .withTags(tagsConfig);                         // List<Map<String,String>>: 标签（可省略）
+agent = client.createAgent(req);
 
 // 更新 Agent
-Map<String, Object> updated = client.updateAgent(
-    agentId, "updated description",
-    null, null, null, null, null, null, null, null
-);
+AgentInfo updated = client.updateAgent(agentId,
+    new UpdateAgentRequest().withDescription("updated description"));
 
 // 创建或更新（先按名称查找，存在则更新，不存在则创建）
-Map<String, Object> agent = client.createOrUpdateAgent(
-    "my-agent", "description",
-    null, null, null, null, null, null, null, null, null
-);
+agent = client.createOrUpdateAgent("my-agent",
+    new CreateAgentRequest().withDescription("description"));
 
 // 列出 Agent（分页）
-List<Map<String, Object>> agents = client.getAgents("name-filter", 1, 10);
-List<Map<String, Object>> allAgents = client.getAgents();  // 默认分页
+AgentListResponse resp = client.getAgents("name-filter", 1, 10);
+List<AgentInfo> agents = resp.getItems();
+List<AgentInfo> allAgents = client.getAgents().getItems();  // 默认分页
 
-// 按名称查找
-Map<String, Object> agent = client.findAgentByName("my-agent");  // null 表示未找到
+// 按名称查找（null 表示未找到）
+AgentInfo found = client.findAgentByName("my-agent");
 
 // 按 ID 查找
-Map<String, Object> agent = client.findAgentById(agentId);
+AgentInfo foundById = client.findAgentById(agentId);
 
 // 按名称删除（内部先查找 ID，再删除）
 boolean deleted = client.deleteAgentByName("my-agent");
@@ -350,24 +348,25 @@ boolean deleted = client.deleteAgentByName("my-agent");
 ### 控制面：Endpoint CRUD
 
 ```java
-// 创建 Endpoint
-Map<String, Object> ep = client.createAgentEndpoint(agentId, "my-endpoint");
+// 创建 Endpoint（仅 agentId + 名称，返回含 endpoint UUID）
+AgentEndpointInfo ep = client.createAgentEndpoint(agentId, "my-endpoint");
+String endpointId = ep.getId();  // 后续 update/find/delete 用此 UUID
 
-// 创建 Endpoint（带类型和配置）
-Map<String, Object> ep = client.createAgentEndpoint(
-    agentId, "my-endpoint", "invocations", Map.of("timeout", 30)
+// 创建 Endpoint（带类型、配置、目标版本名）
+ep = client.createAgentEndpoint(
+    agentId, "my-endpoint", "invocations", Map.of("timeout", 30), "v1"
 );
 
-// 更新 Endpoint
-Map<String, Object> updated = client.updateAgentEndpoint(
-    agentId, "my-endpoint", Map.of("timeout", 60)
+// 更新 Endpoint（第 2 个参数是 endpoint UUID，不是名称）
+AgentEndpointInfo updated = client.updateAgentEndpoint(
+    agentId, endpointId, Map.of("timeout", 60)
 );
 
-// 查找 Endpoint
-Map<String, Object> ep = client.findAgentEndpoint(agentId, "my-endpoint");
+// 查找 Endpoint（第 2 个参数是 endpoint UUID）
+AgentEndpointInfo found = client.findAgentEndpoint(agentId, endpointId);
 
-// 删除 Endpoint
-client.deleteAgentEndpoint(agentId, "my-endpoint");
+// 删除 Endpoint（第 2 个参数是 endpoint UUID）
+client.deleteAgentEndpoint(agentId, endpointId);
 ```
 
 ### 数据面：调用与执行
@@ -453,20 +452,20 @@ client.stopSession("my-agent", sessionId);
 
 | 平面 | 方法 | 说明 |
 |------|------|------|
-| 控制面 | `createAgent(name, description)` | 创建 Agent |
-| 控制面 | `createAgent(name, desc, artifact, identity, invoke, network, obs, agency, gw, env, tags)` | 创建 Agent（完整参数） |
-| 控制面 | `updateAgent(id, desc, artifact, invoke, network, obs, agency, gw, env, tags)` | 更新 Agent |
-| 控制面 | `createOrUpdateAgent(name, desc, ...)` | 创建或更新 Agent |
-| 控制面 | `getAgents(name, offset, limit)` | 列出 Agent（分页） |
+| 控制面 | `createAgent(name, description)` | 创建 Agent（返回 `AgentInfo`） |
+| 控制面 | `createAgent(CreateAgentRequest req)` | 创建 Agent（完整参数，用 builder 构造） |
+| 控制面 | `updateAgent(id, UpdateAgentRequest req)` | 更新 Agent（返回 `AgentInfo`） |
+| 控制面 | `createOrUpdateAgent(name, CreateAgentRequest req)` | 创建或更新 Agent |
+| 控制面 | `getAgents(name, offset, limit)` | 列出 Agent（返回 `AgentListResponse`，`.getItems()` 取列表） |
 | 控制面 | `getAgents()` | 列出 Agent（默认分页） |
-| 控制面 | `findAgentByName(name)` | 按名称查找 |
-| 控制面 | `findAgentById(id)` | 按 ID 查找 |
+| 控制面 | `findAgentByName(name)` | 按名称查找（返回 `AgentInfo`，未找到 null） |
+| 控制面 | `findAgentById(id)` | 按 ID 查找（返回 `AgentInfo`） |
 | 控制面 | `deleteAgentByName(name)` | 按名称删除 |
-| 控制面 | `createAgentEndpoint(agentId, name)` | 创建 Endpoint |
-| 控制面 | `createAgentEndpoint(agentId, name, type, config)` | 创建 Endpoint（完整参数） |
-| 控制面 | `updateAgentEndpoint(agentId, name, config)` | 更新 Endpoint |
-| 控制面 | `deleteAgentEndpoint(agentId, name)` | 删除 Endpoint |
-| 控制面 | `findAgentEndpoint(agentId, name)` | 查找 Endpoint |
+| 控制面 | `createAgentEndpoint(agentId, name)` | 创建 Endpoint（返回 `AgentEndpointInfo`，含 UUID） |
+| 控制面 | `createAgentEndpoint(agentId, name, type, config, targetVersionName)` | 创建 Endpoint（完整参数） |
+| 控制面 | `updateAgentEndpoint(agentId, endpointId, config)` | 更新 Endpoint（第 2 参为 endpoint UUID） |
+| 控制面 | `deleteAgentEndpoint(agentId, endpointId)` | 删除 Endpoint（第 2 参为 endpoint UUID） |
+| 控制面 | `findAgentEndpoint(agentId, endpointId)` | 查找 Endpoint（第 2 参为 endpoint UUID） |
 | 数据面 | `invokeAgent(name, sessionId, payload)` | 调用 Agent |
 | 数据面 | `invokeAgent(name, sid, payload, token, endpoint, timeout, userId, customPath)` | 调用 Agent（完整参数） |
 | 数据面 | `execCommand(name, sessionId, command)` | 执行命令 |

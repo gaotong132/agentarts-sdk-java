@@ -99,8 +99,6 @@ agentarts-sdk-java/
 ### 2. Create Your Agent
 
 ```java
-import com.huaweicloud.agentarts.sdk.core.annotation.Entrypoint;
-import com.huaweicloud.agentarts.sdk.core.annotation.Ping;
 import com.huaweicloud.agentarts.sdk.core.PingStatus;
 import com.huaweicloud.agentarts.sdk.runtime.AgentArtsRuntimeApp;
 
@@ -110,20 +108,22 @@ public class MyAgent {
 
     private final AgentArtsRuntimeApp app = new AgentArtsRuntimeApp();
 
-    @Entrypoint
     public Map<String, Object> handle(Map<String, Object> payload) {
         String message = (String) payload.get("message");
         // Your agent logic here
         return Map.of("result", "Hello from Java agent: " + message);
     }
 
-    @Ping
     public PingStatus healthCheck() {
         return PingStatus.HEALTHY;
     }
 
     public static void main(String[] args) {
         MyAgent agent = new MyAgent();
+        // Programmatic registration. (app.run() does not scan @Entrypoint/@Ping
+        // annotations — use `agentarts dev` for annotation-based auto-wiring.)
+        agent.app.setEntrypoint(agent::handle);
+        agent.app.setPingHandler(agent::healthCheck);
         agent.app.run(8080);
     }
 }

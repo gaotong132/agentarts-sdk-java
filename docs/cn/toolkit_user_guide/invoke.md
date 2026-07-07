@@ -12,16 +12,18 @@ agentarts invoke <payload> [选项]
 
 | 参数 | 缩写 | 说明 | 默认值 |
 |------|------|------|--------|
-| `payload` | | JSON 请求体 | 必需 |
+| `payload` | | JSON 请求体（位置参数） | 必需 |
 | `--agent` | `-a` | Agent 名称 | 默认 Agent |
-| `--region` | `-r` | 华为云区域 | 配置文件值 |
+| `--region` | `-r` | 华为云区域（cloud 模式） | 配置文件值 |
 | `--mode` | `-m` | 调用模式：`cloud` 或 `local` | `cloud` |
 | `--port` | `-p` | 本地模式端口 | `8080` |
-| `--endpoint` | | 自定义端点 URL | 自动检测 |
-| `--session` | | 会话 ID | — |
-| `--bearer-token` | | Bearer 认证令牌 | — |
-| `--timeout` | | 超时时间（秒） | `30` |
-| `--user-id` | `-u` | 用户 ID | — |
+| `--endpoint` | `-e` | Endpoint 名称（非 URL） | 自动检测 |
+| `--session` | `-s` | 会话 ID | — |
+| `--bearer-token` | `-bt` | Bearer 认证令牌 | — |
+| `--timeout` | | 请求超时（秒） | `900` |
+| `--user-id` | `-u` | 用户 ID（OAuth2 出站凭证） | — |
+| `--skip-ssl-verification` | `-k` | 跳过 SSL 证书验证 | `false` |
+| `--custom-path` | | 附加到 `/invocations` 之后的自定义路径 | — |
 
 ## 调用模式
 
@@ -55,10 +57,10 @@ agentarts invoke '{"message":"Hello!"}' -m local -p 8080
 agentarts invoke '{"message":"继续上次对话"}' -a my-agent --session session-123
 
 # 带 Bearer 认证
-agentarts invoke '{"message":"Hello!"}' -a my-agent --bearer-token your-token
+agentarts invoke '{"message":"Hello!"}' -a my-agent -bt your-token
 
-# 自定义端点
-agentarts invoke '{"message":"Hello!"}' --endpoint https://custom-endpoint.com
+# 指定 Endpoint 名称
+agentarts invoke '{"message":"Hello!"}' -a my-agent -e my-endpoint
 
 # 设置超时
 agentarts invoke '{"message":"Complex task"}' --timeout 120

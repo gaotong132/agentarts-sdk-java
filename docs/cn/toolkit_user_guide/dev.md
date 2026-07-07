@@ -13,10 +13,11 @@ agentarts dev [选项]
 | 参数 | 缩写 | 说明 | 默认值 |
 |------|------|------|--------|
 | `--port` | `-p` | 服务器端口 | `8080` |
-| `--host` | | 绑定地址 | `0.0.0.0` |
+| `--host` | `-h` | 绑定地址 | `0.0.0.0` |
 | `--reload` | | 启用热重载 | `false` |
-| `--config` | | 配置文件路径 | `.agentarts_config.yaml` |
-| `--env` | `-e` | 设置环境变量（可多次使用） | — |
+| `--config` | `-c` | 配置文件路径 | `.agentarts_config.yaml` |
+| `--path` | | 项目路径（含 `.agentarts_config.yaml`） | 当前目录 |
+| `--env` | `-e` | 设置环境变量（`KEY=VALUE`，可多次使用） | — |
 
 ## 示例
 
@@ -61,6 +62,7 @@ curl -X POST http://localhost:8080/invocations \
 
 ## 环境变量优先级
 
-1. `--env` 命令行参数（最高优先级）
-2. 配置文件中的 `runtime.environment_variables`
-3. 系统环境变量（最低优先级）
+1. `--env` 命令行参数（通过 `System.setProperty` 注入，最高优先级）
+2. 系统环境变量
+
+> `dev` 命令从配置文件读取 entrypoint 与端口等，但当前不自动应用配置文件中的 `runtime.environment_variables`；如需注入环境变量，请用 `--env` 或系统环境变量。

@@ -25,7 +25,8 @@ agentarts init [选项]
 |------|------|
 | `basic` | 基础 Java 处理器 |
 | `agentscope` | agentscope-java ReActAgent 集成 |
-| `docker` | Docker 部署模板 |
+
+> Dockerfile 在所有模板下都会生成（`docker/Dockerfile.tpl`），无需单独的 `docker` 模板。
 
 ## 示例
 
@@ -45,8 +46,9 @@ agentarts init --name my-agent --template agentscope --region cn-southwest-2 --s
 ```
 my-agent/
 ├── pom.xml                          # Maven 构建文件
+├── Dockerfile                       # 容器镜像构建文件
 ├── src/main/java/com/example/
-│   └── MyAgentAgent.java            # Agent 入口类
+│   └── Agent.java                   # Agent 入口类（public class Agent，与文件名一致）
 └── .agentarts_config.yaml           # AgentArts 配置文件
 ```
 

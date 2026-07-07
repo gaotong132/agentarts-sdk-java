@@ -54,15 +54,18 @@ Java SDK 提供与 Python `@require_*` 等价的注解：
 import com.huaweicloud.agentarts.sdk.core.annotation.RequireAccessToken;
 import com.huaweicloud.agentarts.sdk.core.annotation.RequireApiKey;
 import com.huaweicloud.agentarts.sdk.core.annotation.RequireStsToken;
+import com.huaweicloud.sdk.agentidentity.v1.model.GetResourceStsTokenResponse;
 
 // OAuth2 USER_FEDERATION 流程
-@RequireAccessToken(providerName = "my-oauth2-provider", authFlow = "USER_FEDERATION")
+@RequireAccessToken(providerName = "my-oauth2-provider",
+        authFlow = RequireAccessToken.AuthFlow.USER_FEDERATION)
 public void handleOAuth2(String accessToken) {
     // accessToken 自动注入
 }
 
 // OAuth2 M2M 流程
-@RequireAccessToken(providerName = "my-m2m-provider", authFlow = "M2M")
+@RequireAccessToken(providerName = "my-m2m-provider",
+        authFlow = RequireAccessToken.AuthFlow.M2M)
 public void handleM2M(String accessToken) {
     // accessToken 自动注入
 }
@@ -75,8 +78,10 @@ public void handleApiKey(String apiKey) {
 
 // STS Token
 @RequireStsToken(providerName = "my-sts-provider", agencySessionName = "my-session")
-public void handleSts(StsCredentials credentials) {
-    // credentials.getAccessKeyId(), credentials.getSecretAccessKey(), credentials.getSecurityToken()
+public void handleSts(GetResourceStsTokenResponse stsCredentials) {
+    // stsCredentials.getCredentials().getAccessKeyId()
+    // stsCredentials.getCredentials().getSecretAccessKey()
+    // stsCredentials.getCredentials().getSecurityToken()
 }
 ```
 
@@ -112,8 +117,8 @@ IdentityClient client = new IdentityClient();  // 使用默认区域
 | 方法 | 说明 |
 |------|------|
 | `createApiKeyCredentialProvider(providerName, apiKey)` | 创建 API Key 凭证提供者 |
-| `createOauth2CredentialProvider(providerName)` | 创建 OAuth2 凭证提供者 |
-| `createStsCredentialProvider(providerName)` | 创建 STS 凭证提供者 |
+| `createOauth2CredentialProvider(name, vendor, clientId, clientSecret)` | 创建 OAuth2 凭证提供者（vendor 为 `CredentialProviderVendor` 枚举） |
+| `createStsCredentialProvider(providerName, agencyUrn)` | 创建 STS 凭证提供者（agencyUrn 形如 `iam::<agencyName>`） |
 
 ### 资源凭证获取
 

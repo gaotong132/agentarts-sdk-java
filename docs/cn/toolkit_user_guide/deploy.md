@@ -16,12 +16,12 @@ agentarts launch [选项]  # 别名
 | `--agent` | `-a` | Agent 名称 | 默认 Agent |
 | `--mode` | `-m` | 部署模式：`cloud` 或 `local` | `cloud` |
 | `--tag` | `-t` | Docker 镜像标签 | `latest` |
-| `--local-port` | | 本地模式端口 | `8080` |
-| `--swr-org` | | SWR 组织名 | 配置文件值 |
-| `--swr-repo` | | SWR 仓库名 | 配置文件值 |
+| `--local-port` | `-l` | 本地模式端口映射 | — |
+| `--swr-org` | | SWR 组织名（覆盖配置文件） | 配置文件值 |
+| `--swr-repo` | | SWR 仓库名（覆盖配置文件） | 配置文件值 |
 | `--description` | `-d` | Agent 描述 | — |
-| `--skip-build` | | 跳过 Docker 构建 | `false` |
-| `--skip-ssl-verification` | | 跳过 SSL 验证 | `false` |
+| `--skip-build` | | 跳过构建/推送，直接用配置中的镜像 URL | `false` |
+| `--skip-ssl-verification` | `-k` | 跳过 SSL 证书验证 | `false` |
 
 ## 部署模式
 
@@ -98,6 +98,8 @@ agents:
 
 ### 镜像 URL 优先级
 
-1. `--swr-org` + `--swr-repo` 命令行参数
-2. 配置文件中的 `swr_config`
-3. 默认使用 Agent 名称
+1. 配置文件中的 `runtime.artifact_source.url`（最高，跳过 SWR 推送）
+2. `--swr-org` + `--swr-repo` 命令行参数
+3. 配置文件中的 `swr_config`
+
+> 若以上均未提供，deploy 将报错（不会自动回退到 Agent 名称）。

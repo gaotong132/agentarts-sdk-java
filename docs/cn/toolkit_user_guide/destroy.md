@@ -15,6 +15,7 @@ agentarts destroy [选项]
 | `--agent` | `-a` | Agent 名称 | 交互式选择 |
 | `--region` | `-r` | 华为云区域 | 配置文件值 |
 | `--yes` | `-y` | 跳过确认提示 | `false` |
+| `--skip-ssl-verification` | `-k` | 跳过 SSL 证书验证 | `false` |
 
 ## 示例
 
