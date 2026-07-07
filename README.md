@@ -9,7 +9,7 @@ Build, deploy and manage AI agents with Huawei Cloud capabilities.
 
 ## Overview
 
-AgentArts Java SDK is a comprehensive toolkit for developing, deploying, and managing AI agents on Huawei Cloud. It integrates natively with [agentscope-java](https://github.com/agentscope/agentscope-java) (Reactor-based agent framework). See also the [Python SDK](https://github.com/huaweicloud/agentarts-sdk-python).
+AgentArts Java SDK is a comprehensive toolkit for developing, deploying, and managing AI agents on Huawei Cloud. It integrates natively with [agentscope-java](https://github.com/agentscope-ai/agentscope-java) (Reactor-based agent framework). See also the [Python SDK](https://github.com/huaweicloud/agentarts-sdk-python).
 
 ### Key Features
 
@@ -362,7 +362,7 @@ Tests whose prerequisites aren't met are silently skipped via `assumeTrue()` at 
 
 ## Dependency Versions
 
-Key dependencies aligned with [agentscope-java](https://github.com/agentscope/agentscope-java) BOM:
+Key dependencies aligned with [agentscope-java](https://github.com/agentscope-ai/agentscope-java) BOM:
 
 | Dependency | Version | Notes |
 |---|---|---|
