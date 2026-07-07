@@ -10,14 +10,14 @@ AgentArts Java SDK 端到端测试的运行方法、三层安全模型、Python 
 
 ## 1. 概述
 
-`mvn test`（无云凭证时 E2E 云用例自动跳过）：**650 用例，0 失败，9 跳过**。
+`mvn test`（无云凭证时 E2E 云用例自动跳过）：**643 用例，0 失败，2 跳过**。
 
 | 层次 | 数量 | 说明 |
 |---|---|---|
 | 单元 + 集成 | 537 | 各模块内部，无云凭证即可运行 |
-| E2E | 162 | `agentarts-sdk-tests/e2e` 包（97）+ `agentarts-toolkit-cli` 脚手架（65） |
+| E2E | 155 | `agentarts-sdk-tests/e2e` 包（90）+ `agentarts-toolkit-cli` 脚手架（65） |
 
-E2E 与 Python 全面对齐：SDK 云 E2E 69、CLI 云 E2E 21（与 Python `toolkit/` 21:21）、Java 独有 7（状态存储，@Disabled）+ 65（脚手架）。**无 mock/桩**——全部驱动真实云 HTTP 或真实本地 Vert.x 服务器。
+E2E 与 Python 全面对齐：SDK 云 E2E 69、CLI 云 E2E 21（与 Python `toolkit/` 21:21）、Java 独有 65（脚手架）。**无 mock/桩**——全部驱动真实云 HTTP 或真实本地 Vert.x 服务器。
 
 ---
 
@@ -184,7 +184,7 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 | `test_cli_memory_list_readonly` | `test_cli_memory_list_readonly` | ✅ | 退出码 0 + 含 `spaces`/`total` |
 | `test_cli_memory_lifecycle` | `test_cli_memory_lifecycle` | ✅ | create→list→get→update→status→delete，id 匹配 |
 
-> Java 独有（Python 无对应）：`MemoryAgentStateStoreE2ETest` 7（@Disabled，见 §6.3）、`CliE2ETest` 38 + `CliModuleTest` 27（脚手架）。
+> Java 独有（Python 无对应）：`CliE2ETest` 38 + `CliModuleTest` 27（脚手架，65 用例）。
 
 ### 4.1 SDK 云 E2E — 补充说明
 
@@ -205,7 +205,6 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 
 | Java 类 | 数量 | 覆盖 |
 |---|---|---|
-| `MemoryAgentStateStoreE2ETest` | 7（**@Disabled**） | 状态存储 roundtrip；后端静态加密，无解密路径，见 §6.3 |
 | `CliE2ETest` | 38 | 脚手架细粒度（pom.xml/Agent.java/config/Dockerfile/模板/help/选项） |
 | `CliModuleTest` | 27 | 命令树、选项默认值/别名、模板存在性、配置格式 |
 
@@ -213,13 +212,13 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 
 | 维度 | Python | Java |
 |---|---|---|
-| 用例数 | 90 | 162（97 e2e 包 + 65 脚手架） |
+| 用例数 | 90 | 155（90 e2e 包 + 65 脚手架） |
 | SDK 云 E2E | 69 | 69（58 ✅ + 11 🟡） |
 | CLI 云 E2E | 21 | 21（17 ✅ + 4 🟡） |
-| Java 独有 | — | 65 脚手架 + 7 @Disabled 状态存储 |
+| Java 独有 | — | 65 脚手架 |
 | Python 有 Java 缺失 | — | 0 |
 
-> **真实 AK/SK 验证**：L1 + L2 + CLI 云 E2E 全绿。e2e 包 97 用例，启用 AK/SK + ALLOW_CREATE（不含 L3）时 93 计入（**78 通过 + 15 软跳过**），另 4 个 `CliDeployedRuntime` 缺 Docker+L3 类级跳过。**0 失败 0 错误**。15 跳过：状态存储 7（@Disabled）、OAuth2/STS 4、`delete_memory` 2（后端未产出 memory）、CI/Runtime 计费 2（无 RUN_BILLABLE）。
+> **真实 AK/SK 验证**：L1 + L2 + CLI 云 E2E 全绿。e2e 包 90 用例，启用 AK/SK + ALLOW_CREATE（不含 L3）时 86 计入（**78 通过 + 8 软跳过**），另 4 个 `CliDeployedRuntime` 缺 Docker+L3 类级跳过。**0 失败 0 错误**。8 跳过：OAuth2/STS 4、`delete_memory` 2（后端未产出 memory）、CI/Runtime 计费 2（无 RUN_BILLABLE）。
 
 ---
 
@@ -228,7 +227,7 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 | 模块 | E2E 用例 | 覆盖 |
 |---|---|---|
 | Identity | 14 | Workload Identity CRUD、API Key/OAuth2/STS provider CRUD、access token、`@Require*` 装饰器 |
-| Memory | 29 | Space CRUD、Session/Messages/Memories 全数据面（`parts` 为 `List<Object>` 容忍加密）、同步+异步、`MemorySession` wrapper、状态存储（@Disabled） |
+| Memory | 22 | Space CRUD、Session/Messages/Memories 全数据面（`parts` 为 `List<Object>` 容忍加密）、同步+异步、`MemorySession` wrapper |
 | Gateway | 6 | Gateway/Target CRUD |
 | Code Interpreter | 4 | 控制面 CRUD + 计费沙箱 session |
 | Runtime | 18 | Agent/Endpoint CRUD、数据面 session（计费）、本地 RuntimeApp（ping/invocations/SSE/WS） |
@@ -247,8 +246,8 @@ Java 仅 `basic` / `agentscope`；Python 另有 `langgraph` / `langchain` / `goo
 ### 6.2 CLI 子命令 best-effort 限制（非桩）
 `RuntimeCommand` upload-files（base64 非流式）、download-files（UTF-8 解码可能损坏二进制）、`--endpoint` 未透传；`MemoryCommand` `--strategies/--tags/--vpc-id` 已接收未接 `createSpace`。
 
-### 6.3 Memory 静态加密 → state store 不可验证
-后端对消息内容静态加密（`parts=["_encrypted", <密文>]`、`meta=null`），SDK 无解密路径。message 类测试改按 size/role/id 断言通过；`MemoryAgentStateStore` 7 用例 @Disabled，待后端提供解密或非加密 space。
+### 6.3 Memory 消息内容静态加密
+后端对消息内容静态加密（`parts=["_encrypted", <密文>]`、`meta=null`），SDK 无解密路径。message 类测试改按 size/role/id 断言通过（不断言密文内容）。`MemoryAgentStateStore` 生产类仍可用（README/示例有引用），但其状态 roundtrip 在此后端上无法 E2E 验证，相关 E2E 用例已移除。
 
 ### 6.4 其他
 - Runtime Agent 自建（硬编码 SWR 镜像）可能被后端拒收 → 全跳过（见 §4.1）。
