@@ -269,10 +269,15 @@ public class BaseHttpClient implements AutoCloseable {
                 signRequest(method, fullUrl, mergedHeaders, body, queryParams);
             }
 
-            // Serialize body
+            // Serialize body. byte[] is sent as raw bytes (for streaming uploads
+            // with a caller-supplied Content-Type, e.g. application/octet-stream);
+            // other objects are JSON-serialized.
             String bodyStr = null;
+            byte[] bodyBytes = null;
             if (body != null) {
-                if (body instanceof String) {
+                if (body instanceof byte[]) {
+                    bodyBytes = (byte[]) body;
+                } else if (body instanceof String) {
                     bodyStr = (String) body;
                 } else {
                     bodyStr = OBJECT_MAPPER.writeValueAsString(body);
@@ -304,7 +309,9 @@ public class BaseHttpClient implements AutoCloseable {
             // Send request
             CompletableFuture<RequestResult> future = new CompletableFuture<>();
 
-            if (bodyStr != null) {
+            if (bodyBytes != null) {
+                request.sendBuffer(Buffer.buffer(bodyBytes), ar -> handleResponse(ar, future));
+            } else if (bodyStr != null) {
                 request.sendBuffer(Buffer.buffer(bodyStr), ar -> handleResponse(ar, future));
             } else {
                 request.send(ar -> handleResponse(ar, future));
@@ -474,7 +481,12 @@ public class BaseHttpClient implements AutoCloseable {
         }
 
         String bodyStr = "";
-        if (body != null) {
+        // byte[] bodies are streamed raw (non-JSON Content-Type); the SDK-HMAC
+        // signer hashes a body *string*, so leave the signed body empty for raw
+        // bytes — V11 (UNSIGNED-PAYLOAD) is unaffected, and bearer-token agents
+        // do not verify the body signature.
+        boolean binaryBody = body instanceof byte[];
+        if (body != null && !binaryBody) {
             if (body instanceof String) {
                 bodyStr = (String) body;
             } else {

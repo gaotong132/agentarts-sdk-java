@@ -52,7 +52,17 @@ public class ConfigOperation {
 
     private static File configFile() {
         File override = CONFIG_FILE_OVERRIDE.get();
-        return override != null ? override : new File(CONFIG_FILE);
+        if (override != null) {
+            return override;
+        }
+        // Resolve against the live `user.dir` system property rather than a
+        // relative path. For real CLI use `user.dir` is the process CWD (set at
+        // JVM startup), so this is equivalent to `new File(CONFIG_FILE)`. But
+        // unlike a relative path it also honors runtime updates to `user.dir`
+        // (Java cannot chdir at runtime; tests redirect by setting the property,
+        // the Java analog of the Python suite's `monkeypatch.chdir`).
+        String cwd = System.getProperty("user.dir", ".");
+        return new File(cwd, CONFIG_FILE);
     }
 
     /**

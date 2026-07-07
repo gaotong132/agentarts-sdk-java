@@ -64,7 +64,12 @@ public class DeployOperation {
         String tag = (imageTag == null || imageTag.isBlank()) ? "latest" : imageTag;
         boolean verifySsl = !skipSsl;
 
-        Path projectDir = Paths.get(".").toAbsolutePath().normalize();
+        // Resolve the project dir against the live `user.dir` system property
+        // instead of `Paths.get(".")` — Java caches the process CWD at JVM
+        // startup, so a relative path ignores runtime `user.dir` updates (tests
+        // redirect CWD by setting the property; real CLI use is unaffected since
+        // `user.dir` equals the CWD at startup).
+        Path projectDir = Paths.get(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
         AgentArtsConfigList configList = ConfigOperation.loadConfig();
         String agentKey = resolveAgentKey(configList, agentName);
         if (agentKey == null) {
@@ -345,12 +350,16 @@ public class DeployOperation {
     private static boolean buildProjectAndImage(String agentName, String tag, Path projectDir, String region) {
         // 1. Maven package (produces the fat jar via the shade plugin).
         if (Files.isRegularFile(projectDir.resolve("pom.xml"))) {
-            String mvn = findOnPath("mvn");
+            // On Windows a bare `mvn` (no extension) is a bash shell script that
+            // CreateProcess cannot execute (error 193); `mvn.cmd` is the native
+            // entry point. On POSIX `mvn.cmd` does not exist, so fall back to `mvn`.
+            String mvn = findOnPath("mvn.cmd");
             if (mvn == null) {
-                mvn = findOnPath("mvn.cmd");
+                mvn = findOnPath("mvn");
             }
             if (mvn == null) {
-                // Best-effort: assume mvn is invokable by name on PATH.
+                // Best-effort: assume mvn is invokable by name on PATH (PATHEXT
+                // resolves `mvn` -> `mvn.cmd` on Windows when no full path is given).
                 mvn = "mvn";
             }
             System.out.println("  Building project artifact (mvn package)...");
@@ -361,8 +370,14 @@ public class DeployOperation {
                 return false;
             }
         }
-        // 2. docker build
-        int code = runProcess(Arrays.asList("docker", "build", "-t", agentName + ":" + tag, "."),
+        // 2. docker build. Disable buildx provenance/attestation and pin a single
+        // platform: Docker Desktop's default buildx builder emits an OCI manifest
+        // LIST (with an attestation manifest) which SWR cannot parse — pushes fail
+        // with "Invalid image, fail to parse 'manifest.json'". A single-platform
+        // build with --provenance=false yields a classic Docker v2 schema-2
+        // manifest that SWR accepts. linux/amd64 matches the runtime target.
+        int code = runProcess(Arrays.asList("docker", "build", "--provenance=false",
+                "--platform=linux/amd64", "-t", agentName + ":" + tag, "."),
                 projectDir.toFile(), null, "docker build");
         if (code != 0) {
             System.err.println("  docker build failed (exit " + code + ")");

@@ -195,7 +195,7 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 所有 CLI 命令 `run()`/`call()` 接通 SDK 客户端，无 `println` 桩：`McpGatewayCommand`/`MemoryCommand`/`RuntimeCommand` → 对应 `*Client`；`DeployOperation` → mvn package + docker build + SWR + `createOrUpdateAgent` + 回写 `agent_id`；`DevOperation` → 反射加载 entrypoint `createApp()` + `app.run(port)`；`InvokeOperation` → 本地 Vertx WebClient / 云端 `RuntimeClient.invokeAgent`；`ConfigCommand`/`InitCommand` → `ConfigOperation`/`InitOperation`。
 
 - **`CliLocalE2ETest`** 与 Python `test_cli_local.py` **1:1（13:13）**。config 类用 `ConfigOperation.setConfigFileOverride` 重定向到 `@TempDir`（等价 Python `monkeypatch.chdir`）。
-- **`CliDeployedRuntimeE2ETest`** 4 用例在 L3 + Docker 满足时真实运行 deploy 链，LIFO 清理（`deleteAgentByName` + `docker rmi -f`）；SWR org/repo/image 残留为已知项。
+- **`CliDeployedRuntimeE2ETest`** 4 用例在 L3 + Docker 满足时真实运行 deploy 链，LIFO 清理（`deleteAgentByName` + `docker rmi -f` + 删除 SWR repo/namespace）。SWR org/repo 随用例自动清理，不残留。
 - `CliE2ETest`/`CliModuleTest`（60 用例）提供等价细粒度脚手架断言。
 
 ### 4.3 Java 独有
@@ -215,7 +215,8 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 | Java 独有 | — | 60 脚手架 |
 | Python 有 Java 缺失 | — | 0 |
 
-> **真实 AK/SK 验证**：L1 + L2 + CLI 云 E2E 全绿。e2e 包 90 用例，启用 AK/SK + ALLOW_CREATE（不含 L3）时 86 计入（**78 通过 + 8 软跳过**），另 4 个 `CliDeployedRuntime` 缺 Docker+L3 类级跳过。**0 失败 0 错误**。8 跳过：OAuth2/STS 4、`delete_memory` 2（后端未产出 memory）、CI/Runtime 计费 2（无 RUN_BILLABLE）。
+> **真实 AK/SK 验证**：L1 + L2 + CLI 云 E2E + L3 Docker deploy 全绿。e2e 包 90 用例：启用 AK/SK + ALLOW_CREATE（不含 L3）时 86 计入（**78 通过 + 8 软跳过**）；另设 `RUN_BILLABLE=1` + Docker 后 `CliDeployedRuntimeE2ETest` 4 用例计入（**3 通过 + 1 软跳过**，file-transfer 401 软跳——IAM-only agent 上传需 bearer token，与 Python 套件同态）。**0 失败 0 错误**。8 跳过：OAuth2/STS 4、`delete_memory` 2（后端未产出 memory）、CI/Runtime 计费 2（无 RUN_BILLABLE）。
+
 
 ---
 
@@ -241,7 +242,7 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 Java 仅 `basic` / `agentscope`；Python 另有 `langgraph` / `langchain` / `google-adk`（3 个 `test_*_template_not_supported` 记录缺口）。
 
 ### 6.2 CLI 子命令 best-effort 限制（非桩）
-`RuntimeCommand` upload-files（base64 非流式）、download-files（UTF-8 解码可能损坏二进制）、`--endpoint` 未透传；`MemoryCommand` `--strategies/--tags/--vpc-id` 已接收未接 `createSpace`。
+`RuntimeCommand` download-files（UTF-8 解码可能损坏二进制）；`MemoryCommand` `--strategies/--tags/--vpc-id` 已接收未接 `createSpace`。upload-files 已实现 `application/octet-stream`（单文件）/ `multipart/form-data`（多文件）流式上传，与参考 CLI wire 格式一致。
 
 ### 6.3 Memory 消息内容静态加密
 后端对消息内容静态加密（`parts=["_encrypted", <密文>]`、`meta=null`），SDK 无解密路径。message 类测试改按 size/role/id 断言通过（不断言密文内容）。`MemoryAgentStateStore` 生产类仍可用（README/示例有引用），但其状态 roundtrip 在此后端上无法 E2E 验证，相关 E2E 用例已移除。

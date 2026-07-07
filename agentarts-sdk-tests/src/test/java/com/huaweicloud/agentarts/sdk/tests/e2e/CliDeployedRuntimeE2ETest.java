@@ -108,9 +108,34 @@ class CliDeployedRuntimeE2ETest {
         }
         deployOk = true;
 
-        // 4. Register LIFO cleanup: destroy the runtime agent + remove the local image.
+        // 4. Register LIFO cleanup: destroy the runtime agent, remove the local
+        // image, and delete the SWR namespace/repo created by deploy (org/repo
+        // both equal the agent name, auto-created per the basic template). SWR
+        // cleanup is registered FIRST so it runs LAST in LIFO order — after the
+        // runtime agent is gone, the SWR repo is deleted (must precede namespace
+        // deletion, which requires an empty namespace), then the namespace.
         final String name = agentName;
         final String reg = region;
+        registry.register(() -> {
+            try (com.huaweicloud.agentarts.sdk.service.swr.SWRServiceClient swr =
+                         new com.huaweicloud.agentarts.sdk.service.swr.SWRServiceClient(reg, true)) {
+                com.huaweicloud.sdk.swr.v2.SwrClient sc = swr.getSyncClient();
+                try {
+                    sc.deleteRepo(new com.huaweicloud.sdk.swr.v2.model.DeleteRepoRequest()
+                            .withNamespace(name).withRepository(name));
+                } catch (Exception ignored) {
+                    /* repo already gone */
+                }
+                try {
+                    sc.deleteNamespaces(new com.huaweicloud.sdk.swr.v2.model.DeleteNamespacesRequest()
+                            .withNamespace(name));
+                } catch (Exception ignored) {
+                    /* namespace already gone */
+                }
+            } catch (Exception ignored) {
+                /* swr client failure — best-effort */
+            }
+        }, "swr-namespace:" + name);
         registry.register(() -> {
             try (RuntimeClient c = new RuntimeClient(reg, true)) {
                 c.deleteAgentByName(name);
@@ -346,9 +371,15 @@ class CliDeployedRuntimeE2ETest {
             System.out.println("[setup] Could not locate SDK root; assuming artifacts are in local repo.");
             return;
         }
-        // Skip if the runtime jar is already in the local repo.
-        File localJar = new File(System.getProperty("user.home"),
-                ".m2/repository/com/huaweicloud/agentarts/agentarts-sdk-runtime/"
+        // Skip if the runtime jar is already in the local repo. Resolve the
+        // *effective* local repo (it may be customized via ~/.m2/settings.xml
+        // <localRepository> or -Dmaven.repo.local) rather than assuming the
+        // default ~/.m2/repository — a hardcoded path would always miss on
+        // machines with a custom local repo and trigger a redundant full
+        // upstream rebuild on every run.
+        File localRepo = resolveMavenLocalRepo();
+        File localJar = new File(localRepo,
+                "com/huaweicloud/agentarts/agentarts-sdk-runtime/"
                         + "0.1.0-SNAPSHOT/agentarts-sdk-runtime-0.1.0-SNAPSHOT.jar");
         if (localJar.isFile()) {
             System.out.println("[setup] agentarts-sdk-runtime already in local repo at " + localJar);
@@ -381,6 +412,50 @@ class CliDeployedRuntimeE2ETest {
             if (d.isEmpty()) continue;
             File f = new File(d, name);
             if (f.canExecute()) return f.getAbsolutePath();
+        }
+        return null;
+    }
+
+    /**
+     * Resolve the effective Maven local repository directory, in the same order
+     * Maven does: {@code -Dmaven.repo.local} system property, then
+     * {@code <localRepository>} in {@code ~/.m2/settings.xml}, then the global
+     * {@code conf/settings.xml} (via {@code M2_HOME}/{@code MAVEN_HOME}), then
+     * the default {@code ~/.m2/repository}.
+     */
+    private static File resolveMavenLocalRepo() {
+        String prop = System.getProperty("maven.repo.local");
+        if (prop != null && !prop.isBlank()) {
+            return new File(prop.trim());
+        }
+        String home = System.getProperty("user.home");
+        String fromUserSettings = readLocalRepositoryFromSettings(
+                new File(home, ".m2" + File.separator + "settings.xml"));
+        if (fromUserSettings != null) {
+            return new File(fromUserSettings);
+        }
+        String mavenHome = System.getenv("M2_HOME");
+        if (mavenHome == null || mavenHome.isBlank()) mavenHome = System.getenv("MAVEN_HOME");
+        if (mavenHome != null && !mavenHome.isBlank()) {
+            String fromGlobal = readLocalRepositoryFromSettings(
+                    new File(mavenHome, "conf" + File.separator + "settings.xml"));
+            if (fromGlobal != null) {
+                return new File(fromGlobal);
+            }
+        }
+        return new File(home, ".m2" + File.separator + "repository");
+    }
+
+    /** Extract {@code <localRepository>} from a Maven settings.xml (regex; comments ignored). */
+    private static String readLocalRepositoryFromSettings(File settings) {
+        if (settings == null || !settings.isFile()) return null;
+        try {
+            String content = Files.readString(settings.toPath());
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                    "<localRepository>\\s*([^<]+?)\\s*</localRepository>").matcher(content);
+            if (m.find()) return m.group(1).trim();
+        } catch (Exception ignored) {
+            // unreadable settings — fall back to default
         }
         return null;
     }

@@ -129,12 +129,10 @@ public class RuntimeCommand implements Runnable {
 
         @Override
         public void run() {
-            // TODO: the Java RuntimeClient.uploadFiles posts an UploadFilesRequest as JSON
-            // (files carried as base64 content). The backend's /upload-files endpoint expects
-            // application/octet-stream (single file) or multipart/form-data (multiple files),
-            // as the reference CLI streams. Until the Java client gains a streaming upload path,
-            // this command reads each local file and carries its bytes (Jackson base64-encodes
-            // byte[]) — real uploads against the cloud may not succeed via this JSON path.
+            // Read each local file into memory and carry its bytes + filename.
+            // RuntimeClient.uploadFiles streams single-file uploads as
+            // application/octet-stream (raw bytes) and multi-file uploads as
+            // multipart/form-data, matching the reference CLI's wire format.
             List<Map<String, Object>> fileMaps = new ArrayList<>();
             for (String f : files) {
                 Path local = Path.of(f);

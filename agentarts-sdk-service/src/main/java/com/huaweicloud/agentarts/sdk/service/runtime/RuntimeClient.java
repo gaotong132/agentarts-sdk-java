@@ -12,6 +12,8 @@ import com.huaweicloud.agentarts.sdk.service.runtime.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
@@ -317,16 +319,83 @@ public class RuntimeClient implements AutoCloseable {
                                             Integer fileUserId, Integer fileGroupId, String fileMode,
                                             String bearerToken, String endpoint, String userId,
                                             int timeout) {
-        UploadFilesRequest req = new UploadFilesRequest()
-                .withFiles(files)
-                .withPath(remotePath != null ? remotePath : "/home/user/")
-                .withFileUserId(fileUserId)
-                .withFileGroupId(fileGroupId)
-                .withFileMode(fileMode);
+        if (files == null || files.isEmpty()) {
+            throw new IllegalArgumentException("Files list cannot be empty");
+        }
+        String path = (remotePath != null && !remotePath.isBlank()) ? remotePath : "/home/user/";
 
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
-        RequestResult result = getDataClient().post("/runtimes/" + agentName + "/upload-files", headers, req).block();
+        // file metadata travels as query params (matches the reference CLI wire format).
+        Map<String, List<String>> params = new LinkedHashMap<>();
+        if (fileUserId != null) params.put("user_id", List.of(String.valueOf(fileUserId)));
+        if (fileGroupId != null) params.put("group_id", List.of(String.valueOf(fileGroupId)));
+        if (fileMode != null) params.put("file_mode", List.of(fileMode));
+        if (endpoint != null && !endpoint.isBlank()) params.put("endpoint", List.of(endpoint));
+
+        final String uploadUrl = "/runtimes/" + agentName + "/upload-files";
+        RequestResult result;
+        if (files.size() == 1) {
+            // Single file: application/octet-stream, raw bytes streamed, path = remote FILE path.
+            Map<String, Object> file = files.get(0);
+            byte[] content = fileContentBytes(file.get("content"));
+            if (content == null) {
+                throw new IllegalArgumentException(
+                        "File \"content\" (bytes) is required for single-file upload");
+            }
+            String filename = (file.get("filename") != null)
+                    ? String.valueOf(file.get("filename")) : "file_0";
+            String fileRemote = (file.get("path") != null && !String.valueOf(file.get("path")).isBlank())
+                    ? String.valueOf(file.get("path"))
+                    : (path.endsWith("/") ? path + filename : path + "/" + filename);
+            params.put("path", List.of(fileRemote));
+            headers.put("Content-Type", "application/octet-stream");
+            result = getDataClient().request("POST", uploadUrl, headers, content, params).block();
+        } else {
+            // Multiple files: multipart/form-data, path = remote DIRECTORY.
+            params.put("path", List.of(path));
+            String boundary = "----agentarts-" + java.util.UUID.randomUUID();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            try {
+                byte[] crlf = "\r\n".getBytes(StandardCharsets.UTF_8);
+                int idx = 0;
+                for (Map<String, Object> file : files) {
+                    byte[] content = fileContentBytes(file.get("content"));
+                    if (content == null) {
+                        continue;
+                    }
+                    String filename = (file.get("filename") != null)
+                            ? String.valueOf(file.get("filename")) : "file_" + idx;
+                    String partHead = "--" + boundary + "\r\n"
+                            + "Content-Disposition: form-data; name=\"file\"; filename=\""
+                            + filename + "\"\r\n"
+                            + "Content-Type: application/octet-stream\r\n\r\n";
+                    out.write(partHead.getBytes(StandardCharsets.UTF_8));
+                    out.write(content);
+                    out.write(crlf);
+                    idx++;
+                }
+                out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+            } catch (java.io.IOException e) {
+                throw new IllegalStateException("Failed to build multipart upload body", e);
+            }
+            headers.put("Content-Type", "multipart/form-data; boundary=" + boundary);
+            result = getDataClient().request("POST", uploadUrl, headers, out.toByteArray(), params).block();
+        }
         return check(result, "upload_files");
+    }
+
+    /** Coerce a file spec's "content" field to raw bytes (byte[] or UTF-8 String). */
+    private static byte[] fileContentBytes(Object content) {
+        if (content == null) {
+            return null;
+        }
+        if (content instanceof byte[]) {
+            return (byte[]) content;
+        }
+        if (content instanceof String) {
+            return ((String) content).getBytes(StandardCharsets.UTF_8);
+        }
+        return null;
     }
 
     public Map<String, Object> uploadFiles(String agentName, String sessionId, List<Map<String, Object>> files) {

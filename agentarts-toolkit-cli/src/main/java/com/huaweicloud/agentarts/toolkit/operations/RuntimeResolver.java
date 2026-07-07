@@ -75,7 +75,10 @@ public final class RuntimeResolver {
     private static AgentArtsConfigList loadConfigIfExists() {
         // Only load when a project config is present, so that running a runtime
         // subcommand outside a project dir does not create an empty config file.
-        if (!new File(".agentarts_config.yaml").exists()) {
+        // Resolve against the live `user.dir` (see DeployOperation/ConfigOperation
+        // for rationale — relative paths ignore runtime `user.dir` updates).
+        File cfg = new File(System.getProperty("user.dir", "."), ".agentarts_config.yaml");
+        if (!cfg.exists()) {
             return new AgentArtsConfigList();
         }
         return ConfigOperation.loadConfig();
