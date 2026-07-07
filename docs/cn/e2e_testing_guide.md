@@ -74,103 +74,132 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 
 图例：✅ 对齐 ｜ 🟡 双方同状态跳过 / 机制差异 ｜ ❌ Python 有 Java 缺失 ｜ ➕ Java 独有
 
-### 4.1 SDK 云 E2E（Python 顶层 ↔ Java `e2e` 包）
+### 4.0 总表（Python ↔ Java ↔ 状态 ↔ 断言）
 
-**Runtime 本地（无云）** — `RuntimeAppLocalTest` 11 用例，全 ✅。断言：ping 三态（healthy/unhealthy/busy）、invocations 200/404/400/500、SSE `data:` 事件数 + 内容、WebSocket close 1011 + echo。
+| Python | Java | 状态 | 断言 |
+|---|---|---|---|
+| **Runtime 本地**（`RuntimeAppLocalTest`，无云） | | | |
+| `test_ping_default_healthy` | `testPingDefaultHealthy` | ✅ | 200 + `status=healthy` + `time_of_last_update` |
+| `test_ping_force_unhealthy` | `testPingForceUnhealthy` | ✅ | 200 + `status=unhealthy` |
+| `test_ping_custom_handler` | `testPingCustomHandler` | ✅ | `status=healthy_busy` |
+| `test_invocation_returns_handler_result` | `testInvocationReturnsHandlerResult` | ✅ | 200 + `echo=hello` + session header |
+| `test_invocation_no_entrypoint_returns_404` | `testInvocationNoEntrypointReturns404` | ✅ | 404 |
+| `test_invocation_invalid_json_returns_400` | `testInvocationInvalidJsonReturns400` | ✅ | 400 |
+| `test_invocation_handler_raises_returns_500` | `testInvocationHandlerRaiseReturns500` | ✅ | 500 |
+| `test_invocation_sync_generator_streams_sse` | `testInvocationSyncGeneratorStreamsSse` | 🟡 | 200 + SSE + `data:`≥3 + 含 `a`/`c`（`Flux.just`） |
+| `test_invocation_async_generator_streams_sse` | `testInvocationAsyncGeneratorStreamsSse` | 🟡 | 200 + SSE + `data:`≥2（`Flux.interval`） |
+| `test_websocket_without_handler_closes_1011` | `testWebsocketWithoutHandlerCloses1011` | ✅ | closeCode==1011 |
+| `test_websocket_echo_handler` | `testWebsocketEchoHandler` | ✅ | `echo.msg=ping` |
+| **Runtime Session（L3）** | | | |
+| `test_runtime_session_upload_download` | `testRuntimeSessionUploadDownload` | ✅ | exec + download 含 `hello-aa-it` |
+| **只读列表（L1，`ReadonlyListsTest`）** | | | |
+| `test_list_spaces` | `testListSpaces` | ✅ | items 为 List |
+| `test_list_gateways` | `testListMcpGateways` | ✅ | `getDataAsJson()` 非空；403 软跳 |
+| `test_list_runtime_agents` | `testListRuntimeAgents` | ✅ | items 为 List |
+| `test_list_code_interpreters` | `testListCodeInterpreters` | ✅ | items 为 List |
+| **Identity 只读（L1，`IdentityReadonlyTest`）** | | | |
+| `test_list_workload_identities` | `testListWorkloadIdentities` | ✅ | 返回 List |
+| `test_list_api_key_credential_providers` | `testListApiKeyCredentialProviders` | ✅ | 返回 List |
+| `test_list_oauth2_credential_providers` | `testListOauth2CredentialProviders` | ✅ | 返回 List |
+| `test_list_sts_credential_providers` | `testListStsCredentialProviders` | ✅ | 返回 List |
+| `test_get_and_token_for_preprovisioned_workload_identity` | `testGetAndTokenForWorkloadIdentity` | 🟡 | name 匹配 + token 非空（无预置则临时 create→delete） |
+| **Identity 生命周期（L2，`IdentityLifecycleTest`）** | | | |
+| `test_get_created_workload_identity` | `testGetCreatedWorkloadIdentity` | ✅ | name 匹配 |
+| `test_update_workload_identity` | `testUpdateWorkloadIdentity` | ✅ | re-get 断言 return URL |
+| `test_list_workload_identities_contains_created` | `testListWorkloadIdentitiesContainsCreated` | ✅ | 含 created |
+| `test_get_api_key_credential_provider` | `testGetApiKeyCredentialProvider` | ✅ | name 匹配 |
+| `test_list_api_key_credential_providers_contains_created` | `testListApiKeyCredentialProvidersContainsCreated` | ✅ | 含 created |
+| `test_create_workload_access_token` | `testCreateWorkloadAccessToken` | ✅ | 非空 |
+| `test_get_resource_api_key` | `testGetResourceApiKey` | ✅ | 非空 |
+| `test_create_and_delete_oauth2_credential_provider` | `testCreateAndDeleteOauth2CredentialProvider` | 🟡 | 无 OAuth2 凭证，双方跳过 |
+| `test_create_and_delete_sts_credential_provider` | `testCreateAndDeleteStsCredentialProvider` | 🟡 | 无 STS URN，双方跳过 |
+| **Memory 生命周期（L2，`MemoryLifecycleTest`）** | | | |
+| `test_get_space` | `testGetSpace` | ✅ | id + name |
+| `test_list_spaces_contains_created` | `testListSpacesContainsCreated` | ✅ | 含 created |
+| `test_update_space` | `testUpdateSpace` | ✅ | re-get 断言 description |
+| `test_session_created` | `testSessionCreated` | ✅ | id 非空 |
+| `test_add_messages` | `testAddMessages` | ✅ | size==2 |
+| `test_list_messages` | `testListMessages` | ✅ | total≥2 + size==total |
+| `test_get_last_k_messages` | `testGetLastKMessages` | ✅ | size=2 + 含 user/assistant |
+| `test_get_message` | `testGetMessage` | ✅ | msgId 匹配 |
+| `test_search_memories` | `testSearchMemories` | ✅ | size==total |
+| `test_list_memories` | `testListMemories` | ✅ | size==total |
+| `test_delete_memory_if_any` | `testDeleteMemoryIfAny` | ✅ | 18s 轮询；有则删 + re-list，无则软跳 |
+| `test_memory_session_wrapper` | `testMemorySessionWrapper` | ✅ | last-k size + total |
+| **Memory 异步（L2，`MemoryAsyncTest`）** | | | |
+| `test_async_get_last_k_messages` | `testAsyncGetLastKMessages` | ✅ | size=2 + 含 user/assistant |
+| `test_async_list_messages` | `testAsyncListMessages` | ✅ | total≥2 + size==total |
+| `test_async_get_message` | `testAsyncGetMessage` | ✅ | msgId 匹配 |
+| `test_async_search_memories` | `testAsyncSearchMemories` | ✅ | size==total |
+| `test_async_list_memories` | `testAsyncListMemories` | ✅ | size==total |
+| `test_async_delete_memory_if_any` | `testAsyncDeleteMemory` | ✅ | 18s 轮询；有则删，无则软跳 |
+| `test_async_create_session_and_add_messages` | `testAsyncCreateSessionAndAddMessages` | ✅ | 走真实 `*Async` API；id + total≥1 |
+| `test_async_session_wrapper` | `testAsyncSessionWrapper` | 🟡 | 用同步 `MemorySession.of` |
+| **Code Interpreter（L2 + L3）** | | | |
+| `test_get_code_interpreter` | `testGetCodeInterpreter` | ✅ | id 匹配 |
+| `test_list_code_interpreters` | `testListCodeInterpreters` | ✅ | 含 created（按 id） |
+| `test_update_code_interpreter` | `testUpdateCodeInterpreter` | ✅ | re-get 断言 tags `{env=aa-it}` |
+| `test_code_session_full_workflow` | `testCodeSessionFullWorkflow` | ✅ | echo+upload+download 含 `hello-aa-it` |
+| **Gateway 生命周期（L2，`McpGatewayLifecycleTest`）** | | | |
+| `test_get_gateway` | `testGetGateway` | ✅ | 响应体含 gatewayId |
+| `test_list_gateways` | `testListGateways` | ✅ | 响应含 created gatewayId |
+| `test_update_gateway` | `testUpdateGateway` | ✅ | re-get 断言 description |
+| `test_get_target` | `testGetTarget` | ✅ | 响应体含 targetId |
+| `test_list_targets` | `testListTargets` | ✅ | 响应含 created targetId |
+| `test_update_target` | `testUpdateTarget` | ✅ | re-get 断言 description |
+| **Runtime Agent 生命周期（L2，`RuntimeAgentLifecycleTest`）** | | | |
+| `test_find_agent_by_name` | `testFindAgentByName` | 🟡 | id 匹配（Java 自建 agent） |
+| `test_find_agent_by_id` | `testFindAgentById` | 🟡 | id 匹配 |
+| `test_get_agents` | `testGetAgents` | 🟡 | !isEmpty + 含 created |
+| `test_update_agent` | `testUpdateAgent` | ✅ | re-find 断言 description |
+| `test_find_agent_endpoint` | `testFindAgentEndpoint` | ✅ | 按 UUID，id + name 匹配 |
+| `test_update_agent_endpoint` | `testUpdateAgentEndpoint` | ✅ | 按 UUID，config 持久化 |
+| **Auth 装饰器（L2，`AuthDecoratorsTest`）** | | | |
+| `test_require_api_key_injects_key` | `testRequireApiKeyInjectsKey` | ✅ | api_key 非空 |
+| `test_require_sts_token_injects_credentials` | `testRequireStsTokenInjectsCredentials` | 🟡 | 无 URN 跳过；有则 access/secret 非空 |
+| `test_require_access_token_3lo_is_manual` | `testRequireAccessToken3loIsManual` | 🟡 | OAuth2 3LO 交互式，双方跳过 |
+| **CLI 本地（`CliLocalE2ETest`，无云）** | | | |
+| `test_cli_version` | `test_cli_version` | ✅ | 退出码 0 + 输出含 `agentarts` |
+| `test_cli_help` | `test_cli_help` | ✅ | 退出码 0 |
+| `test_init_creates_project_files[basic]` | `test_init_creates_project_files` | ✅ | pom.xml/Agent.java/config/Dockerfile 存在 |
+| `test_init_creates_project_files[langgraph]` | `test_langgraph_template_not_supported` | 🟡 | `assertThrows(IOException)` 缺口 |
+| `test_init_creates_project_files[langchain]` | `test_langchain_template_not_supported` | 🟡 | 同上 |
+| `test_init_creates_project_files[google-adk]` | `test_google_adk_template_not_supported` | 🟡 | 同上 |
+| `test_init_path_option` | `test_init_path_option` | ✅ | 项目在指定子目录 |
+| `test_init_invalid_name_fails` | `test_init_invalid_name_fails` | ✅ | 退出码非 0 + 目录未建 |
+| `test_config_add_writes_yaml_and_lists` | `test_config_add_writes_yaml_and_lists` | ✅ | YAML 含 agent + list 退出码 0 |
+| `test_config_set_get_roundtrip` | `test_config_set_get_roundtrip` | ✅ | YAML + get 退出码 0 |
+| `test_config_env_lifecycle` | `test_config_env_lifecycle` | ✅ | set/list/remove-env YAML 增删 |
+| `test_config_set_default_and_remove` | `test_config_set_default_and_remove` | ✅ | `getAgent("a2")` 在、`getAgent("a1")` null |
+| `test_dev_server_serves_ping_and_invocations` | `test_dev_server_serves_ping_and_invocations` | ✅ | ping 200 + invocations 200 + echo |
+| **CLI Deployed Runtime（L3，`CliDeployedRuntimeE2ETest`）** | | | |
+| `test_deploy_succeeds` | `test_deploy_succeeds` | ✅ | config 含非空 `agent_id` |
+| `test_invoke_deployed_agent` | `test_invoke_deployed_agent` | ✅ | `invoke --mode cloud` 退出码 0（404/503 软跳） |
+| `test_runtime_session_on_deployed_agent` | `test_runtime_session_on_deployed_agent` | ✅ | session_id 非空 + exec/stop 退出码 0 |
+| `test_runtime_file_transfer_on_deployed_agent` | `test_runtime_file_transfer_on_deployed_agent` | ✅ | 下载内容 `== "hello-aa-it"`（401 软跳） |
+| **CLI Gateway（`CliGatewayE2ETest`）** | | | |
+| `test_cli_gateway_list_readonly` | `test_cli_gateway_list_readonly` | ✅ | 退出码 0 + JSON（403 软跳） |
+| `test_cli_gateway_create` | `test_cli_gateway_lifecycle` | ✅ | create→get→list→delete，id 匹配 |
+| **CLI Memory（`CliMemoryE2ETest`）** | | | |
+| `test_cli_memory_list_readonly` | `test_cli_memory_list_readonly` | ✅ | 退出码 0 + 含 `spaces`/`total` |
+| `test_cli_memory_lifecycle` | `test_cli_memory_lifecycle` | ✅ | create→list→get→update→status→delete，id 匹配 |
 
-**Runtime Session（L3）** — `RuntimeSessionLifecycleTest`
+> Java 独有（Python 无对应）：`MemoryAgentStateStoreE2ETest` 7（@Disabled，见 §6.3）、`CliE2ETest` 38 + `CliModuleTest` 27（脚手架）。
 
-| Python | Java | 状态 |
-|---|---|---|
-| `test_runtime_session_upload_download` | `testRuntimeSessionUploadDownload` | ✅ exec + download 内容含 `hello-aa-it` |
+### 4.1 SDK 云 E2E — 补充说明
 
-**只读列表（L1）** — `ReadonlyListsTest` 4 用例
+- **Runtime 本地**：Java 用 Vert.x `WebClient`/`HttpClient` 驱动真实 `AgentArtsRuntimeApp`（Python 用 Starlette `TestClient`）。SSE 用 `Flux.just`/`Flux.interval`（Java 无 sync/async 生成器）。
+- **Memory 异步**：`MemoryClient` 的 `*Async` 方法返回真实 cold `Mono`（订阅时执行真实云 HTTP；底层同步方法 `.block()` 阻塞 boundedElastic，非真正非阻塞 reactive，但非桩）。`test_async_session_wrapper` 用同步 `MemorySession.of`（Java 无 `AsyncMemorySession`）。
+- **Gateway**：`createMcpGateway` 自动创建/复用 IAM agency `AgentArtsCoreGateway`（trust policy `sts:agencies:assume` + 系统策略 `AgentArtsCoreGatewayIdentityAgencyPolicy`），不删除。
+- **Runtime Agent**：Java 自建 agent（硬编码 SWR 镜像），Python 复用预置/部署 agent。若 `createAgent` 抛错（镜像不可达 / 后端拒收），`requireSetup()` 静默跳过全部 6 用例——运行时全跳应查 `setupError` 而非视为通过。
 
-| Python | Java | 断言 |
-|---|---|---|
-| `test_list_spaces` / `test_list_runtime_agents` / `test_list_code_interpreters` | 同名 | items 为 List |
-| `test_list_gateways` | `testListMcpGateways` | `getDataAsJson()` 非空；403 软跳过 |
+### 4.2 CLI 工具链 — 补充说明
 
-**Identity 只读（L1）** — `IdentityReadonlyTest` 5 用例，全 ✅。4 个 list 断言返回 List；`get_and_token` 断言 name 匹配 + token 非空（无预置时临时 create→delete）。
+所有 CLI 命令 `run()`/`call()` 接通 SDK 客户端，无 `println` 桩：`McpGatewayCommand`/`MemoryCommand`/`RuntimeCommand` → 对应 `*Client`；`DeployOperation` → mvn package + docker build + SWR + `createOrUpdateAgent` + 回写 `agent_id`；`DevOperation` → 反射加载 entrypoint `createApp()` + `app.run(port)`；`InvokeOperation` → 本地 Vertx WebClient / 云端 `RuntimeClient.invokeAgent`；`ConfigCommand`/`InitCommand` → `ConfigOperation`/`InitOperation`。
 
-**Identity 生命周期（L2）** — `IdentityLifecycleTest` 9 用例
-
-| Python | Java | 状态 |
-|---|---|---|
-| `test_get_created_workload_identity` | 同名 | ✅ name 匹配 |
-| `test_update_workload_identity` | 同名 | ✅ re-get 断言 return URL |
-| `test_list_*_contains_created`（×2） | 同名 | ✅ 含 created |
-| `test_get_api_key_credential_provider` | 同名 | ✅ name 匹配 |
-| `test_create_workload_access_token` / `test_get_resource_api_key` | 同名 | ✅ 非空 |
-| `test_create_and_delete_oauth2_credential_provider` | 同名 | 🟡 无 OAuth2 凭证，双方跳过 |
-| `test_create_and_delete_sts_credential_provider` | 同名 | 🟡 无 STS URN，双方跳过 |
-
-**Memory 生命周期（L2）** — `MemoryLifecycleTest` 12 用例，全 ✅。Space CRUD（get 断言 id+name、update re-get 断言 description）、session/messages（size=2、total≥2、含 user/assistant 角色、msgId 匹配）、memories（size==total 一致性）、`delete_memory` 18s 轮询有则删无则软跳、`MemorySession` wrapper。
-
-**Memory 异步（L2）** — `MemoryAsyncTest` 8 用例，全 ✅/🟡。走真实 `Mono`-returning `*Async` API（订阅时执行真实云 HTTP；底层同步方法 `.block()`，非真正非阻塞 reactive，但非桩）。`test_async_session_wrapper` 🟡 Java 无 `AsyncMemorySession`，用同步 `MemorySession.of`。
-
-**Code Interpreter（L2 + L3）** — `CodeInterpreterLifecycleTest` 3 用例（L2，全 ✅：id 匹配、list 含 created、update re-get 断言 tags）+ `CodeInterpreterSessionTest` 1 用例（L3：execute/command/upload/download/get_session/clear_context，echo+upload+download 统一哨兵串 `hello-aa-it`）。
-
-**Gateway 生命周期（L2）** — `McpGatewayLifecycleTest` 6 用例，全 ✅
-
-| Python | Java | 断言 |
-|---|---|---|
-| `test_get_gateway` / `test_get_target` | 同名 | 响应体含 requested id |
-| `test_list_gateways` / `test_list_targets` | 同名 | 响应含 created id |
-| `test_update_gateway` / `test_update_target` | 同名 | re-get 断言 description 持久化 |
-
-> `createMcpGateway` 自动创建/复用 IAM agency `AgentArtsCoreGateway`（trust policy `sts:agencies:assume` + 系统策略 `AgentArtsCoreGatewayIdentityAgencyPolicy`），不删除。
-
-**Runtime Agent 生命周期（L2）** — `RuntimeAgentLifecycleTest` 6 用例
-
-| Python | Java | 状态 |
-|---|---|---|
-| `test_find_agent_by_name` / `test_find_agent_by_id` / `test_get_agents` | 同名 | 🟡 Python 复用预置 agent；Java 自建（硬编码 SWR 镜像），断言 id 匹配 + 含 created |
-| `test_update_agent` | 同名 | ✅ re-find 断言 description |
-| `test_find_agent_endpoint` / `test_update_agent_endpoint` | 同名 | ✅ 按 endpoint UUID，断言 id+name / config 持久化 |
-
-> 若 `createAgent` 抛错（镜像不可达 / 后端拒收），`requireSetup()` 静默跳过全部 6 用例——运行时全跳应查 `setupError` 而非视为通过。
-
-**Auth 装饰器（L2）** — `AuthDecoratorsTest` 3 用例
-
-| Python | Java | 状态 |
-|---|---|---|
-| `test_require_api_key_injects_key` | 同名 | ✅ `AuthInterceptor.wrap()`+`@RequireApiKey`，断言 api_key 非空 |
-| `test_require_sts_token_injects_credentials` | 同名 | 🟡 无 STS URN 跳过；提供时断言 access/secret 非空 |
-| `test_require_access_token_3lo_is_manual` | 同名 | 🟡 OAuth2 3LO 交互式，双方跳过 |
-
-### 4.2 CLI 工具链（Python `toolkit/` ↔ Java `e2e` 包 CLI 类 + `toolkit-cli` 脚手架）
-
-所有 CLI 命令 `run()`/`call()` 接通 SDK 客户端，无 `println` 桩。
-
-**`test_cli_local.py`（本地，无云）** — `CliLocalE2ETest` 13 用例，与 Python **1:1**
-
-| Python | Java | 断言 |
-|---|---|---|
-| `test_cli_version` / `test_cli_help` | 同名 | 退出码 0（+ version 输出含 `agentarts`） |
-| `test_init_creates_project_files[basic]` | `test_init_creates_project_files` | pom.xml / Agent.java / .agentarts_config.yaml / Dockerfile 存在 |
-| `[langgraph]` / `[langchain]` / `[google-adk]` | `test_*_template_not_supported` | 🟡 `assertThrows(IOException)` 记录缺口 |
-| `test_init_path_option` / `test_init_invalid_name_fails` | 同名 | 退出码 0 / 非 0 + 目录创建与否 |
-| `test_config_add_writes_yaml_and_lists` | 同名 | YAML 含 agent + `config list` 退出码 0 |
-| `test_config_set_get_roundtrip` | 同名 | YAML + get 退出码 0 |
-| `test_config_env_lifecycle` | 同名 | set-env/list-env/remove-env YAML 增删 |
-| `test_config_set_default_and_remove` | 同名 | `getAgent("a2")` 仍在、`getAgent("a1")` 为 null |
-| `test_dev_server_serves_ping_and_invocations` | 同名 | `/ping` 200 + `/invocations` 200 + `response=hello from dev e2e` |
-
-> config 类用 `ConfigOperation.setConfigFileOverride` 重定向到 `@TempDir`（等价 Python `monkeypatch.chdir`）。`CliE2ETest`/`CliModuleTest`（65 用例）提供等价细粒度脚手架断言。
-
-**`test_cli_deployed_runtime.py`（L3，Docker）** — `CliDeployedRuntimeE2ETest` 4 用例，全 ✅（L3 + Docker 满足时真实运行 deploy 链）
-
-| Python | Java | 断言 |
-|---|---|---|
-| `test_deploy_succeeds` | 同名 | config 含非空 `agent_id` |
-| `test_invoke_deployed_agent` | 同名 | `invoke --mode cloud` 退出码 0（404/503 软跳） |
-| `test_runtime_session_on_deployed_agent` | 同名 | `session_id` 非空 + exec/stop 退出码 0 |
-| `test_runtime_file_transfer_on_deployed_agent` | 同名 | 下载内容 `== "hello-aa-it"`（401 软跳） |
-
-**`test_cli_gateway.py`** — `CliGatewayE2ETest` 2 用例 ✅：readonly（list 退出码 0 + JSON，403 软跳）、lifecycle（create→get→list→delete，id 匹配）。
-
-**`test_cli_memory.py`** — `CliMemoryE2ETest` 2 用例 ✅：readonly（含 `spaces`/`total`）、lifecycle（create→list→get→update→status→delete，id 匹配）。
+- **`CliLocalE2ETest`** 与 Python `test_cli_local.py` **1:1（13:13）**。config 类用 `ConfigOperation.setConfigFileOverride` 重定向到 `@TempDir`（等价 Python `monkeypatch.chdir`）。
+- **`CliDeployedRuntimeE2ETest`** 4 用例在 L3 + Docker 满足时真实运行 deploy 链，LIFO 清理（`deleteAgentByName` + `docker rmi -f`）；SWR org/repo/image 残留为已知项。
+- `CliE2ETest`/`CliModuleTest`（65 用例）提供等价细粒度脚手架断言。
 
 ### 4.3 Java 独有
 
