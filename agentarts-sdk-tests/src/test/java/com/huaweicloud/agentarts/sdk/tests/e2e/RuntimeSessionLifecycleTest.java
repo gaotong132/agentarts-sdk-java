@@ -42,8 +42,9 @@ class RuntimeSessionLifecycleTest {
             // 1. Start session
             Map<String, Object> started = client.startSession(agentName);
             assertNotNull(started);
-            String backendSid = started.get("session_id") != null
-                    ? started.get("session_id").toString() : sessionId;
+            assertNotNull(started.get("session_id"),
+                    "startSession must return a session_id; got: " + started);
+            String backendSid = started.get("session_id").toString();
 
             registry.register(
                     () -> client.stopSession(agentName, backendSid),

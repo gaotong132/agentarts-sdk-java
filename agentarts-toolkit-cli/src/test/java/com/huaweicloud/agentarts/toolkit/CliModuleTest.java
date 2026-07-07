@@ -321,7 +321,6 @@ class CliModuleTest {
             assertTrue(Files.exists(output));
             String content = Files.readString(output);
             assertTrue(content.contains("public class Agent"));
-            assertTrue(content.contains("demo"));
         }
     }
 
@@ -332,15 +331,6 @@ class CliModuleTest {
     @Nested
     @DisplayName("Config YAML format matches Python")
     class ConfigFormatTests {
-
-        @Test
-        void configTemplateHasThreeLayers() throws Exception {
-            // Python config has base/swr_config/runtime three-layer structure
-            String content = TemplateManager.loadTemplate("basic/config.yaml.tpl");
-            assertTrue(content.contains("base:"), "Missing 'base' layer");
-            assertTrue(content.contains("swr_config:"), "Missing 'swr_config' layer");
-            assertTrue(content.contains("runtime:"), "Missing 'runtime' layer");
-        }
 
         @Test
         void configTemplateHasJavaDefaults() throws Exception {

@@ -172,7 +172,6 @@ class MemoryLifecycleTest {
         assertNotNull(result);
         assertNotNull(result.getResults(), "results should be a list");
         assertTrue(result.getResults() instanceof java.util.List, "results should be a List");
-        assertTrue(result.getTotal() >= 0, "total should be a non-negative int");
         // Consistency check (not tautology): total must equal the number of results.
         assertEquals(result.getResults().size(), result.getTotal(),
                 "total must match results.size() for a non-paginated search response");
@@ -186,7 +185,6 @@ class MemoryLifecycleTest {
         assertNotNull(result);
         assertNotNull(result.getItems(), "items should be a list");
         assertTrue(result.getItems() instanceof java.util.List, "items should be a List");
-        assertTrue(result.getTotal() >= 0, "total should be a non-negative int");
         // Consistency check (not tautology): total must equal the number of items returned
         // for this page (the API returns total items for the page, not the global count).
         assertEquals(result.getItems().size(), result.getTotal(),

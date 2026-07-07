@@ -59,10 +59,12 @@ class RuntimeClientTest {
         }
 
         @Test
-        void constructorsWork() {
-            assertNotNull(new RuntimeClient());
-            assertNotNull(new RuntimeClient("cn-southwest-2"));
-            assertNotNull(new RuntimeClient("cn-southwest-2", true));
+        void constructorsDoNotThrow() {
+            // RuntimeClient exposes no region/signMode getters, so the smoke test
+            // is that each public constructor completes without throwing.
+            new RuntimeClient();
+            new RuntimeClient("cn-southwest-2");
+            new RuntimeClient("cn-southwest-2", true);
         }
     }
 
@@ -84,9 +86,17 @@ class RuntimeClientTest {
 
         @Test
         void constructorsWork() {
-            assertNotNull(new LocalRuntimeClient());
-            assertNotNull(new LocalRuntimeClient(3000));
-            assertNotNull(new LocalRuntimeClient(3000, "localhost", 60));
+            LocalRuntimeClient c0 = new LocalRuntimeClient();
+            assertEquals(8080, c0.getPort());
+            assertEquals("localhost", c0.getHost());
+
+            LocalRuntimeClient c1 = new LocalRuntimeClient(3000);
+            assertEquals(3000, c1.getPort());
+            assertEquals("localhost", c1.getHost());
+
+            LocalRuntimeClient c2 = new LocalRuntimeClient(3000, "localhost", 60);
+            assertEquals(3000, c2.getPort());
+            assertEquals("localhost", c2.getHost());
         }
 
         @Test

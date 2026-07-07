@@ -90,13 +90,6 @@ class PingStatusTest {
     @Nested
     class ValueOf {
         @Test
-        void valueOfWorksForEnumNames() {
-            assertEquals(PingStatus.HEALTHY, PingStatus.valueOf("HEALTHY"));
-            assertEquals(PingStatus.HEALTHY_BUSY, PingStatus.valueOf("HEALTHY_BUSY"));
-            assertEquals(PingStatus.UNHEALTHY, PingStatus.valueOf("UNHEALTHY"));
-        }
-
-        @Test
         void valueOfThrowsForInvalid() {
             assertThrows(IllegalArgumentException.class, () -> PingStatus.valueOf("Healthy"));
         }

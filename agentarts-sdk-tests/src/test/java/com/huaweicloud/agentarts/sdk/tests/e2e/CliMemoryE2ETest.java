@@ -104,6 +104,22 @@ class CliMemoryE2ETest {
         JsonNode listed = parseJson(stdout);
         assertNotNull(listed, "list should print JSON; stdout=" + stdout);
         assertTrue(listed.has("spaces"), "list response should contain spaces; stdout=" + stdout);
+        // The just-created space must actually appear in the list (not just "spaces"
+        // key present) — iterate the array and match by id.
+        JsonNode spaces = listed.get("spaces");
+        boolean foundCreated = false;
+        if (spaces != null && spaces.isArray()) {
+            for (JsonNode s : spaces) {
+                JsonNode sid = s.get("id");
+                if (sid != null && !sid.isNull() && spaceId.equals(sid.asText())) {
+                    foundCreated = true;
+                    break;
+                }
+            }
+        }
+        assertTrue(foundCreated,
+                "list spaces should contain the just-created space id " + spaceId
+                        + "; stdout=" + stdout);
 
         // 3. Get via CLI — the returned id must match.
         int getExit = runCli("memory", "get", id, "--region", region, "--output", "json");

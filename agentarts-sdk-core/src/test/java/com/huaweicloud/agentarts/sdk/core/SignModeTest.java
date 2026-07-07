@@ -39,12 +39,6 @@ class SignModeTest {
     @Nested
     class ValueOf {
         @Test
-        void valueOfWorks() {
-            assertEquals(SignMode.SDK_HMAC_SHA256, SignMode.valueOf("SDK_HMAC_SHA256"));
-            assertEquals(SignMode.V11_HMAC_SHA256, SignMode.valueOf("V11_HMAC_SHA256"));
-        }
-
-        @Test
         void valueOfThrowsForInvalid() {
             assertThrows(IllegalArgumentException.class, () -> SignMode.valueOf("invalid"));
         }

@@ -146,26 +146,6 @@ class BaseHttpClientTest {
                 assertEquals(SignMode.V11_HMAC_SHA256, client.getSignMode());
             }
         }
-
-        @Test
-        void shouldManageAuthTokens() {
-            RequestConfig config = RequestConfig.builder().build();
-            try (BaseHttpClient client = new BaseHttpClient(config)) {
-                client.setAuthToken("Bearer", "test-token-123");
-                client.clearAuth();
-                // No exception means success
-            }
-        }
-
-        @Test
-        void shouldManageHeaders() {
-            RequestConfig config = RequestConfig.builder().build();
-            try (BaseHttpClient client = new BaseHttpClient(config)) {
-                client.setHeader("X-Custom", "value1");
-                client.setHeader("X-Another", "value2");
-                // No exception means success
-            }
-        }
     }
 
     // ========================

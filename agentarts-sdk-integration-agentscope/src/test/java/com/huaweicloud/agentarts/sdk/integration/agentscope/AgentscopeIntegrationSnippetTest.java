@@ -45,7 +45,7 @@ class AgentscopeIntegrationSnippetTest {
                 .name("my-agent").model(model).toolkit(toolkit)
                 .stateStore(new MemoryAgentStateStore(memoryClient, spaceId))
                 .build();
-        assertNotNull(agent);
+        // build() success is the smoke test — no filler assertNotNull needed.
 
         // Host the agent behind AgentArts Runtime — POST /invocations dispatches to it.
         // (app.run(port) omitted — it would block on the HTTP server.)
@@ -55,7 +55,7 @@ class AgentscopeIntegrationSnippetTest {
             var reply = agent.call(message, ctx).block();
             return Map.of("reply", reply != null ? reply.getTextContent() : "");
         });
-        assertNotNull(app);
+        // Construction of AgentscopeRuntimeHost is the smoke test — no filler assertNotNull.
 
         agent.close();
         gatewayClient.close();

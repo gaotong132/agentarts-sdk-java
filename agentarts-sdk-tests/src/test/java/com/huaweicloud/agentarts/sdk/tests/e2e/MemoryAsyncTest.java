@@ -121,7 +121,6 @@ class MemoryAsyncTest {
         assertNotNull(result);
         assertNotNull(result.getResults(), "results should be a list");
         assertTrue(result.getResults() instanceof java.util.List, "results should be a List");
-        assertTrue(result.getTotal() >= 0, "total should be a non-negative int");
         assertEquals(result.getResults().size(), result.getTotal(),
                 "total must match results.size()");
     }
@@ -134,7 +133,6 @@ class MemoryAsyncTest {
         assertNotNull(result);
         assertNotNull(result.getItems(), "items should be a list");
         assertTrue(result.getItems() instanceof java.util.List, "items should be a List");
-        assertTrue(result.getTotal() >= 0, "total should be a non-negative int");
         assertEquals(result.getItems().size(), result.getTotal(),
                 "total must match items.size() for the returned page");
     }

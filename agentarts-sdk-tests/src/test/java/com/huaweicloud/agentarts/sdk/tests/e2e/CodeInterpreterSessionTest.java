@@ -4,6 +4,7 @@ import com.huaweicloud.agentarts.sdk.tools.CodeInterpreterClient;
 import com.huaweicloud.agentarts.sdk.tools.CodeSession;
 import org.junit.jupiter.api.*;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -41,7 +42,14 @@ class CodeInterpreterSessionTest {
             // execute_code
             Map<String, Object> codeResult = client.executeCode("print(1+1)");
             assertNotNull(codeResult);
-            assertTrue(codeResult.toString().contains("2"));
+            // Dig into the real output field — the MCP result envelope is
+            // result.result.content[0].text (see downloadFile parsing in
+            // CodeInterpreterClient). The previous toString().contains("2") was
+            // vacuous: Map.toString() always contains digits from status/timestamps.
+            String codeOutput = extractExecuteOutput(codeResult);
+            assertTrue(codeOutput.contains("2"),
+                    "execute_code result.content[0].text should contain '2' (print(1+1)); "
+                            + "codeResult=" + codeResult);
 
             // execute_command — echo the same string we will upload, so the shell
             // output and the file content are tied by the same sentinel.
@@ -61,10 +69,42 @@ class CodeInterpreterSessionTest {
             // get_session
             var sess = client.getSession(ciName, session.getSessionId());
             assertNotNull(sess);
+            assertEquals(session.getSessionId(), sess.getSessionId(),
+                    "getSession should return the same session id; got: " + sess);
 
             // clear_context
             Map<String, Object> cleared = client.clearContext();
             assertNotNull(cleared);
+            // clearContext returns the execute_code response envelope; assert it
+            // carries a real backend result (not an empty/error map).
+            // CodeInterpreterClient exposes no list-context API to verify the
+            // context is actually empty, so we assert the clear operation was
+            // acknowledged by the backend rather than just exit-0/null.
+            assertTrue(cleared.containsKey("result"),
+                    "clearContext should return a response with a result field; got: " + cleared);
         }
+    }
+
+    /**
+     * Extract the textual output of an {@code execute_code} invoke response.
+     *
+     * <p>The MCP result envelope is {@code {result: {content: [{type: "text", text: "..."}]}}}
+     * (the same path {@link CodeInterpreterClient#downloadFile} navigates). This
+     * returns the first content item's {@code text} field, or the empty string if
+     * the envelope is absent — the caller asserts the content is non-vacuous.</p>
+     */
+    @SuppressWarnings("unchecked")
+    private static String extractExecuteOutput(Map<String, Object> codeResult) {
+        if (codeResult == null) return "";
+        Object resultObj = codeResult.get("result");
+        if (!(resultObj instanceof Map)) return "";
+        Object contentList = ((Map<String, Object>) resultObj).get("content");
+        if (!(contentList instanceof List)) return "";
+        List<?> contents = (List<?>) contentList;
+        if (contents.isEmpty()) return "";
+        Object first = contents.get(0);
+        if (!(first instanceof Map)) return "";
+        Object text = ((Map<?, ?>) first).get("text");
+        return text == null ? "" : text.toString();
     }
 }

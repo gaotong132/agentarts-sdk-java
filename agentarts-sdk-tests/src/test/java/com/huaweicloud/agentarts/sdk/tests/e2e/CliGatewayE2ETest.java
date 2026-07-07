@@ -74,8 +74,10 @@ class CliGatewayE2ETest {
         assertEquals(0, exit, "CLI list-mcp-gateways should exit 0; stderr=" + stderr);
         JsonNode node = parseJson(stdout);
         assertNotNull(node, "CLI list-mcp-gateways should print JSON; stdout=" + stdout);
-        // The list response is a JSON object (gateways array / total).
-        assertTrue(node.isObject(), "list response should be a JSON object; stdout=" + stdout);
+        // The list response must carry a real payload (gateways array / items / total),
+        // not just be any JSON object.
+        assertTrue(node.has("gateways") || node.has("items") || node.has("total"),
+                "list response should carry gateways/items/total; stdout=" + stdout);
     }
 
     /** {@code create → get → list → delete} through the CLI, asserting the CLI's JSON output. */
@@ -114,6 +116,23 @@ class CliGatewayE2ETest {
         JsonNode listed = parseJson(stdout);
         assertNotNull(listed, "list should print JSON; stdout=" + stdout);
         assertTrue(listed.isObject(), "list response should be a JSON object; stdout=" + stdout);
+        // The just-created gateway must actually appear in the list — scan the
+        // gateways/items array for an entry whose id / gateway_id matches gatewayId.
+        JsonNode arr = listed.has("gateways") ? listed.get("gateways")
+                : (listed.has("items") ? listed.get("items") : null);
+        boolean foundCreated = false;
+        if (arr != null && arr.isArray()) {
+            for (JsonNode g : arr) {
+                String gid = findText(g, "id", "gateway_id");
+                if (gatewayId.equals(gid)) {
+                    foundCreated = true;
+                    break;
+                }
+            }
+        }
+        assertTrue(foundCreated,
+                "list gateways should contain the just-created gateway id " + gatewayId
+                        + "; stdout=" + stdout);
 
         // 4. Delete via CLI.
         int deleteExit = runCli("mcp-gateway", "delete-mcp-gateway", id);

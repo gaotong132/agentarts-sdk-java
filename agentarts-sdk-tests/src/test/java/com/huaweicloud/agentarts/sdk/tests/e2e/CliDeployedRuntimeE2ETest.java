@@ -36,7 +36,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * {@code docker rmi} run as LIFO teardown.</p>
  *
  * <p>Gated behind cloud_credentials + ALLOW_CREATE + RUN_BILLABLE + Docker on
- * PATH, so it skips by default. SWR org/repo/image persist (documented residue).</p>
+ * PATH, so it skips by default. LIFO teardown deletes the runtime agent, the
+ * local image, and the SWR repo/namespace — no cloud residue.</p>
  */
 @Tag("e2e")
 @DisplayName("CLI Deployed Runtime E2E Tests")
@@ -191,6 +192,19 @@ class CliDeployedRuntimeE2ETest {
             assumeTrue(false, "Deployed agent not routable yet: " + stderr);
         }
         assertEquals(0, exit, "invoke should exit 0; stderr=" + stderr + " stdout=" + stdout);
+        // The agent must actually return a response payload, not just exit 0 with an
+        // empty body. Parse stdout as JSON and assert it carries a real reply (data /
+        // response field, or the echoed "hello" sentinel from the request payload).
+        JsonNode node = null;
+        try {
+            node = JsonUtils.MAPPER.readTree(stdout);
+        } catch (Exception e) {
+            // stdout not JSON — fall through to the content-based check below.
+        }
+        assertNotNull(node, "invoke stdout should be parseable JSON; stdout=" + stdout);
+        assertTrue(stdout.contains("hello") || stdout.contains("ok")
+                        || (node != null && (node.has("data") || node.has("response"))),
+                "invoke stdout should carry the agent response; stdout=" + stdout);
     }
 
     /** Mirrors {@code test_runtime_session_on_deployed_agent}: start-session →
@@ -213,6 +227,8 @@ class CliDeployedRuntimeE2ETest {
         int exec = runCli("runtime", "exec-command", "--agent", agentName,
                 "--region", region, "--session", sessionId, "echo aa-it");
         assertEquals(0, exec, "exec-command should exit 0; stderr=" + stderr + " stdout=" + stdout);
+        assertTrue(stdout.contains("aa-it"),
+                "exec-command stdout should contain the echoed 'aa-it'; stdout=" + stdout);
 
         int stop = runCli("runtime", "stop-session", "--agent", agentName,
                 "--region", region, "--session", sessionId);

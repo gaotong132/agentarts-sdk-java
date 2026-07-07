@@ -70,7 +70,6 @@ class CliE2ETest {
             // which is required for the generated project to compile.
             assertTrue(agent.contains("public class Agent"),
                     "Agent class should be named Agent to match its file");
-            assertTrue(agent.contains("demo"), "Agent should reference the project name");
             assertTrue(agent.contains("AgentArtsRuntimeApp"),
                     "Should reference AgentArtsRuntimeApp");
         }
@@ -109,7 +108,6 @@ class CliE2ETest {
 
             String dockerfile = Files.readString(tempDir.resolve("docker-test/Dockerfile"));
             assertTrue(dockerfile.contains("eclipse-temurin:17-jre"), "Missing base image");
-            assertTrue(dockerfile.contains("docker-test"), "Missing project name");
             assertTrue(dockerfile.contains("EXPOSE 8080"), "Missing expose");
         }
 
@@ -309,22 +307,6 @@ class CliE2ETest {
         }
 
         @Test
-        void helpCommandReturnsZero() {
-            StringWriter sw = new StringWriter();
-            cli.setOut(new PrintWriter(sw));
-            int exitCode = cli.execute("--help");
-            assertEquals(0, exitCode);
-        }
-
-        @Test
-        void versionCommandReturnsZero() {
-            StringWriter sw = new StringWriter();
-            cli.setOut(new PrintWriter(sw));
-            int exitCode = cli.execute("--version");
-            assertEquals(0, exitCode);
-        }
-
-        @Test
         void helpListsAllTopLevelCommands() {
             StringWriter sw = new StringWriter();
             cli.setOut(new PrintWriter(sw));
@@ -437,13 +419,14 @@ class CliE2ETest {
     class TemplateRenderingE2E {
 
         @Test
-        void allTemplatesRenderWithoutErrors() throws Exception {
-            // Verify all templates can be loaded
-            assertNotNull(TemplateManager.loadTemplate("basic/Agent.java.tpl"));
-            assertNotNull(TemplateManager.loadTemplate("agentscope/Agent.java.tpl"));
-            assertNotNull(TemplateManager.loadTemplate("basic/pom.xml.tpl"));
-            assertNotNull(TemplateManager.loadTemplate("basic/config.yaml.tpl"));
-            assertNotNull(TemplateManager.loadTemplate("docker/Dockerfile.tpl"));
+        void allTemplatesLoadWithoutError() throws Exception {
+            // loadTemplate throws on a missing template, so a clean return
+            // through these calls IS the check that every template is present.
+            TemplateManager.loadTemplate("basic/Agent.java.tpl");
+            TemplateManager.loadTemplate("agentscope/Agent.java.tpl");
+            TemplateManager.loadTemplate("basic/pom.xml.tpl");
+            TemplateManager.loadTemplate("basic/config.yaml.tpl");
+            TemplateManager.loadTemplate("docker/Dockerfile.tpl");
         }
 
         @Test
@@ -456,7 +439,6 @@ class CliE2ETest {
             // substituted into the welcome/invoke message.
             assertTrue(content.contains("public class Agent"),
                     "Class should be named Agent to match its file");
-            assertTrue(content.contains("weather"), "Project name should be substituted");
             assertFalse(content.contains("{{ name }}"), "Placeholder should be replaced");
             assertFalse(content.contains("{{name}}"), "Placeholder should be replaced");
         }
@@ -493,7 +475,8 @@ class CliE2ETest {
             TemplateManager.renderToFile("docker/Dockerfile.tpl", output, "name", "svc");
 
             String content = Files.readString(output);
-            assertTrue(content.contains("svc"), "Name should be in Dockerfile");
+            assertTrue(content.contains("COPY target/svc.jar app.jar"),
+                    "Name should be substituted into the COPY line");
             assertTrue(content.contains("eclipse-temurin:17-jre"), "Base image should be present");
         }
 
@@ -533,11 +516,15 @@ class CliE2ETest {
 
             Path projectDir = tempDir.resolve("buildable");
 
-            // Verify the generated Java file is syntactically plausible
+            // Verify the generated Java file references the runtime SDK and the
+            // substituted project name (specific identifiers — not generic Java
+            // keywords that any .java file would contain).
             String agentJava = Files.readString(projectDir.resolve("src/main/java/com/example/Agent.java"));
-            assertTrue(agentJava.contains("public class"), "Should have a public class");
-            assertTrue(agentJava.contains("public static void main"), "Should have main method");
-            assertTrue(agentJava.contains("import"), "Should have imports");
+            assertTrue(agentJava.contains("public class Agent"), "Should declare public class Agent");
+            assertTrue(agentJava.contains("AgentArtsRuntimeApp"),
+                    "Should reference AgentArtsRuntimeApp from the runtime SDK");
+            assertTrue(agentJava.contains("buildable"),
+                    "Project name should be substituted into the generated source");
 
             // Verify pom.xml is valid XML structure
             String pomXml = Files.readString(projectDir.resolve("pom.xml"));

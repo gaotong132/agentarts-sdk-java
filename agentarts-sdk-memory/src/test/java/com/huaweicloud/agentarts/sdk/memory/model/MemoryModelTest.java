@@ -811,10 +811,16 @@ class MemoryModelTest {
 
         @Test
         void jsonSerialization() throws Exception {
-            CreateMemorySessionRequest req = new CreateMemorySessionRequest();
-            // Use reflection to set fields since I need to check actual class
+            CreateMemorySessionRequest req = new CreateMemorySessionRequest()
+                    .withId("sess-1")
+                    .withActorId("actor-1")
+                    .withAssistantId("asst-1")
+                    .withMeta(Map.of("key", "val"));
             String json = JsonUtils.toJson(req);
-            assertNotNull(json);
+            assertTrue(json.contains("\"id\":\"sess-1\""));
+            assertTrue(json.contains("\"actor_id\":\"actor-1\""));
+            assertTrue(json.contains("\"assistant_id\":\"asst-1\""));
+            assertTrue(json.contains("\"key\":\"val\""));
         }
 
         @Test
@@ -822,8 +828,11 @@ class MemoryModelTest {
             String json = "{\"id\":\"sess-1\",\"actor_id\":\"actor-1\","
                     + "\"assistant_id\":\"asst-1\",\"meta\":{\"key\":\"val\"}}";
             CreateMemorySessionRequest req = JsonUtils.MAPPER.readValue(json, CreateMemorySessionRequest.class);
-            // Just verify it deserializes without error
-            assertNotNull(req);
+            assertEquals("sess-1", req.getId());
+            assertEquals("actor-1", req.getActorId());
+            assertEquals("asst-1", req.getAssistantId());
+            assertNotNull(req.getMeta());
+            assertEquals("val", req.getMeta().get("key"));
         }
     }
 

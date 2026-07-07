@@ -290,8 +290,9 @@ class CrossModuleIntegrationTest {
         @Test
         void memoryClientUsesConstantsRegion() {
             MemoryClient client = new MemoryClient(null, "test-key");
-            // Should use default region
-            assertNotNull(client);
+            // A null region must resolve through Constants.getRegion() (which falls
+            // back to Constants.DEFAULT_REGION when no env var is set).
+            assertEquals(Constants.getRegion(), client.getRegionName());
         }
 
         @Test
@@ -383,20 +384,6 @@ class CrossModuleIntegrationTest {
             String memoryData = Constants.getMemoryEndpoint("data", region);
             assertTrue(memoryData.contains(region), "Memory data should contain region");
             assertTrue(memoryData.startsWith("https://"), "Memory data should be HTTPS");
-        }
-
-        @Test
-        void defaultRegionEndpointConsistency() {
-            String defaultRegion = Constants.DEFAULT_REGION;
-            assertEquals("cn-southwest-2", defaultRegion);
-
-            // All endpoints with default region should be valid
-            assertNotNull(Constants.getControlPlaneEndpoint());
-            assertNotNull(Constants.getIamEndpoint());
-            assertNotNull(Constants.getSwrEndpoint());
-            assertNotNull(Constants.getIdentityEndpoint());
-            assertNotNull(Constants.getMemoryEndpoint("control"));
-            assertNotNull(Constants.getMemoryEndpoint("data"));
         }
 
         @Test

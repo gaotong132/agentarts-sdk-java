@@ -31,7 +31,6 @@ class ReadonlyListsTest {
             var result = client.listSpaces(1, 0);
             assertNotNull(result);
             assertNotNull(result.getItems(), "items should be a list");
-            assertTrue(result.getItems() instanceof java.util.List, "items should be a List");
         }
     }
 
@@ -62,7 +61,6 @@ class ReadonlyListsTest {
             var agents = client.getAgents(null, 1, 10);
             assertNotNull(agents, "agents response should not be null");
             assertNotNull(agents.getItems(), "items should be a list");
-            assertTrue(agents.getItems() instanceof java.util.List, "items should be a List");
         }
     }
 
@@ -74,7 +72,6 @@ class ReadonlyListsTest {
             var result = client.listCodeInterpreters(null, 1, 0);
             assertNotNull(result, "result should not be null");
             assertNotNull(result.getItems(), "items should be a list");
-            assertTrue(result.getItems() instanceof java.util.List, "items should be a List");
         }
     }
 }

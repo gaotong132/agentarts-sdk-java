@@ -21,18 +21,6 @@ class JsonUtilsTest {
     class Mapper {
 
         @Test
-        void mapperIsNotNull() {
-            assertNotNull(JsonUtils.MAPPER);
-        }
-
-        @Test
-        void mapperIsSameInstance() {
-            ObjectMapper a = JsonUtils.MAPPER;
-            ObjectMapper b = JsonUtils.MAPPER;
-            assertSame(a, b);
-        }
-
-        @Test
         void mapperIgnoresUnknownProperties() throws Exception {
             String json = "{\"unknown_field\": 42, \"name\": \"test\"}";
             TestPojo pojo = JsonUtils.MAPPER.readValue(json, TestPojo.class);

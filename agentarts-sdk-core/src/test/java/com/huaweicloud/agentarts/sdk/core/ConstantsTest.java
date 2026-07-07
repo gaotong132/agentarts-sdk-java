@@ -204,34 +204,6 @@ class ConstantsTest {
     }
 
     // ============================================================
-    // Credential accessors (return empty when env not set)
-    // ============================================================
-
-    @Nested
-    class CredentialAccessors {
-
-        @Test
-        void getAkReturnsNonNull() {
-            assertNotNull(Constants.getAk());
-        }
-
-        @Test
-        void getSkReturnsNonNull() {
-            assertNotNull(Constants.getSk());
-        }
-
-        @Test
-        void getSecurityTokenReturnsNonNull() {
-            assertNotNull(Constants.getSecurityToken());
-        }
-
-        @Test
-        void getProjectIdReturnsNonNull() {
-            assertNotNull(Constants.getProjectId());
-        }
-    }
-
-    // ============================================================
     // Endpoint constructors
     // ============================================================
 
@@ -320,9 +292,14 @@ class ConstantsTest {
         }
 
         @Test
-        void runtimeDataPlaneEndpointReturnsNonNull() {
+        void runtimeDataPlaneEndpointReturnsValidUrl() {
+            // These endpoints read env vars (AGENTARTS_RUNTIME_DATA_ENDPOINT, …).
+            // When unset, the method routes "" through ensureHttps and returns "".
+            // Either way the result must be empty (env unset) or an HTTPS URL —
+            // never a bare host or null (ensureHttps invariant).
             String endpoint = Constants.getRuntimeDataPlaneEndpoint();
-            assertNotNull(endpoint);
+            assertTrue(endpoint.isEmpty() || endpoint.startsWith("https://"),
+                    "endpoint must be empty (env unset) or an HTTPS URL");
         }
 
         @Test
@@ -334,13 +311,15 @@ class ConstantsTest {
         @Test
         void codeInterpreterDataPlaneEndpointNoArg() {
             String endpoint = Constants.getCodeInterpreterDataPlaneEndpoint();
-            assertNotNull(endpoint);
+            assertTrue(endpoint.isEmpty() || endpoint.startsWith("https://"),
+                    "endpoint must be empty (env unset) or an HTTPS URL");
         }
 
         @Test
         void codeInterpreterDataPlaneEndpointWithNull() {
             String endpoint = Constants.getCodeInterpreterDataPlaneEndpoint(null);
-            assertNotNull(endpoint);
+            assertTrue(endpoint.isEmpty() || endpoint.startsWith("https://"),
+                    "endpoint must be empty (env unset) or an HTTPS URL");
         }
 
         @Test
