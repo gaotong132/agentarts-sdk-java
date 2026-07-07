@@ -69,6 +69,7 @@ agentarts-sdk-java/
 
 | 文档 | 命令 |
 |---|---|
+| [**CLI 安装与前置步骤**](docs/cn/toolkit_user_guide/cli_overview.md) | **先看这个**：构建 jar、`bin/agentarts` 启动器、PATH 配置、`agentarts` 命令如何生效 |
 | [init](docs/cn/toolkit_user_guide/init.md) | 初始化项目 |
 | [config](docs/cn/toolkit_user_guide/config.md) | 配置管理（9 个子命令） |
 | [dev](docs/cn/toolkit_user_guide/dev.md) | 本地开发服务器 |
