@@ -9,7 +9,10 @@ import java.util.concurrent.Callable;
 /**
  * Initialize a new AgentArts project.
  *
- * <p>CLI command: initialize a new AgentArts project.</p>
+ * <p>CLI command: initialize a new AgentArts project. When {@code --name} is
+ * omitted and a console is attached, the command prompts interactively for the
+ * project name (all other options default sensibly); in a non-interactive
+ * context it errors with exit code 2.</p>
  */
 @Command(name = "init", description = "Initialize a new AgentArts project")
 public class InitCommand implements Callable<Integer> {
@@ -34,9 +37,28 @@ public class InitCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
+        // --name is the only field without a default. When it is omitted the
+        // command is "interactive init": prompt on the console for the project
+        // name (matching the documented `agentarts init` flow). If no console
+        // is attached (piped input, CI, IDE test harness), fall back to a hard
+        // error so the caller still gets a non-zero exit and no half-created
+        // project.
         if (name == null || name.isEmpty()) {
-            System.err.println("Error: --name is required");
-            return 2;
+            java.io.Console console = System.console();
+            if (console == null) {
+                System.err.println("Error: --name is required (no interactive console; pass -n <name>)");
+                return 2;
+            }
+            name = console.readLine("Project name: ");
+            if (name == null) { // Ctrl-D / EOF
+                System.err.println("Error: --name is required");
+                return 2;
+            }
+            name = name.trim();
+            if (name.isEmpty()) {
+                System.err.println("Error: --name is required");
+                return 2;
+            }
         }
         // Validate name: lowercase letters, digits, hyphens
         String normalized = name.toLowerCase();

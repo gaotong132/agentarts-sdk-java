@@ -17,6 +17,15 @@ java -version    # 17 及以上
 mvn -version     # 3.9 及以上（仅构建需要）
 ```
 
+Windows PowerShell：
+
+```powershell
+java -version    # 17 及以上
+mvn -version     # 3.9 及以上（仅构建需要）
+```
+
+> Windows 上 `mvn` 实为 `mvn.cmd`（cmd 脚本）。在 PowerShell 与 Git Bash 中均可直接调用 `mvn`；若从某些工具链调用报 "CreateProcess error=193"，请确认调用的是 `mvn.cmd` 而非无扩展名的 bash 脚本。
+
 ## 2. 构建 CLI jar
 
 在仓库根目录执行（首次构建会编译全部上游模块）：
@@ -66,9 +75,19 @@ alias agentarts="java -jar $PWD/agentarts-toolkit-cli/target/agentarts-toolkit-c
 Windows PowerShell：
 
 ```powershell
+# (a) 当前会话加入 PATH（仅本会话生效）
 $env:PATH = "$PWD\bin;$env:PATH"
 agentarts --version
+
+# (b) 持久化（写入用户环境变量，新开终端生效）
+setx PATH "$PWD\bin;$env:PATH"
+# 注意：setx 会截断超过 1024 字符的 PATH，建议改用「系统属性 → 环境变量」图形界面编辑。
+
+# (c) 或定义函数（写入 $PROFILE 可跨会话复用）
+function agentarts { java -jar "$PWD\agentarts-toolkit-cli\target\agentarts-toolkit-cli-0.1.0-SNAPSHOT-standalone.jar" @args }
 ```
+
+> Windows 下 `bin/agentarts.cmd` 由 cmd 解释器运行，在 PowerShell 与 cmd.exe 中均可直接调用 `agentarts`。若提示找不到命令，确认 `bin` 已在 PATH 中、且 `.cmd` 扩展名未被 `PATHEXT` 排除（默认包含 `.CMD`）。
 
 启动器查找 jar 的顺序：`AGENTARTS_CLI_JAR` 环境变量 → 脚本同目录的 `agentarts-toolkit-cli.jar` → 仓库内 `agentarts-toolkit-cli/target/...-standalone.jar`。将 jar 复制到 `bin/` 并改名为 `agentarts-toolkit-cli.jar`，即可脱离源码树使用。
 
