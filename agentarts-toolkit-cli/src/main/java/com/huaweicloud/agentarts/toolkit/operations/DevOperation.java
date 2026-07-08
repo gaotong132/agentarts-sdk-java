@@ -5,8 +5,15 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.huaweicloud.agentarts.sdk.runtime.AgentArtsRuntimeApp;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
@@ -54,7 +61,7 @@ public class DevOperation {
                 + (configFile != null ? " (config: " + configFile + ")" : "")
                 + (entrypoint != null ? " (entrypoint: " + entrypoint + ")" : ""));
 
-        AgentArtsRuntimeApp app = buildApp(entrypoint);
+        AgentArtsRuntimeApp app = buildApp(entrypoint, projectPath);
 
         CountDownLatch stopLatch = new CountDownLatch(1);
         Thread shutdownHook = new Thread(() -> {
@@ -115,14 +122,19 @@ public class DevOperation {
     }
 
     /**
-     * Build the runtime app. If the entrypoint class is on the classpath and exposes a
-     * {@code public static AgentArtsRuntimeApp createApp()} factory, use it; otherwise
-     * create an app with a default echo entrypoint so the dev server is still usable.
+     * Build the runtime app. Loads the entrypoint class declared in the config from
+     * the project's compiled {@code target/classes} (plus any {@code target/dependency/*.jar})
+     * via a URLClassLoader, and invokes its {@code public static AgentArtsRuntimeApp createApp()}
+     * factory — the same contract the Python {@code create_app} entrypoint uses. If the class
+     * cannot be loaded (not compiled / not on classpath) or has no {@code createApp()} factory,
+     * a clear warning is printed and a default echo entrypoint is used so the dev server is
+     * still usable.
      */
-    private static AgentArtsRuntimeApp buildApp(String entrypointClassName) {
+    private static AgentArtsRuntimeApp buildApp(String entrypointClassName, String projectPath) {
         if (entrypointClassName != null) {
+            ClassLoader loader = buildProjectClassLoader(projectPath);
             try {
-                Class<?> cls = Class.forName(entrypointClassName);
+                Class<?> cls = Class.forName(entrypointClassName, true, loader);
                 for (Method m : cls.getDeclaredMethods()) {
                     if (java.lang.reflect.Modifier.isStatic(m.getModifiers())
                             && m.getParameterCount() == 0
@@ -135,11 +147,17 @@ public class DevOperation {
                         }
                     }
                 }
+                System.err.println("Warning: entrypoint '" + entrypointClassName
+                        + "' has no 'public static AgentArtsRuntimeApp createApp()' factory"
+                        + " — using default echo entrypoint. (The scaffolded Agent must expose"
+                        + " createApp() for `agentarts dev` to drive it.)");
             } catch (ClassNotFoundException e) {
-                System.out.println("Entrypoint class '" + entrypointClassName
-                        + "' not on classpath — using default echo entrypoint.");
+                System.err.println("Warning: entrypoint class '" + entrypointClassName
+                        + "' not found on project classpath — using default echo entrypoint."
+                        + " Run 'mvn compile' so target/classes/com/example/Agent.class exists"
+                        + " (and ensure the config's entrypoint matches the class).");
             } catch (Exception e) {
-                System.out.println("Could not load entrypoint '" + entrypointClassName
+                System.err.println("Warning: could not load entrypoint '" + entrypointClassName
                         + "': " + e.getMessage() + " — using default echo entrypoint.");
             }
         }
@@ -148,5 +166,43 @@ public class DevOperation {
         app.setEntrypoint((Map<String, Object> payload) ->
                 Map.of("response", payload.getOrDefault("message", "")));
         return app;
+    }
+
+    /**
+     * Build a URLClassLoader over the project's {@code target/classes} and
+     * {@code target/dependency/*.jar} so the user's compiled Agent is visible to
+     * {@code Class.forName}. The parent loader is the CLI's own loader, which holds
+     * the SDK classes the Agent depends on. Returns the CLI's loader unchanged when
+     * no project output directory exists.
+     */
+    private static ClassLoader buildProjectClassLoader(String projectPath) {
+        Path base = (projectPath != null && !projectPath.isEmpty())
+                ? Path.of(projectPath) : Path.of(".");
+        List<URL> urls = new ArrayList<>();
+        Path classesDir = base.resolve("target/classes");
+        if (Files.isDirectory(classesDir)) {
+            urls.add(toUrl(classesDir));
+        }
+        Path depDir = base.resolve("target/dependency");
+        if (Files.isDirectory(depDir)) {
+            try (DirectoryStream<Path> ds = Files.newDirectoryStream(depDir, "*.jar")) {
+                for (Path jar : ds) {
+                    urls.add(toUrl(jar));
+                }
+            } catch (IOException ignored) { }
+        }
+        if (urls.isEmpty()) {
+            return DevOperation.class.getClassLoader();
+        }
+        URL[] array = urls.toArray(new URL[0]);
+        return new URLClassLoader(array, DevOperation.class.getClassLoader());
+    }
+
+    private static URL toUrl(Path path) {
+        try {
+            return path.toAbsolutePath().normalize().toUri().toURL();
+        } catch (java.net.MalformedURLException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

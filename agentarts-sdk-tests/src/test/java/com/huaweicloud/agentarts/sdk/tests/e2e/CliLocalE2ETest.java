@@ -280,26 +280,101 @@ class CliLocalE2ETest {
     // dev (blocking server — driven via the `dev` CLI subcommand)
     // ---------------------------------------------------------------
 
-    /** Mirrors {@code test_dev_server_serves_ping_and_invocations}.
+    /** Drives the {@code dev} CLI subcommand in a background thread (which runs
+     *  {@link com.huaweicloud.agentarts.toolkit.operations.DevOperation#runDevServer}),
+     *  polls {@code /ping} on the bound port, POSTs {@code /invocations}, asserts the
+     *  real entrypoint ran, then stops the dev server by interrupting the thread.</p>
      *
-     * <p>Drives the {@code dev} CLI subcommand in a background thread (which runs
-     * {@link com.huaweicloud.agentarts.toolkit.operations.DevOperation#runDevServer}),
-     * polls {@code /ping} on the bound port, POSTs {@code /invocations}, asserts the
-     * echo, then stops the dev server by interrupting the thread.</p>
+     *  <p>The scaffolded {@code Agent.java} exposes {@code createApp()}; rather than
+     *  compile the project inside the test, the config's entrypoint is pointed at
+     *  {@link DevTestAgent} (a fixture on the test classpath with the same factory
+     *  contract). {@code DevOperation} loads it via its URLClassLoader parent and
+     *  invokes {@code createApp()} — verifying the dev server actually drives the
+     *  user's agent, not the built-in echo fallback.</p>
      */
     @Test
-    @DisplayName("dev server serves /ping and POST /invocations")
-    void test_dev_server_serves_ping_and_invocations(@TempDir Path tmp) throws Exception {
-        // 1. Scaffold a basic project so .agentarts_config.yaml exists for DevOperation.
+    @DisplayName("dev server loads the agent's createApp() factory and serves /ping and POST /invocations")
+    void test_dev_server_drives_real_agent(@TempDir Path tmp) throws Exception {
+        // 1. Scaffold a basic project so .agentarts_config.yaml exists.
         InitOperation.initProject("basic", "myagent", tmp.toString(),
                 "cn-southwest-2", null, null);
-        assertTrue(Files.isRegularFile(tmp.resolve("myagent/pom.xml")));
+        Path project = tmp.resolve("myagent");
+        assertTrue(Files.isRegularFile(project.resolve("pom.xml")));
 
-        // 2. Launch the dev subcommand in a background thread. DevOperation loads the
-        //    config, falls back to a default echo entrypoint (the scaffolded class is
-        //    not compiled onto the test classpath), binds to an ephemeral port, and
-        //    prints "DEV_SERVER_LISTENING on port N" to stdout. picocli only redirects
-        //    its own writer output, so capture System.out directly.
+        // 2. Point the config's entrypoint at the test-fixture agent (same createApp()
+        //    contract as the scaffolded Agent). The fixture is on the test classpath,
+        //    so DevOperation resolves it without compiling the project.
+        rewriteEntrypoint(project, DevTestAgent.class.getName());
+
+        try (DevHandle dev = startDev(project)) {
+            // 3. POST /invocations on the dev server and assert the REAL entrypoint ran.
+            JsonNode resp = postInvocation(dev.port, "{\"message\":\"hello from dev e2e\"}");
+            assertTrue(resp.has("result"), "real entrypoint should return 'result'; got: " + resp);
+            assertEquals("dev-test: hello from dev e2e", resp.get("result").asText(),
+                    "dev server should drive the agent's createApp() factory, not the echo fallback");
+        }
+    }
+
+    /** When the configured entrypoint class cannot be loaded (not compiled / not on
+     *  classpath), {@code dev} must stay usable via the default echo entrypoint AND
+     *  print a clear warning — silent fallback was the original bug. */
+    @Test
+    @DisplayName("dev server falls back to echo with a warning when the entrypoint class is missing")
+    void test_dev_server_echo_fallback_when_class_missing(@TempDir Path tmp) throws Exception {
+        InitOperation.initProject("basic", "myagent", tmp.toString(),
+                "cn-southwest-2", null, null);
+        Path project = tmp.resolve("myagent");
+        // Leave entrypoint as the scaffolded com.example.Agent — not compiled, not on
+        // the test classpath -> DevOperation prints a warning and uses the echo fallback.
+        try (DevHandle dev = startDev(project)) {
+            JsonNode resp = postInvocation(dev.port, "{\"message\":\"fallback hi\"}");
+            assertTrue(resp.has("response"), "fallback should echo under 'response'; got: " + resp);
+            assertEquals("fallback hi", resp.get("response").asText(),
+                    "dev server should echo the message under 'response' when the agent class is missing");
+            // The fallback must be announced, not silent.
+            assertTrue(dev.stderr.contains("not found on project classpath")
+                            || dev.stderr.contains("default echo entrypoint"),
+                    "dev should warn on echo fallback; stderr=" + dev.stderr);
+        }
+    }
+
+    /** Rewrite {@code base.entrypoint} in the project's .agentarts_config.yaml. */
+    private void rewriteEntrypoint(Path project, String entrypoint) throws IOException {
+        Path cfg = project.resolve(".agentarts_config.yaml");
+        String content = Files.readString(cfg, StandardCharsets.UTF_8);
+        content = content.replaceFirst("(?m)^(\\s*entrypoint:\\s*).*$", "$1" + entrypoint);
+        Files.writeString(cfg, content, StandardCharsets.UTF_8);
+    }
+
+    /** Handle keeping the dev server alive until closed. */
+    private static final class DevHandle implements AutoCloseable {
+        final int port;
+        final Thread thread;
+        final PrintStream origOut;
+        final PrintStream origErr;
+        String stdout = "";
+        String stderr = "";
+
+        DevHandle(int port, Thread thread, PrintStream origOut, PrintStream origErr) {
+            this.port = port;
+            this.thread = thread;
+            this.origOut = origOut;
+            this.origErr = origErr;
+        }
+
+        @Override
+        public void close() {
+            thread.interrupt();
+            try { thread.join(5000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            System.setOut(origOut);
+            System.setErr(origErr);
+        }
+    }
+
+    /** Launch {@code dev} in a daemon thread against {@code project}, wait for the
+     *  listening banner and a healthy /ping, and return a handle that keeps the
+     *  server alive until closed. */
+    private DevHandle startDev(Path project) throws Exception {
         CommandLine devCli = new CommandLine(new AgentArtsCli());
         ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
         ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
@@ -313,14 +388,13 @@ class CliLocalE2ETest {
         Thread devThread = new Thread(() -> devCli.execute("dev",
                 "--port", "0",
                 "--host", "127.0.0.1",
-                "--path", tmp.resolve("myagent").toString()));
+                "--path", project.toString()));
         devThread.setDaemon(true);
         devThread.start();
 
+        int port = -1;
+        String prefix = "DEV_SERVER_LISTENING on port ";
         try {
-            // 3. Discover the bound port from stdout.
-            int port = -1;
-            String prefix = "DEV_SERVER_LISTENING on port ";
             for (int i = 0; i < 80 && port < 0; i++) {
                 String soFar = outBuf.toString(StandardCharsets.UTF_8);
                 int idx = soFar.indexOf(prefix);
@@ -331,54 +405,54 @@ class CliLocalE2ETest {
                 }
                 if (port < 0) Thread.sleep(250);
             }
+        } finally {
             capturedOut.flush();
             capturedErr.flush();
-            String outStr = outBuf.toString(StandardCharsets.UTF_8);
-            String errStr = errBuf.toString(StandardCharsets.UTF_8);
-            assertTrue(port > 0, "dev server did not announce port. stdout=" + outStr + " err=" + errStr);
+        }
+        String outStr = outBuf.toString(StandardCharsets.UTF_8);
+        String errStr = errBuf.toString(StandardCharsets.UTF_8);
+        assertTrue(port > 0, "dev server did not announce port. stdout=" + outStr + " err=" + errStr);
 
-            // 4. Poll /ping until healthy.
-            boolean pingOk = false;
-            for (int i = 0; i < 40; i++) {
-                try {
-                    HttpURLConnection conn = (HttpURLConnection)
-                            new URL("http://127.0.0.1:" + port + "/ping").openConnection();
-                    conn.setConnectTimeout(1000);
-                    conn.setReadTimeout(1000);
-                    if (conn.getResponseCode() == 200) {
-                        pingOk = true;
-                        conn.disconnect();
-                        break;
-                    }
-                    conn.disconnect();
-                } catch (Exception e) {
-                    Thread.sleep(250);
-                }
-            }
-            assertTrue(pingOk, "dev server did not come up (GET /ping)");
-
-            // 5. POST /invocations and assert the echo.
-            HttpURLConnection conn = (HttpURLConnection)
-                    new URL("http://127.0.0.1:" + port + "/invocations").openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/json");
-            conn.setDoOutput(true);
-            String body = "{\"message\":\"hello from dev e2e\"}";
-            conn.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));
-            assertEquals(200, conn.getResponseCode(), "POST /invocations should return 200");
-            JsonNode resp = JsonUtils.MAPPER.readTree(
-                    new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
-            assertTrue(resp.has("response"), "response body should contain 'response'");
-            assertEquals("hello from dev e2e", resp.get("response").asText(),
-                    "dev server should echo the message under 'response'");
-            conn.disconnect();
-        } finally {
-            // 6. Stop the dev server and restore streams.
+        // Poll /ping until healthy.
+        boolean pingOk = false;
+        for (int i = 0; i < 40; i++) {
+            try {
+                HttpURLConnection c = (HttpURLConnection)
+                        new URL("http://127.0.0.1:" + port + "/ping").openConnection();
+                c.setConnectTimeout(1000);
+                c.setReadTimeout(1000);
+                if (c.getResponseCode() == 200) { pingOk = true; c.disconnect(); break; }
+                c.disconnect();
+            } catch (Exception e) { Thread.sleep(250); }
+        }
+        if (!pingOk) {
+            // Stop the server before failing so we don't leak a background thread.
             devThread.interrupt();
-            devThread.join(5000);
+            try { devThread.join(5000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             System.setOut(origOut);
             System.setErr(origErr);
         }
+        assertTrue(pingOk, "dev server did not come up (GET /ping). stdout=" + outStr + " err=" + errStr);
+
+        DevHandle handle = new DevHandle(port, devThread, origOut, origErr);
+        handle.stdout = outStr;
+        handle.stderr = errStr;
+        return handle;
+    }
+
+    /** POST a JSON body to /invocations on the dev server and return the parsed body. */
+    private JsonNode postInvocation(int port, String body) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection)
+                new URL("http://127.0.0.1:" + port + "/invocations").openConnection();
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "application/json");
+        conn.setDoOutput(true);
+        conn.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));
+        assertEquals(200, conn.getResponseCode(), "POST /invocations should return 200");
+        JsonNode resp = JsonUtils.MAPPER.readTree(
+                new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+        conn.disconnect();
+        return resp;
     }
 
     // ---------------------------------------------------------------

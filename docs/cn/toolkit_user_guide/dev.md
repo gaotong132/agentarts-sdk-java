@@ -41,6 +41,14 @@ agentarts dev -p 3000 -e KEY1=value1 -e KEY2=value2
 agentarts dev --config /path/to/config.yaml
 ```
 
+## 工作原理
+
+`dev` 从 `.agentarts_config.yaml` 读取 `base.entrypoint`，把项目的 `target/classes`（及 `target/dependency/*.jar`）挂到类路径上，加载该类并调用其 `public static AgentArtsRuntimeApp createApp()` 工厂方法（与 Python 的 `create_app` 契约一致）。`agentarts init` 生成的 `Agent.java` 已自带 `createApp()`。
+
+因此**改完代码需先 `mvn compile`**，`dev` 才能加载到新的 `target/classes`。
+
+若入口类未编译、不在类路径、或没有 `createApp()` 工厂，`dev` 会打印警告并回退到内置 echo（`{"response": <message>}`），保证服务器仍可用——但此时跑的是 echo，不是你的 Agent。看到 `{"response":"..."}` 而非你代码的返回字段时，先检查是否编译、`createApp()` 是否存在、`entrypoint` 是否指向正确的类。
+
 ## 端点
 
 | 端点 | 方法 | 说明 |

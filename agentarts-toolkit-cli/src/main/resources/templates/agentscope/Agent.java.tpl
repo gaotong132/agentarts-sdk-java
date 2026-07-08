@@ -12,7 +12,11 @@ import java.util.Map;
  */
 public class {{ name }}Agent {
 
-    public static void main(String[] args) {
+    /**
+     * Factory used by {@code agentarts dev} to load this agent's runtime app.
+     * Mirrors the Python {@code create_app} entrypoint contract.
+     */
+    public static AgentArtsRuntimeApp createApp() {
         AgentArtsRuntimeApp app = new AgentArtsRuntimeApp();
 
         // TODO: Build ReActAgent with agentscope-java
@@ -36,7 +40,11 @@ public class {{ name }}Agent {
         });
 
         app.setPingHandler(() -> PingStatus.HEALTHY);
+        return app;
+    }
 
+    public static void main(String[] args) {
+        AgentArtsRuntimeApp app = createApp();
         System.out.println("Starting {{ name }} agentscope agent...");
         app.run(8080);
     }
