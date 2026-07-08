@@ -127,28 +127,22 @@ agentarts --help        # 列出 9 个顶层命令：init / config / dev / deplo
 
 ### 4.1 Windows PowerShell 引号注意事项（重要）
 
-Windows PowerShell 5.1 把参数传给原生命令（`curl.exe`、`java`）以及 `agentarts` 的 `.cmd` 启动器时，会**吞掉字符串里的双引号**。因此凡是命令里带 JSON 字面量（如 `'{"message":"Hello!"}'`）的写法，在 PS 5.1 下都会被对端收成 `{message:Hello!}`，触发 `400 Invalid JSON`。
+Windows PowerShell 5.1 下，命令里带 JSON 字面量（如 `'{"message":"Hello!"}'`）时必须按下述之一处理，否则 JSON 无效。PowerShell 7（`pwsh`）无此限制。
 
-**规避方法（任选其一）**：
-
-1. **`--%` 停止解析 + `\"` 转义**（PS 5.1 通用解法）。`--%` 让 PowerShell 不再解析其后内容，JSON 内层双引号写成 `\"`：
+1. **`--%` + `\"` 转义**（PS 5.1 通用）——JSON 内层双引号写成 `\"`，整行单行（`--%` 后不支持变量插值与续行）：
 
    ```powershell
    agentarts --% invoke "{\"message\":\"Hello!\"}" -a my-agent
    curl.exe --% -X POST http://localhost:8080/invocations -H "Content-Type: application/json" -d "{\"message\": \"Hello!\"}"
    ```
 
-   > `--%` 之后整行不再做 PowerShell 解析，故无法用 `$VAR` 变量插值，也无法用反引号续行——含 JSON 的命令写成单行。
-
-2. **升级 PowerShell 7（`pwsh`）**。PS 7 默认启用正确的原生参数传递（`$PSNativeCommandArgumentPassing`），`'{"message":"Hello!"}'` 可直接使用，变量插值/续行正常。
-
-3. **HTTP 场景改用 `Invoke-RestMethod`**（原生 cmdlet，不经原生参数传递层，无引号坑）：
+2. **HTTP 场景改用 `Invoke-RestMethod`**：
 
    ```powershell
    Invoke-RestMethod -Uri http://localhost:8080/invocations -Method Post -ContentType "application/json" -Body '{"message": "Hello!"}'
    ```
 
-> 不含 JSON 的命令（纯路径、带空格的命令串如 `"python process.py data.csv"`、`$VAR` 变量）在 PS 5.1 下正常，无需 `--%`。仅当位置参数或选项值里带双引号字面量时才需要上述处理。
+> 不含 JSON 的命令（路径、带空格的命令串如 `"python process.py data.csv"`、`$VAR` 变量）无需此处理。
 
 ## 5. 云命令的额外前置
 

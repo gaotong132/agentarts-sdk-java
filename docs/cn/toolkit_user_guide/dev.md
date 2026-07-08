@@ -63,18 +63,14 @@ curl -X POST http://localhost:8080/invocations \
 Windows PowerShell：
 
 ```powershell
-# 注意：PowerShell 里 curl 是 Invoke-WebRequest 的别名，不支持 -H/-d 语法。
-# 推荐用 Invoke-RestMethod（原生 cmdlet，无引号转义坑）；如需 curl 语法用 curl.exe。
+# PowerShell 里 curl 是 Invoke-WebRequest 的别名，不支持 -H/-d 语法。用 curl.exe 或 Invoke-RestMethod。
 
-# 方式一（推荐）：Invoke-RestMethod —— -Body 用单引号字面量即可
+# 方式一（推荐）：Invoke-RestMethod
 Invoke-RestMethod -Uri http://localhost:8080/ping
 Invoke-RestMethod -Uri http://localhost:8080/invocations -Method Post `
   -ContentType "application/json" -Body '{"message": "Hello!"}'
 
-# 方式二：curl.exe（Windows 10+ 自带）
-# 注意：Windows PowerShell 5.1 把参数传给原生 exe 时会吞掉单引号串里的双引号，
-#   -d '{"message":"..."}' 会被服务端收成 {message: ...} 导致 400。
-#   解法：用 --% 停止解析 + \" 转义内层双引号（且 --% 后整行不再做 PS 解析）。
+# 方式二：curl.exe（PS 5.1 带 JSON 需 --% + \"，见 cli_overview.md §4.1）
 curl.exe http://localhost:8080/ping
 curl.exe --% -X POST http://localhost:8080/invocations -H "Content-Type: application/json" -d "{\"message\": \"Hello!\"}"
 ```

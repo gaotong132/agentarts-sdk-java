@@ -2,9 +2,9 @@
 
 `runtime` 命令提供 Agent 运行时的会话管理、文件传输和命令执行能力。
 
-> 下方多行示例使用 bash 的反斜杠 `\` 续行。Windows PowerShell 下续行符改为反引号 `` ` ``（须为行尾最后一个字符），或直接将命令写成一行。每处多行示例后均附 PowerShell 版本。
+> 下方多行示例使用 bash 的反斜杠 `\` 续行。Windows PowerShell 下续行符改为反引号 `` ` ``，或写成一行。每处多行示例后均附 PowerShell 版本。
 >
-> **含 JSON 的命令例外**：PS 5.1 传 JSON 给 `agentarts`（`.cmd`→`java`）会吞双引号，必须用 `--%` + `\"` 且写成单行（无反引号续行、无 `$VAR`）。详见 [cli_overview.md §4.1](cli_overview.md#41-windows-powershell-引号注意事项重要)。
+> **含 JSON 的命令**（如 `invoke`）在 PS 5.1 下须用 `--%` + `\"` 且单行，见 [cli_overview.md §4.1](cli_overview.md#41-windows-powershell-引号注意事项重要)。
 
 ## 子命令
 
