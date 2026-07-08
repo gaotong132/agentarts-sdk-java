@@ -46,6 +46,8 @@ agentarts deploy -a my-agent -m local --local-port 8080
 
 ## 示例
 
+> 多行示例使用 bash 反斜杠 `\` 续行；Windows PowerShell 下改为反引号 `` ` ``，或写成一行。
+
 ```bash
 # 基本部署（云端）
 agentarts deploy
@@ -64,6 +66,12 @@ agentarts deploy --skip-build
 
 # 完整参数
 agentarts deploy -a my-agent -m cloud -t v2.0 --swr-org my-org --swr-repo my-repo \
+  -d "Production deployment v2.0"
+```
+
+```powershell
+# 完整参数
+agentarts deploy -a my-agent -m cloud -t v2.0 --swr-org my-org --swr-repo my-repo `
   -d "Production deployment v2.0"
 ```
 

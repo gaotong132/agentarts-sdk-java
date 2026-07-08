@@ -30,6 +30,14 @@ agentarts config --name my-agent --entrypoint com.example.MyAgent --region cn-so
   --dependency-file pom.xml --swr-org my-org --swr-repo my-repo
 ```
 
+Windows PowerShell（行尾续行符用反引号 `` ` ``，或直接写成一行）：
+
+```powershell
+# 完整参数
+agentarts config --name my-agent --entrypoint com.example.MyAgent --region cn-southwest-2 `
+  --dependency-file pom.xml --swr-org my-org --swr-repo my-repo
+```
+
 ## config list — 列出所有 Agent
 
 ```bash

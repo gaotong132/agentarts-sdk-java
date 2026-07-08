@@ -72,6 +72,13 @@ for agent in agent-1 agent-2 agent-3; do
 done
 ```
 
+```powershell
+# 批量删除
+foreach ($agent in "agent-1","agent-2","agent-3") {
+    agentarts destroy -a $agent -y
+}
+```
+
 ## CI/CD 集成
 
 ```yaml

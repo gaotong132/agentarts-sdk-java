@@ -2,6 +2,8 @@
 
 `mcp-gateway` 命令提供 MCP 网关和目标的 CRUD 管理功能。
 
+> 下方多行示例使用 bash 的反斜杠 `\` 续行。Windows PowerShell 下续行符改为反引号 `` ` ``（须为行尾最后一个字符），或直接将命令写成一行。每处多行示例后均附 PowerShell 版本。
+
 ## 前置条件
 
 设置 AK/SK 环境变量：
@@ -9,6 +11,11 @@
 ```bash
 export HUAWEICLOUD_SDK_AK="your-access-key"
 export HUAWEICLOUD_SDK_SK="your-secret-key"
+```
+
+```powershell
+$env:HUAWEICLOUD_SDK_AK = "your-access-key"
+$env:HUAWEICLOUD_SDK_SK = "your-secret-key"
 ```
 
 ## 网关命令
@@ -25,6 +32,16 @@ agentarts mcp-gateway create-mcp-gateway \
   --description "生产网关" \
   --protocol-type mcp \
   --authorizer-type iam \
+  --agency-name AgentArtsCoreGateway
+```
+
+```powershell
+# 完整配置
+agentarts mcp-gateway create-mcp-gateway `
+  --name my-gateway `
+  --description "生产网关" `
+  --protocol-type mcp `
+  --authorizer-type iam `
   --agency-name AgentArtsCoreGateway
 ```
 
@@ -74,6 +91,13 @@ agentarts mcp-gateway create-mcp-gateway-target gw-123 \
   --target-configuration '{"mcp_server":{"endpoint":"https://example.com/mcp","server_type":"sse"}}'
 ```
 
+```powershell
+agentarts mcp-gateway create-mcp-gateway-target gw-123 `
+  --name my-target `
+  --description "测试目标" `
+  --target-configuration '{"mcp_server":{"endpoint":"https://example.com/mcp","server_type":"sse"}}'
+```
+
 ### update-mcp-gateway-target — 更新目标
 
 `gatewayId` 与 `targetId` 均为位置参数（前两个位置参数）：
@@ -81,6 +105,12 @@ agentarts mcp-gateway create-mcp-gateway-target gw-123 \
 ```bash
 agentarts mcp-gateway update-mcp-gateway-target gw-123 tgt-456 \
   --name new-name \
+  --description "新描述"
+```
+
+```powershell
+agentarts mcp-gateway update-mcp-gateway-target gw-123 tgt-456 `
+  --name new-name `
   --description "新描述"
 ```
 

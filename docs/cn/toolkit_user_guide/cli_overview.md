@@ -61,6 +61,13 @@ java -jar agentarts-toolkit-cli/target/agentarts-toolkit-cli-0.1.0-SNAPSHOT-stan
 ./bin/agentarts --help
 ```
 
+Windows（PowerShell 与 cmd.exe 均可，`.cmd` 扩展名可省略）：
+
+```powershell
+.\bin\agentarts.cmd --version
+.\bin\agentarts.cmd --help
+```
+
 将其注册为 `agentarts` 命令，二选一：
 
 ```bash
@@ -99,6 +106,14 @@ function agentarts { java -jar "$PWD\agentarts-toolkit-cli\target\agentarts-tool
 mvn -pl agentarts-toolkit-cli exec:java \
   -Dexec.mainClass=com.huaweicloud.agentarts.toolkit.AgentArtsCli \
   -Dexec.args="--version"
+```
+
+Windows PowerShell（续行符用反引号 `` ` ``）：
+
+```powershell
+mvn -pl agentarts-toolkit-cli exec:java `
+  "-Dexec.mainClass=com.huaweicloud.agentarts.toolkit.AgentArtsCli" `
+  "-Dexec.args=--version"
 ```
 
 ## 4. 验证

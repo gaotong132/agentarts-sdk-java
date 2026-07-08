@@ -18,16 +18,29 @@ export HUAWEICLOUD_SDK_AK="your-access-key"
 export HUAWEICLOUD_SDK_SK="your-secret-key"
 ```
 
+```powershell
+$env:HUAWEICLOUD_SDK_AK = "your-access-key"
+$env:HUAWEICLOUD_SDK_SK = "your-secret-key"
+```
+
 ### 数据平面（API Key）
 
 ```bash
 export HUAWEICLOUD_SDK_MEMORY_API_KEY="your-memory-api-key"
 ```
 
+```powershell
+$env:HUAWEICLOUD_SDK_MEMORY_API_KEY = "your-memory-api-key"
+```
+
 ### 数据面端点（可选）
 
 ```bash
 export AGENTARTS_MEMORY_DATA_ENDPOINT="https://memory.cn-southwest-2.huaweicloud-agentarts.com"
+```
+
+```powershell
+$env:AGENTARTS_MEMORY_DATA_ENDPOINT = "https://memory.cn-southwest-2.huaweicloud-agentarts.com"
 ```
 
 ## 快速入门
@@ -344,4 +357,11 @@ export HUAWEICLOUD_SDK_MEMORY_API_KEY=your-api-key
 export AGENTARTS_MEMORY_SPACE_ID=your-space-id
 mvn compile exec:java -pl agentarts-sdk-examples \
   -Dexec.mainClass="com.huaweicloud.agentarts.examples.memory.MemoryUsageExample"
+```
+
+```powershell
+$env:HUAWEICLOUD_SDK_MEMORY_API_KEY = "your-api-key"
+$env:AGENTARTS_MEMORY_SPACE_ID = "your-space-id"
+mvn compile exec:java -pl agentarts-sdk-examples `
+  "-Dexec.mainClass=com.huaweicloud.agentarts.examples.memory.MemoryUsageExample"
 ```

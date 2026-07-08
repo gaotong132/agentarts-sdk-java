@@ -18,16 +18,29 @@ export HUAWEICLOUD_SDK_AK="your-access-key"
 export HUAWEICLOUD_SDK_SK="your-secret-key"
 ```
 
+```powershell
+$env:HUAWEICLOUD_SDK_AK = "your-access-key"
+$env:HUAWEICLOUD_SDK_SK = "your-secret-key"
+```
+
 ### API Key 认证（数据平面）
 
 ```bash
 export HUAWEICLOUD_SDK_CODE_INTERPRETER_API_KEY="your-ci-api-key"
 ```
 
+```powershell
+$env:HUAWEICLOUD_SDK_CODE_INTERPRETER_API_KEY = "your-ci-api-key"
+```
+
 ### 数据面端点（可选）
 
 ```bash
 export AGENTARTS_CODEINTERPRETER_DATA_ENDPOINT="https://your-ci-endpoint.com"
+```
+
+```powershell
+$env:AGENTARTS_CODEINTERPRETER_DATA_ENDPOINT = "https://your-ci-endpoint.com"
 ```
 
 ## 快速入门
@@ -262,4 +275,11 @@ export HUAWEICLOUD_SDK_CODE_INTERPRETER_API_KEY=your-api-key
 export AGENTARTS_CODE_INTERPRETER_NAME=your-ci-name
 mvn compile exec:java -pl agentarts-sdk-examples \
   -Dexec.mainClass="com.huaweicloud.agentarts.examples.tools.CodeInterpreterExample"
+```
+
+```powershell
+$env:HUAWEICLOUD_SDK_CODE_INTERPRETER_API_KEY = "your-api-key"
+$env:AGENTARTS_CODE_INTERPRETER_NAME = "your-ci-name"
+mvn compile exec:java -pl agentarts-sdk-examples `
+  "-Dexec.mainClass=com.huaweicloud.agentarts.examples.tools.CodeInterpreterExample"
 ```

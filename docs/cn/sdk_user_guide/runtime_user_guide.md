@@ -239,6 +239,11 @@ mvn compile exec:java -pl agentarts-sdk-examples \
   -Dexec.mainClass="com.huaweicloud.agentarts.examples.BasicRuntimeExample"
 ```
 
+```powershell
+mvn compile exec:java -pl agentarts-sdk-examples `
+  "-Dexec.mainClass=com.huaweicloud.agentarts.examples.BasicRuntimeExample"
+```
+
 ## 响应格式
 
 ### 同步 JSON 响应

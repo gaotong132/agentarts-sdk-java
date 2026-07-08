@@ -2,6 +2,8 @@
 
 `runtime` 命令提供 Agent 运行时的会话管理、文件传输和命令执行能力。
 
+> 下方多行示例使用 bash 的反斜杠 `\` 续行。Windows PowerShell 下续行符改为反引号 `` ` ``（须为行尾最后一个字符），或直接将命令写成一行。每处多行示例后均附 PowerShell 版本。
+
 ## 子命令
 
 | 子命令 | 说明 |
@@ -59,6 +61,18 @@ agentarts runtime invoke -a my-agent -s session-123 \
   --timeout 120 '{"message":"Complex task"}'
 ```
 
+```powershell
+agentarts runtime invoke -a my-agent -s session-123 '{"message":"Hello!"}'
+
+# 自定义路径
+agentarts runtime invoke -a my-agent --custom-path /custom/invoke `
+  -s session-123 '{"data":"test"}'
+
+# 设置超时
+agentarts runtime invoke -a my-agent -s session-123 `
+  --timeout 120 '{"message":"Complex task"}'
+```
+
 ## exec-command — 执行命令
 
 `command` 为位置参数（需引号，整条命令作为一个参数），不是 `--command` 选项：
@@ -69,6 +83,15 @@ agentarts runtime exec-command -a my-agent -s session-123 "ls -la"
 
 # 带超时
 agentarts runtime exec-command -a my-agent -s session-123 \
+  "python script.py" --timeout 60
+```
+
+```powershell
+# 基本命令执行
+agentarts runtime exec-command -a my-agent -s session-123 "ls -la"
+
+# 带超时
+agentarts runtime exec-command -a my-agent -s session-123 `
   "python script.py" --timeout 60
 ```
 
@@ -84,6 +107,16 @@ agentarts runtime upload-files -a my-agent -s session-123 \
   -f file1.txt -p /home/user/data/
 ```
 
+```powershell
+# 上传文件到默认目录 (/home/user/)
+agentarts runtime upload-files -a my-agent -s session-123 `
+  -f file1.txt file2.py
+
+# 上传到指定远程目录
+agentarts runtime upload-files -a my-agent -s session-123 `
+  -f file1.txt -p /home/user/data/
+```
+
 ## download-files — 下载文件
 
 `-p/--path` 为远程路径（必填），`-o/--output` 为本地输出路径：
@@ -95,6 +128,16 @@ agentarts runtime download-files -a my-agent -s session-123 \
 
 # 递归下载目录（打包为 tar）
 agentarts runtime download-files -a my-agent -s session-123 \
+  -p /home/user/logs/ --recursive -o ./logs.tar
+```
+
+```powershell
+# 下载单个文件
+agentarts runtime download-files -a my-agent -s session-123 `
+  -p /home/user/output.txt -o ./output.txt
+
+# 递归下载目录（打包为 tar）
+agentarts runtime download-files -a my-agent -s session-123 `
   -p /home/user/logs/ --recursive -o ./logs.tar
 ```
 
@@ -113,6 +156,25 @@ agentarts runtime exec-command -a my-agent -s $SESSION_ID \
 
 # 4. 下载结果
 agentarts runtime download-files -a my-agent -s $SESSION_ID \
+  -p /home/user/result.csv -o ./result.csv
+
+# 5. 关闭会话
+agentarts runtime stop-session -a my-agent -s $SESSION_ID
+```
+
+```powershell
+# 1. 启动会话（捕获输出到变量）
+$SESSION_ID = agentarts runtime start-session -a my-agent
+
+# 2. 上传文件
+agentarts runtime upload-files -a my-agent -s $SESSION_ID -f data.csv
+
+# 3. 执行命令
+agentarts runtime exec-command -a my-agent -s $SESSION_ID `
+  "python process.py data.csv"
+
+# 4. 下载结果
+agentarts runtime download-files -a my-agent -s $SESSION_ID `
   -p /home/user/result.csv -o ./result.csv
 
 # 5. 关闭会话

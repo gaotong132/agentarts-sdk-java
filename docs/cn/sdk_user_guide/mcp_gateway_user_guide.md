@@ -15,6 +15,11 @@ export HUAWEICLOUD_SDK_AK="your-access-key"
 export HUAWEICLOUD_SDK_SK="your-secret-key"
 ```
 
+```powershell
+$env:HUAWEICLOUD_SDK_AK = "your-access-key"
+$env:HUAWEICLOUD_SDK_SK = "your-secret-key"
+```
+
 ## 快速入门
 
 ```java

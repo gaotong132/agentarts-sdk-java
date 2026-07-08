@@ -18,6 +18,12 @@ export HUAWEICLOUD_SDK_SK="your-secret-key"
 export HUAWEICLOUD_SDK_REGION="cn-southwest-2"
 ```
 
+```powershell
+$env:HUAWEICLOUD_SDK_AK = "your-access-key"
+$env:HUAWEICLOUD_SDK_SK = "your-secret-key"
+$env:HUAWEICLOUD_SDK_REGION = "cn-southwest-2"
+```
+
 ## 快速入门
 
 ### 使用 IdentityClient

@@ -65,6 +65,19 @@ mvn test -pl agentarts-sdk-tests -am -Dtest=MemoryLifecycleTest -Dsurefire.failI
 # L3 计费：另设 AGENTARTS_TEST_RUN_BILLABLE=1 + 预置 CI/Agent + Docker
 ```
 
+Windows PowerShell：
+
+```powershell
+# 需 JDK 17+ 与 Maven 3.9+（确认：java -version / mvn -version）
+mvn test                                                    # 全量（无凭证 E2E 跳过）
+$env:HUAWEICLOUD_SDK_AK = "<ak>"; $env:HUAWEICLOUD_SDK_SK = "<sk>"
+mvn test -pl agentarts-sdk-tests -am                        # L1 只读
+$env:AGENTARTS_TEST_ALLOW_CREATE = "1"
+mvn test -pl agentarts-sdk-tests -am                        # L2 生命周期
+mvn test -pl agentarts-sdk-tests -am "-Dtest=MemoryLifecycleTest" "-Dsurefire.failIfNoSpecifiedTests=false"  # 单类
+# L3 计费：另设 $env:AGENTARTS_TEST_RUN_BILLABLE = "1" + 预置 CI/Agent + Docker
+```
+
 ---
 
 ## 4. 与 Python SDK 的用例对比
