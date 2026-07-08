@@ -310,8 +310,16 @@ class AgentArtsRuntimeAppTest {
     @DisplayName("RequestContext generates UUID when X-Request-Id missing")
     void requestContextGeneratesRequestId() {
         RequestContext ctx = RequestContext.fromHeaders(name -> null);
-        assertNotNull(ctx.getRequestId());
-        assertFalse(ctx.getRequestId().isEmpty());
+        String id = ctx.getRequestId();
+        assertNotNull(id);
+        assertFalse(id.isEmpty());
+        // Must be the generated 32-hex-char UUID form (no dashes), not just any non-empty
+        // string — a constant or leaked field would satisfy non-empty alone.
+        assertTrue(id.matches("[0-9a-f]{32}"),
+                "generated request id should be a 32-char hex UUID, got: " + id);
+        // Two generations must differ (non-constant).
+        String id2 = RequestContext.fromHeaders(name -> null).getRequestId();
+        assertNotEquals(id, id2, "generated request ids should be unique");
     }
 
     // ========================

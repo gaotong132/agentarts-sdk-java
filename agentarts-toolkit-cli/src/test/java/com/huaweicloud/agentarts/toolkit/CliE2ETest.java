@@ -266,6 +266,12 @@ class CliE2ETest {
             // because its language default is `python3`).
             assertTrue(remaining.contains("\n  a2:"), "remaining config should still contain agent a2. yaml=" + remaining);
             assertFalse(remaining.contains("\n  a1:"), "remaining config should not contain agent a1. yaml=" + remaining);
+            // set-default must actually have written default_agent — not just exited 0.
+            // Jackson quotes the YAML scalar, so accept both `default_agent: a2` and
+            // `default_agent: "a2"`, anchored to a whole line so "a2foo" can't sneak in.
+            assertTrue(remaining.lines()
+                            .anyMatch(l -> l.matches("^default_agent:\\s*\"?a2\"?\\s*$")),
+                    "set-default a2 should have set default_agent to a2. yaml=" + remaining);
         }
 
         /** Verifies config persists across CLI-driven add/list/get cycles. */

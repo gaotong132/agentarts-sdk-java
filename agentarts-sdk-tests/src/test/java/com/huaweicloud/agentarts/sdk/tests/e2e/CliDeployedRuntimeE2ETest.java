@@ -192,9 +192,12 @@ class CliDeployedRuntimeE2ETest {
             assumeTrue(false, "Deployed agent not routable yet: " + stderr);
         }
         assertEquals(0, exit, "invoke should exit 0; stderr=" + stderr + " stdout=" + stdout);
-        // The agent must actually return a response payload, not just exit 0 with an
-        // empty body. Parse stdout as JSON and assert it carries a real reply (data /
-        // response field, or the echoed "hello" sentinel from the request payload).
+        // The agent must actually return a real response, not just exit 0. The deployed
+        // basic-template agent returns {"result":"Hello from <name>: hello from deployed e2e"},
+        // so the response body must carry the echoed "hello" sentinel. Do NOT accept
+        // {"response":...} / {"data":...} / {"ok":...} — those are fallback/envelope shapes
+        // that would let a degraded (non-agent) 2xx body pass, the same hole that once hid
+        // the dev echo-fallback bug.
         JsonNode node = null;
         try {
             node = JsonUtils.MAPPER.readTree(stdout);
@@ -202,9 +205,8 @@ class CliDeployedRuntimeE2ETest {
             // stdout not JSON — fall through to the content-based check below.
         }
         assertNotNull(node, "invoke stdout should be parseable JSON; stdout=" + stdout);
-        assertTrue(stdout.contains("hello") || stdout.contains("ok")
-                        || (node != null && (node.has("data") || node.has("response"))),
-                "invoke stdout should carry the agent response; stdout=" + stdout);
+        assertTrue(stdout.contains("hello"),
+                "invoke response should echo back the 'hello' sentinel from the request; stdout=" + stdout);
     }
 
     /** Mirrors {@code test_runtime_session_on_deployed_agent}: start-session →
