@@ -120,6 +120,28 @@ export HUAWEICLOUD_SDK_SK="your-secret-key"
 export HUAWEICLOUD_SDK_REGION="cn-southwest-2"   # 可选，默认 cn-southwest-2
 ```
 
+Windows PowerShell：
+
+```powershell
+# 当前会话（仅本会话生效）
+$env:HUAWEICLOUD_SDK_AK = "your-access-key"
+$env:HUAWEICLOUD_SDK_SK = "your-secret-key"
+$env:HUAWEICLOUD_SDK_REGION = "cn-southwest-2"   # 可选，默认 cn-southwest-2
+
+# 持久化（写入用户环境变量，新开终端生效）
+setx HUAWEICLOUD_SDK_AK "your-access-key"
+setx HUAWEICLOUD_SDK_SK "your-secret-key"
+setx HUAWEICLOUD_SDK_REGION "cn-southwest-2"
+```
+
+Windows cmd.exe：
+
+```cmd
+set HUAWEICLOUD_SDK_AK=your-access-key
+set HUAWEICLOUD_SDK_SK=your-secret-key
+set HUAWEICLOUD_SDK_REGION=cn-southwest-2
+```
+
 凭证仅通过环境变量注入，不得写入配置文件或提交仓库。数据面 Memory 与 Code Interpreter 另需各自的 API Key 环境变量，详见对应子命令文档。
 
 ## 6. 子命令文档
