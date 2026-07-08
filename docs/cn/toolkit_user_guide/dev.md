@@ -60,6 +60,26 @@ curl -X POST http://localhost:8080/invocations \
   -d '{"message": "Hello!"}'
 ```
 
+Windows PowerShell：
+
+```powershell
+# 注意：PowerShell 里 curl 是 Invoke-WebRequest 的别名，不支持 -H/-d 语法。
+# 用 curl.exe（Windows 10+ 自带）走真正的 curl，或改用 Invoke-RestMethod。
+
+# 方式一：curl.exe（语法与 bash 版一致）
+curl.exe http://localhost:8080/ping
+curl.exe -X POST http://localhost:8080/invocations `
+  -H "Content-Type: application/json" `
+  -d '{"message": "Hello!"}'
+
+# 方式二：Invoke-RestMethod（原生 PowerShell）
+Invoke-RestMethod -Uri http://localhost:8080/ping
+Invoke-RestMethod -Uri http://localhost:8080/invocations -Method Post `
+  -ContentType "application/json" -Body '{"message": "Hello!"}'
+```
+
+> 请求体是一个任意 JSON 对象，整体作为 `payload` 传给 Agent 的 entrypoint；字段名（如 `message`）取决于 entrypoint 代码读取的 key。
+
 ## 环境变量优先级
 
 1. `--env` 命令行参数（通过 `System.setProperty` 注入，最高优先级）
