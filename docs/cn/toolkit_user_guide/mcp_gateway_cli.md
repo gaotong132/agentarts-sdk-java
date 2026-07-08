@@ -3,6 +3,8 @@
 `mcp-gateway` 命令提供 MCP 网关和目标的 CRUD 管理功能。
 
 > 下方多行示例使用 bash 的反斜杠 `\` 续行。Windows PowerShell 下续行符改为反引号 `` ` ``（须为行尾最后一个字符），或直接将命令写成一行。每处多行示例后均附 PowerShell 版本。
+>
+> **含 JSON 的命令例外**（如 `--target-configuration`）：PS 5.1 传 JSON 给 `agentarts` 会吞双引号，必须用 `--%` + `\"` 且写成单行。详见 [cli_overview.md §4.1](cli_overview.md#41-windows-powershell-引号注意事项重要)。
 
 ## 前置条件
 
@@ -92,10 +94,8 @@ agentarts mcp-gateway create-mcp-gateway-target gw-123 \
 ```
 
 ```powershell
-agentarts mcp-gateway create-mcp-gateway-target gw-123 `
-  --name my-target `
-  --description "测试目标" `
-  --target-configuration '{"mcp_server":{"endpoint":"https://example.com/mcp","server_type":"sse"}}'
+# PS 5.1 含 JSON 需用 --% + \" 且单行（见 cli_overview.md §4.1）
+agentarts --% mcp-gateway create-mcp-gateway-target gw-123 --name my-target --description "测试目标" --target-configuration "{\"mcp_server\":{\"endpoint\":\"https://example.com/mcp\",\"server_type\":\"sse\"}}"
 ```
 
 ### update-mcp-gateway-target — 更新目标

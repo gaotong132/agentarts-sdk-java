@@ -72,6 +72,26 @@ agentarts invoke '{"message":"Hello!"}' -u user-123
 agentarts invoke '{"message":"Calculate","data":[1,2,3],"options":{"verbose":true}}'
 ```
 
+### Windows PowerShell
+
+> PS 5.1 把 JSON 里的双引号传给 `agentarts`（`.cmd`→`java`）时会吞掉，`'{"message":"Hello!"}'` 会被收成 `{message:Hello!}` 触发 400。含 JSON 的命令需用 `--%` 停止解析 + `\"` 转义内层双引号，且写成单行（详见 [cli_overview.md §4.1](cli_overview.md#41-windows-powershell-引号注意事项重要)）：
+
+```powershell
+# 基本调用
+agentarts --% invoke "{\"message\":\"Hello!\"}" -a my-agent
+
+# 本地调用
+agentarts --% invoke "{\"message\":\"Hello!\"}" -m local -p 8080
+
+# 带会话 ID
+agentarts --% invoke "{\"message\":\"继续上次对话\"}" -a my-agent --session session-123
+
+# 复杂 JSON
+agentarts --% invoke "{\"message\":\"Calculate\",\"data\":[1,2,3],\"options\":{\"verbose\":true}}"
+```
+
+> 升级 PowerShell 7（`pwsh`）后 `'{"message":"Hello!"}'` 可直接使用、支持 `$VAR` 变量与反引号续行；HTTP 场景也可改用 `Invoke-RestMethod`（见 [dev.md](dev.md#测试)）。
+
 ## Payload 格式
 
 基本格式：
