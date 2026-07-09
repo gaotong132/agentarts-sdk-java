@@ -275,6 +275,9 @@ flowchart TD
   `longTermMemoryAsyncRecord` 不阻塞主流程。
 - **容错**：`record` 失败 `onErrorResume` 吞掉（记忆不应让主对话挂掉）；`retrieve` 失败返回空串。
 - **角色映射**：`MsgRole.USER/ASSISTANT/SYSTEM/TOOL` → `"user"/"assistant"/"system"/"tool"`。
+- **抽取延迟**：`record` 写消息后云上**异步抽取**（秒~分钟级），立即 `retrieve` 可能为空。
+  `record` 用 `forceExtract=true` 尽快触发；紧邻的"写完就查"场景用 `waitForRecall` 轮询兜底。
+  （`searchMemories` 的返回解析是适配层内部细节，已封装，用户不感知。）
 
 ### 4.2 短期记忆持久化：`MemoryAgentStateStore`（已有）
 
@@ -375,27 +378,46 @@ flowchart TD
 - 会话 B（**全新会话**）：`retrieve("导航去公司")` → 按 actor 跨会话召回公司位置 + 偏好 → 给路线。
 - 对照：另一用户 `retrieve` 为空 → 提示信息不足。
 
-### 7.2 运行
+### 7.2 运行（`.env` + 一键脚本）
+
+demo 的所有环境变量写在 `agentarts-sdk-examples/.env`（已 gitignore，不入库），用 `run-demo.sh` 自动加载：
 
 ```bash
-# 离线（零凭据，脚本驱动 record/retrieve，开箱即跑）
-mvn compile exec:java -pl agentarts-sdk-examples \
-  -Dexec.mainClass="com.huaweicloud.agentarts.examples.memory.NavigationLongTermMemoryDemo"
+cd agentarts-sdk-examples
 
-# 上云（真连 AgentArts Memory）
-export AGENTARTS_MEMORY_API_KEY=your-api-key
-export AGENTARTS_MEMORY_SPACE_ID=your-space-id
+# 1) 一次性：从模板建 .env 并填入你的值
+cp .env.example .env
+#   编辑 .env，填：
+#     OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL_NAME   (LLM，不填则脚本驱动模式)
+#     AGENTARTS_MEMORY_API_KEY / AGENTARTS_MEMORY_SPACE_ID   (云上记忆，不填则离线)
+#     HUAWEICLOUD_SDK_AK / SK / REGION                       (仅建 Space 时需要)
 
-# LLM 路径（真实 ReActAgent + STATIC_CONTROL 原生 Hook）
-export OPENAI_API_KEY=sk-xxx   # 可选 OPENAI_BASE_URL 对接华为云 MaaS
+# 2) 跑（自动加载 .env，首次自动 install SDK）
+./run-demo.sh              # 默认导航 demo
+./run-demo.sh nav          # 同上
+# 也支持: memory / agentscope / basic / com.huaweicloud.Xxx 完整类名
 ```
 
-### 7.3 预期观察
+demo 根据 `.env` **自动选模式**：
 
-- 会话 B（新实例、同 actor）`retrieve` 返回 `(semantic) 用户公司在国贸` 与
-  `(user_preference) ...避开高速公路...`，且来自会话 A —— 证明跨会话召回。
-- 对照组 `retrieve` 为空 —— 证明记忆按 actor 隔离且驱动输出。
-- LLM 路径下，STATIC_CONTROL 的 Hook 自动把召回结果注入 system 消息，模型据此回答。
+| `.env` 配置 | 运行模式 |
+|-------------|----------|
+| 都不填 | 离线脚本驱动（`InMemoryLongTermMemory`），零凭据开箱即跑 |
+| 只填 `AGENTARTS_MEMORY_*` | 脚本驱动 + 真实云上记忆（`waitForRecall` 等抽取） |
+| 填 `OPENAI_API_KEY`（+ 云上记忆） | **真实 ReActAgent + STATIC_CONTROL + 云上记忆**（完整场景） |
+
+> `OPENAI_BASE_URL` 可对接任意 OpenAI 兼容端点（阿里云百炼 / 华为云 MaaS / DeepSeek / 本地 Ollama）。
+
+### 7.3 预期观察（真实云上 + LLM 已验证）
+
+- 会话 A：`record` 用户画像 → 云上自动抽取记忆（`<global_summary>` / `{"fact":...}` 等）。
+- 会话 B（**全新会话**）：STATIC_CONTROL Hook 在 `agent.call()` 的 `PRE_CALL` 自动调 `retrieve`，
+  召回到会话 A 写入的公司位置 + 避开高速偏好（`LoggingLongTermMemory` 装饰器把这次调用打印可见），
+  并 `appendSystemContent` 注入 system → LLM 据此直接给出前往公司（国贸）、避开高速的路线。
+- 对照：无相关记忆的 actor `retrieve` 为空 → LLM 提示信息不足。
+
+> 真实运行实测：第二轮 LLM 回复"已为您调用保存的通勤信息，正在为您规划前往公司（国贸）的路线，
+> 已自动应用您避开高速公路的偏好"——证明云上召回的记忆确实被注入并被 LLM 使用。
 
 ---
 
@@ -408,5 +430,8 @@ export OPENAI_API_KEY=sk-xxx   # 可选 OPENAI_BASE_URL 对接华为云 MaaS
 | `integration-agentscope/.../state/MemoryAgentStateStore.java` | 短期 Memory 持久化后端（已有） |
 | `integration-agentscope/.../message/MessageConverter.java` | 消息双向转换（已有） |
 | `integration-agentscope/.../runtime/AgentscopeRuntimeHost.java` | Runtime 桥接（已有） |
-| `integration-agentscope/.../LongTermMemoryTest.java` | 适配层单测（9 例，不触网不依赖 LLM） |
+| `integration-agentscope/.../LongTermMemoryTest.java` | 适配层单测（12 例，不触网不依赖 LLM） |
+| `integration-agentscope/.../LongTermMemoryWiringTest.java` | 验证 STATIC_CONTROL 自动注册 Hook（3 例） |
 | `examples/.../memory/NavigationLongTermMemoryDemo.java` | 导航场景 Demo（双路径） |
+| `examples/.../memory/LoggingLongTermMemory.java` | 可观测装饰器（打印 record/retrieve 调用） |
+| `examples/.env.example` / `examples/run-demo.sh` | 环境变量模板 + 一键运行脚本 |
