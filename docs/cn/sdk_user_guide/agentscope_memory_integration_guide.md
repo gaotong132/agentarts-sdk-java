@@ -524,6 +524,22 @@ AgentArts 消息面是"**session 内 append 消息**"模型，agentscope `AgentS
 
 **对"原生消息"统一设计的影响**：append/覆盖错配是最大障碍——原生消息路径必须 **delta 写 + count 跟踪**（每条消息独立 append，不能"覆盖"），且 `key` 维度无处安放（只能按 session 聚合，丢失 key 区分）。故原生路径比 blob 路径**更难与 AgentStateStore 干净匹配**。当前 blob 方案虽不"原生"，却是与 AgentStateStore 语义最相容的接法。
 
+#### save 的覆盖语义如何适配
+
+核心错配：`AgentStateStore.save` 是**覆盖**（最新赢），`AgentArts addMessages` 是**追加**（append-only，无 `updateMessage`/`replaceSession`）。
+`MemoryAgentStateStore` 的适配（已实现、已验证，**功能等价于覆盖，非真覆盖**）：
+
+| State 类型 | save（写） | get（读） | 效果 |
+|---|---|---|---|
+| 单值 `save(userId,sid,key,State)` | 追加一条 `__S__:className:json` | `getLastKMessages` 取**最后一条 `__S__`**（最高 seq）反序列化 | "追加全部 + 读时取最新" 模拟覆盖 |
+| 列表 `save(userId,sid,key,List<State>)` | 追加 `__LB__:N` 批次标记 + N 条 `__L__:` | 找**最后一个 `__LB__` 批次**只读其项 | 模拟列表全量替换 |
+
+**代价**：
+- **存储累积**：每次 save 追加新 blob，**旧的不删**（AgentArts 无 deleteMessage）→ session 堆 N 份历史 blob（N=save 次数），靠 **Space TTL** 清理。成本 O(save 次数 × state 大小)，非 O(当前 state 大小)。
+- **非真覆盖**：旧数据仍在（TTL 内），读时忽略；依赖 seq 顺序取最新，单 writer 无碍，多 writer 并发需注意 seq 竞态。
+
+**要"真覆盖"需 AgentArts 新增**（当前无）：① `updateMessage`/`replaceSessionMessages`（消息层覆盖）；或 ② 独立 KV-state API（`put/get/delete by key`，不走消息）——后者能与 `AgentStateStore` 1:1 干净匹配。现状下 blob+take-latest 是最相容适配，代价是 TTL 内存储累积。
+
 **限制与取舍**：
 
 1. **短期 State 默认存为 blob，非原生消息**：`MemoryAgentStateStore` 把整个 `AgentState` 序列化成
