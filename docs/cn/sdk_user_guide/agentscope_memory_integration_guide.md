@@ -473,9 +473,13 @@ sequenceDiagram
 
 | 影响 | 必然性 | 说明 |
 |---|---|---|
-| ① 重复消息（存储膨胀） | 必然 | 同一消息被多次 append，session 里出现 N 份 |
-| ② 重复抽取（算力/费用） | 必然 | 每次都跑 LLM 抽取，对旧内容反复抽取，浪费成本 |
-| ③ 重复 Memory 资源（召回噪声） | **取决于云上去重** | 若 AgentArts 按 content 去重（如 mem0 upsert）则不产生重复 Memory；若不去重，每次抽取生成新 Memory → `searchMemories` 返回同一条 N 次 → LLM 看到重复记忆。AgentArts 是否去重 SDK 未暴露，未证实 |
+| ① 重复消息（存储膨胀） | 必然 | 同一消息被多次 append，session 里出现 N 份（消息面是追加语义） |
+| ② 重复抽取（算力/费用） | 视后端 | 若后端对已抽取内容跳过/合并则低成本；否则反复跑 LLM 抽取浪费算力 |
+| ③ 重复 Memory 资源（召回噪声） | **已消除** | **后端有去重合并逻辑（已确认）**：重复写入不会产生重复 Memory，`searchMemories` 不会返回同一条 N 次 |
+
+> **后端去重合并（已确认）改变了冲突性质**：③ 消除 → 重复写入**不会导致召回噪声/正确性问题**，
+> 只剩 ① 消息存储膨胀 + ② 抽取算力（成本问题）。故统一设计里 `record→no-op`/delta 写是**成本优化**，
+> 不是正确性必需——即使两路都写，后端也会去重合并，召回结果正确。
 
 **两个设计的重复来源**：
 
@@ -489,11 +493,36 @@ sequenceDiagram
 > 真正多轮单 session 场景才会触发重复。
 
 **缓解手段**：
-1. **record → no-op**（统一设计）：短期 save 已写+抽取，record 不重复。
+1. **record → no-op**（统一设计）：短期 save 已写+抽取，record 不重复——成本优化（非正确性必需，因后端已去重）。
 2. **delta 写**：`record`/save 只写新增——查 `listMessages` 现有 count，只写 tail。对 STATIC（全量 getMessages）可行；
    对 AGENT（`recordToMemory` 传 summary 非前缀）不适用，需分别处理。
 3. **无状态 sessionId**：每轮不同 sessionId → context 不累积 → 不重复（简单，但牺牲单 session 多轮）。
-4. **依赖云上去重**：若 AgentArts 抽取按 content 去重，则 ③ 不发生（但 ①② 仍在），不能依赖未证实行为。
+4. **依赖后端去重合并**（已确认）：③ 不会发生；①② 仍需靠 1/2/3 或后端跳过已抽取内容来减成本。
+
+#### AgentArts session/message 与 AgentStateStore 的匹配度
+
+AgentArts 消息面是"**session 内 append 消息**"模型，agentscope `AgentStateStore` 是"**(userId,sessionId,key) → State 覆盖存取**"模型。二者对照：
+
+| 维度 | AgentArts session/message | agentscope AgentStateStore | 匹配 |
+|---|---|---|---|
+| 容器 | Session（绑定 actor/assistant） | (userId, sessionId, key) 三元组 | 部分：userId↔actor、session↔session；**key 无对应** → 按不同 key 建不同 session |
+| 标识 | sessionId 服务端生成 **UUID** | sessionId 任意字符串 | 不匹配 → 需 logicalKey→UUID 映射缓存（`MemoryAgentStateStore` 已做） |
+| 写语义 | `addMessages` **追加** | `save` **覆盖**（最新赢） | 不匹配 → blob 用"取最新 `__S__`"模拟覆盖；原生消息需 **delta 写** |
+| 读语义 | `listMessages`/`getLastKMessages`（按 seq 列全部） | `get(key)` 返回**最新** State | 部分：都按序；但 get 是"取最新一条"，listMessages 是"列全部" |
+| 多值 | 消息序列 append | `save(List<State>)` 列表 | 不匹配 → `__LB__` 批次标记模拟全量替换 |
+| 删除 | **无** deleteMessage/deleteSession（仅 Space TTL） | `delete(userId,sessionId)` / `delete(key)` | 不匹配 → AgentArts 不能按需删，仅 TTL 过期；`MemoryAgentStateStore` 只清本地缓存 |
+| 生命周期 | Session 有 TTL 自动清理 | 无 TTL 概念 | 不匹配 |
+| actor 隔离 | actor_id | userId | 匹配 |
+| 消息顺序 | seq 有序 | `context` List<Msg> 有序 | 匹配 |
+
+**结论：部分匹配，非 1:1。** 消息存储（按序、按 actor）对得上；但 `AgentStateStore` 的 **key 维度 / 覆盖语义 / 按需删除 / 任意 id** 与 AgentArts 的 **session / append / TTL-only / UUID** 存在结构性错配。`MemoryAgentStateStore` 用以下手段桥接（已实现，可工作）：
+
+- **blob 编码**：整个 State 序列化成一条 `__S__` 文本消息（绕开"key 维度"与"覆盖语义"——一个 key 一个 session、取最新那条即覆盖效果）。
+- **logicalKey→UUID 缓存**：把 agentscope 任意 sessionId 映射到 AgentArts UUID session。
+- **TTL-only 删除**：`delete` 仅清本地缓存，数据靠 Space TTL 过期（不能真删）。
+- **`__LB__` 批次**：列表 State 的全量替换。
+
+**对"原生消息"统一设计的影响**：append/覆盖错配是最大障碍——原生消息路径必须 **delta 写 + count 跟踪**（每条消息独立 append，不能"覆盖"），且 `key` 维度无处安放（只能按 session 聚合，丢失 key 区分）。故原生路径比 blob 路径**更难与 AgentStateStore 干净匹配**。当前 blob 方案虽不"原生"，却是与 AgentStateStore 语义最相容的接法。
 
 **限制与取舍**：
 
