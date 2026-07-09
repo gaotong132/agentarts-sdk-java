@@ -395,6 +395,31 @@ flowchart TD
 （`forceExtract=true`）→ 同一次写入既是"长期记忆的抽取源"，也相当于把对话原文留存在 AgentArts
 消息面（兼具短期存档意义）。短期 `AgentState` 则以 blob 形式另存（供 agent 恢复工作状态，不参与抽取）。
 
+#### `record` 与短期 `Memory.addMessage` 写入的数据对比
+
+两条写入路径写的数据是否相同，分模式看（字节码核实）：
+
+| 模式 | `LongTermMemory.record` 写入 | 数据来源 | 与短期缓冲一致？ |
+|---|---|---|---|
+| **STATIC** | `memory.getMessages()`（**全量对话**，无 subList/filter） | = `AgentState.context` | **一致**（就是短期缓冲里那批 Msg） |
+| **AGENT** | `recordToMemory(summary, messages)` → 把 LLM 的 `summary` 包成 ASSISTANT Msg + 选定 messages 包成 USER Msg | LLM 蒸馏的总结 | **不一致**（LLM 加工过，非原始对话） |
+
+> 短期写入侧：ReActAgent 的对话缓冲是 `AgentState.context`（`List<Msg>`），agent 每轮把
+> user/assistant/tool 消息**直接写进 context**；`Memory` 是其只读视图（`AgentStateMemoryView`，
+> `addMessage` 抛 `UnsupportedOperationException`）——故"短期写入"实际指 agent 写 `AgentState.context`。
+
+**即便 STATIC 内容一致，"写入"这件事也不同**（去向/语义不同）：
+
+| | 短期（agent 写 context → stateStore） | 长期 record（→ AgentArtsLongTermMemory） |
+|---|---|---|
+| 去向 | `AgentState` 持久化（`MemoryAgentStateStore` 编码 `__S__` blob） | `addMessages` 原生消息，**独立 session** |
+| 是否抽取 | `forceExtract=false`，**不触发抽取** | `forceExtract=true`，**触发云上抽取** |
+| 用途 | 对话上下文恢复（下次接着聊） | 抽取成可检索记忆 + 语义召回 |
+
+故 STATIC 模式下，同一批对话 Msg 被**写两份到 AgentArts 不同 session**：一份 blob 存档（不抽取）、
+一份原生消息抽取（后端去重合并保证不产生重复 Memory）。这是后续"重复写入/重复抽取"分析的基础。
+AGENT 模式下 record 写的是 LLM summary，与短期原始对话内容不同，不存在此重叠。
+
 #### 短期数据结构匹配 + 单次写入两用 + 冲突分析
 
 **① 数据结构匹配（高，可实现）**：
