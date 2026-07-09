@@ -198,31 +198,6 @@ builder 会按 `longTermMemoryMode` 自动挂 `StaticLongTermMemoryHook`（STATI
 > ✅ 已用 `LongTermMemoryWiringTest` 验证：`.longTermMemoryMode(STATIC_CONTROL)` 确实自动注册了
 > `StaticLongTermMemoryHook`（查 `agent.getHooks()`），故 record/retrieve 会在调用中被触发。
 
-### 2.5 ⚠️ API 现状：LongTermMemory 已被标记弃用，Knowledge/RAG 是演进方向
-
-`javap` 编译期可见：`LongTermMemory`、`longTermMemoryMode`、`StaticLongTermMemoryHook`、`Hook`、
-`LongTermMemoryMode` 在 `2.0.0-RC4` 中**均带 `@Deprecated`（marked for removal）**。agentscope 正用
-**`Knowledge` / RAG** 体系替代：
-
-```java
-public interface Knowledge {                                              // 新方向，未弃用
-    Mono<Void>                       addDocuments(List<Document> docs);   // 写入
-    Mono<List<Document>>             retrieve(String query, RetrieveConfig cfg);  // 召回
-}
-public enum RAGMode { GENERIC, AGENTIC, NONE }                            // 对应 LongTermMemoryMode
-// 配套：GenericRAGHook（≈ StaticLongTermMemoryHook）、KnowledgeRetrievalTools（≈ LongTermMemoryTools）
-// ReActAgent.Builder: .knowledge(Knowledge) / .knowledges(...) / .ragMode(RAGMode)
-```
-
-`Knowledge` 的形状与 `LongTermMemory` 同构（写入 + 召回），同样可映射到 AgentArts
-（`addDocuments → addMessages` 触发抽取，`retrieve → searchMemories`）。**建议**：
-
-- **当前可用**：本文的 `AgentArtsLongTermMemory`（LongTermMemory）在 2.0.0-RC4 仍工作（已验证），
-  可直接用于 demo / 当前交付。
-- **面向演进**：升级 agentscope 后 LongTermMemory 可能被移除，届时改实现 `Knowledge`
-  （`AgentArtsKnowledge`），同样对接 AgentArts，业务调用侧仅换 builder 方法
-  （`.longTermMemory` → `.knowledge`、`.longTermMemoryMode` → `.ragMode`）。
-
 ---
 
 ## 3. AgentArts 云上 Memory 模型
@@ -310,6 +285,33 @@ ReActAgent agent = ReActAgent.builder()
 - **STATIC_CONTROL**（推荐起步）：自动 record/retrieve + 注入，零侵入，LLM 无需学会"调记忆工具"。
 - **AGENT_CONTROL**：LLM 自主决定何时记忆/召回，灵活但依赖模型能力，可能漏调。
 - **BOTH**：两者兼有。
+
+### 4.4 与 mem0 实现的对比（客户从 mem0 迁移参考）
+
+agentscope 官方扩展 `agentscope-extensions-mem0` 提供了 `Mem0LongTermMemory`（`implements LongTermMemory`），
+与本实现 `AgentArtsLongTermMemory` 实现**同一接口**，可互换。二者对照如下（参考 mem0 源码）：
+
+| 维度 | `Mem0LongTermMemory`（mem0） | `AgentArtsLongTermMemory`（本实现） |
+|------|------------------------------|--------------------------------------|
+| 契约 | `implements LongTermMemory`（record/retrieve） | **同**（可互换，业务侧只换实现类） |
+| 后端 | 外部 mem0 服务（platform 或 self-hosted），需单独部署 + `MEM0_API_KEY` | 华为云 AgentArts Memory（托管，AK/SK + API Key，无需自部署） |
+| 抽取时机 | `add(infer=true)` **同步抽取**——add 返回时记忆已抽取完，retrieve 立即可见 | `addMessages(forceExtract=true)` **异步抽取**——秒~分钟级，立即 retrieve 可能为空，需 `waitForRecall` 兜底 |
+| 隔离维度 | `agentId` / `userId` / `runId` / `metadata`（丰富，多租户） | `actorId` / `assistantId`（简洁；`searchMemories` 亦支持 `session_id`/`strategy_type` 过滤） |
+| record 角色 | USER,SYSTEM→`user`；ASSISTANT,TOOL→`assistant` | 保留原角色：`user`/`assistant`/`system`/`tool` |
+| retrieve 返回 | 各记忆 `getMemory()` 文本，`\n` 拼接 | 含 `memory_type` + `score` 的格式化串（便于调试与排序） |
+| 特殊过滤 | 过滤 `<compressed_history>` 等 agentscope 内部压缩标记 | 过滤空文本（可按需补 `<compressed_history>`） |
+| 容错 | `retrieve` `onErrorReturn("")` | **同**：`retrieve` 失败返回空串；`record` 失败 `onErrorResume` 吞掉 |
+| 模式接入 | `.longTermMemory(mem0LTM).longTermMemoryMode(...)` | **同**（框架层无差异，STATIC/AGENT/BOTH 通用） |
+| 迁移成本 | — | 接口相同，把 `Mem0LongTermMemory.builder()...build()` 换成 `new AgentArtsLongTermMemory(client, spaceId, actorId)` 即可 |
+
+**迁移要点**（mem0 → AgentArts）：
+
+1. **接口不变**：都 `implements LongTermMemory`，`.longTermMemory(...)` 接法不变，模式不变。
+2. **抽取时序变了**：mem0 同步抽取，AgentArts 异步抽取——"写完立刻查"的场景要在 record 后
+   `waitForRecall` 轮询，或等下一轮再 retrieve（生产里通常天然有间隔）。
+3. **隔离模型简化**：mem0 的 `agentId/userId/runId/metadata` → AgentArts 的 `actorId`（用户级），
+   云端按 actor 跨会话召回；多租户用不同 actor 即可。
+4. **后端免运维**：mem0 要自己部署/运维 mem0 服务；AgentArts 是云上托管，开箱即用。
 
 ---
 
