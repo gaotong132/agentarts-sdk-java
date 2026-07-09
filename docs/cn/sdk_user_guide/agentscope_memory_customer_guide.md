@@ -99,12 +99,16 @@ sequenceDiagram
     autonumber
     participant C as 客户端
     participant A as ReActAgent
+    participant S as 短期记忆存储
     participant T as 记忆工具
     participant L as LongTermMemory
     participant MM as 模型
 
     C->>A: call 用户消息
-    Note over A: 开始不自动 retrieve
+    Note over A,S: 调用开始 读短期记忆
+    A->>S: 恢复历史消息
+    S-->>A: 历史对话
+    Note over A: PRE_CALL 不自动 retrieve
     loop 推理-行动循环
         A->>MM: system + 历史
         MM-->>A: 文本 / 工具调用
@@ -115,10 +119,14 @@ sequenceDiagram
             T-->>A: 工具结果
         end
     end
+    Note over A,S: 调用结束 写短期记忆
+    A->>S: 落盘本轮对话
     A-->>C: 回复
 ```
 
-> **两种模式**：STATIC_CONTROL 零侵入、开箱即用；AGENT_CONTROL 由 LLM 自主决定记忆/召回，灵活但可能漏调；BOTH 两者兼开。按场景选择。
+> 与 STATIC 的区别**只在长期记忆**：AGENT 模式下 `retrieve`/`record` 不在调用边界自动触发，而由 LLM 在循环里自主调记忆工具。**短期记忆的边界读写（开始恢复历史、结束落盘）两种模式都有**。
+>
+> **模式选择**：STATIC_CONTROL 零侵入、开箱即用；AGENT_CONTROL 由 LLM 自主决定记忆/召回，灵活但可能漏调；BOTH 两者兼开。按场景选择。
 
 ---
 
