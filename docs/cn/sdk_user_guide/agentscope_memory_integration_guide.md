@@ -223,13 +223,12 @@ builder 会按 `longTermMemoryMode` 自动挂 `StaticLongTermMemoryHook`（STATI
 ```mermaid
 flowchart TD
     AGENT["agentscope ReActAgent"]
-    AGENT -->|"短期 Memory.saveTo/loadFrom<br/>后端 AgentStateStore"| SS["MemoryAgentStateStore<br/>(已有)"]
-    AGENT -->|".longTermMemory(...)<br/>.longTermMemoryMode(...)"| LTM["AgentArtsLongTermMemory<br/>implements LongTermMemory (新增)"]
-
-    SS --> M1["AgentArts 消息面<br/>State→TextMessage 编码存储"]
-    LTM -->|"record(List<Msg>)"| M2["AgentArts 消息面<br/>addMessages → 自动抽取"]
-    LTM -->|"retrieve(Msg)"| M3["AgentArts 语义面<br/>searchMemories(按 actor)"]
-    M3 -. 召回字符串注入 .-> AGENT
+    AGENT -->|短期 Memory 持久化| SS["MemoryAgentStateStore 已有"]
+    AGENT -->|longTermMemory 静态模式| LTM["AgentArtsLongTermMemory 新增"]
+    SS --> M1["AgentArts 消息面 State 编码存储"]
+    LTM -->|record 写对话| M2["AgentArts 消息面 自动抽取"]
+    LTM -->|retrieve 语义召回| M3["AgentArts 语义面 按 actor 召回"]
+    M3 -.召回字符串注入.-> AGENT
 ```
 
 ### 4.1 长期记忆：`AgentArtsLongTermMemory implements LongTermMemory`（核心）
@@ -297,7 +296,7 @@ agentscope 官方扩展 `agentscope-extensions-mem0` 提供了 `Mem0LongTermMemo
 | 契约 | `implements LongTermMemory`（record/retrieve） | **同**（可互换，业务侧只换实现类） |
 | 后端 | 外部 mem0 服务（platform 或 self-hosted），需单独部署 + `MEM0_API_KEY` | 华为云 AgentArts Memory（托管，AK/SK + API Key，无需自部署） |
 | 抽取时机 | `add` 默认 `async_mode=true` **异步**抽取（可选 `async_mode=false` 同步）；`infer=true` 用 LLM 抽取 | `addMessages(forceExtract=true)` **异步**抽取（forceExtract 尽快触发，但不阻塞到完成）。两者默认都异步，"写完立刻查"都可能要轮询/等下一轮 |
-| 隔离维度 | `agentId` / `userId` / `runId` / `metadata`（丰富，多租户） | `actorId` / `assistantId`（简洁；`searchMemories` 亦支持 `session_id`/`strategy_type` 过滤） |
+| 隔离维度 | `agentId` / `userId` / `runId` / `metadata`（多租户；`metadata` **可直接作检索过滤**） | `actorId` / `assistantId` / `sessionId` / `strategy_type` 等；**同样支持自定义 meta**：消息级 `TextMessage.meta`(String) + session 级 `meta`(Map) 可写入自定义元数据；`searchMemories` 按 actor/session/strategy 等结构维度过滤 |
 | record 角色 | USER,SYSTEM→`user`；ASSISTANT,TOOL→`assistant` | 保留原角色：`user`/`assistant`/`system`/`tool` |
 | retrieve 返回 | 各记忆 `getMemory()` 文本，`\n` 拼接 | 含 `memory_type` + `score` 的格式化串（便于调试与排序） |
 | 特殊过滤 | 过滤 `<compressed_history>` 等 agentscope 内部压缩标记 | 过滤空文本（可按需补 `<compressed_history>`） |
@@ -337,14 +336,14 @@ agentscope 官方扩展 `agentscope-extensions-mem0` 提供了 `Mem0LongTermMemo
 
 ```mermaid
 flowchart TD
-    subgraph AGENT["agentscope ReActAgent"]
-        SP["sysPrompt = 基础提示词<br/>+ Hook 自动 appendSystemContent(召回记忆)"]
-        SS["stateStore = MemoryAgentStateStore<br/>(短期记忆/状态)"]
+    subgraph AGENT [agentscope ReActAgent]
+        SP["sysPrompt 含 Hook 注入的召回记忆"]
+        SS["stateStore 为 MemoryAgentStateStore"]
     end
-    AGENT -->|".longTermMemory(AgentArtsLongTermMemory)<br/>.longTermMemoryMode(STATIC_CONTROL)"| LTM["AgentArtsLongTermMemory<br/>implements LongTermMemory"]
-    LTM -->|"record → addMessages"| MSG["云上消息面<br/>→ 自动抽取记忆"]
-    LTM -->|"retrieve → searchMemories"| SEM["云上语义面<br/>按 actor 跨会话召回"]
-    SEM -. 召回字符串 .-> SP
+    AGENT -->|longTermMemory 静态模式| LTM["AgentArtsLongTermMemory"]
+    LTM -->|record 写消息触发抽取| MSG["云上消息面 自动抽取记忆"]
+    LTM -->|retrieve 按 actor 召回| SEM["云上语义面 跨会话语义召回"]
+    SEM -.召回字符串.-> SP
 ```
 
 ### 6.2 最佳实践
