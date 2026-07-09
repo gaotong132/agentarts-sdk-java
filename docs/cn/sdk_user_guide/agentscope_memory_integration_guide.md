@@ -129,24 +129,39 @@ sequenceDiagram
     autonumber
     participant C as 客户端
     participant A as ReActAgent
+    participant S as AgentStateStore
     participant H as StaticLongTermMemoryHook
     participant L as LongTermMemory
     participant MM as 模型
 
     C->>A: call(messages, RuntimeContext)
+    Note over A,S: 调用开始 读短期记忆
+    A->>S: get 恢复 AgentState 含历史消息
+    S-->>A: State
+    Note over A: Memory = AgentStateMemoryView(State)
+
     Note over A,H: PRE_CALL 事件
     H->>L: retrieve(query)
     L-->>H: 召回字符串
-    H->>A: appendSystemContent(召回) 注入 system
+    H->>A: appendSystemContent 注入 system
 
-    Note over A,MM: 推理-行动循环(模型生成/工具调用)
-    A->>MM: system(含召回) + 历史
+    Note over A,MM: 推理-行动循环
+    A->>MM: system 含召回 加 历史
     MM-->>A: 回复
+    Note over A: 本轮消息 addMessage 进 AgentState
 
     Note over A,H: POST_CALL 事件
-    H->>L: record(本轮 Msg) 写入长期记忆
+    H->>L: record memory.getMessages 写长期记忆
+    Note over A,S: 调用结束 写短期记忆
+    A->>S: save 持久化 AgentState
     A-->>C: 最终回复
 ```
+
+> **短期记忆读写时机**（两种模式都适用，与 LTM 模式无关）：
+> - **读**：调用开始，agent 经 `AgentStateStore.get(userId,sessionId,key)` 恢复 `AgentState`（含历史消息）；
+>   agent 的 `Memory` 是该 State 的只读视图 `AgentStateMemoryView`（`HookEvent.getMemory()` 即此）。
+> - **写**：调用过程中本轮消息 `addMessage` 进 AgentState；调用结束 `AgentStateStore.save(...)` 落盘整个 State。
+> - **Hook 读取**：STATIC 模式 `POST_CALL` 时 Hook 调 `memory.getMessages()` 取本轮消息 → `record` 到长期记忆。
 
 #### AGENT_CONTROL 模式（LLM 自主调用工具）
 
@@ -324,6 +339,61 @@ agentscope 官方扩展 `agentscope-extensions-mem0` 提供了 `Mem0LongTermMemo
 3. **隔离模型简化**：mem0 的 `agentId/userId/runId/metadata` → AgentArts 的 `actorId`（用户级），
    云端按 actor 跨会话召回；多租户用不同 actor 即可。
 4. **后端免运维**：mem0 要自己部署/运维 mem0 服务；AgentArts 是云上托管，开箱即用。
+
+### 4.5 短期 + 长期同时替换为 AgentArts 的可行性
+
+AgentArts Memory 数据面同时提供**短期对话消息管理**（`addMessages` / `getLastKMessages` /
+`listMessages` / `getMessage`，原生 role/parts）与**长期语义记忆**（`searchMemories` 等）。
+客户希望把 agentscope 的短期记忆和长期记忆**同时**替换为 AgentArts。
+
+**关键事实**（`javap` 核实）：
+- agentscope 的短期 `Memory` **不可插拔**——`HookEvent.getMemory()` 对 ReActAgent 返回
+  `new AgentStateMemoryView(agent的AgentState)`，即短期记忆就是 `AgentState` 的只读视图。
+- 短期记忆唯一的可插拔持久化点是 **`AgentStateStore`**（`.stateStore(...)`）。
+- 长期记忆的可插拔点是 **`LongTermMemory`**（`.longTermMemory(...)`）。
+
+因此"同时替换"= 同时实现这两个接口对接 AgentArts：
+
+| | agentscope 接口 | AgentArts 实现 | 现状 |
+|---|---|---|---|
+| 短期记忆 | `AgentStateStore`（State 含消息） | `MemoryAgentStateStore`（已有）→ `addMessages`（State 编码为 `__S__` blob，`forceExtract=false`） | ✅ 已替换 |
+| 长期记忆 | `LongTermMemory`（record/retrieve） | `AgentArtsLongTermMemory`（新增）→ `addMessages`(真实消息,`forceExtract=true`) + `searchMemories` | ✅ 已替换 |
+
+**结论：可行，且本实现已完成。** 两者都落到 AgentArts Memory：
+
+```mermaid
+flowchart TD
+    A["agentscope ReActAgent"]
+    A -->|stateStore 短期 State 持久化| SS["MemoryAgentStateStore"]
+    A -->|longTermMemory 长期 record 加 retrieve| LTM["AgentArtsLongTermMemory"]
+    SS -->|addMessages State blob 不触发抽取| P1["AgentArts 消息面 存档"]
+    LTM -->|addMessages 真实对话 触发抽取| P2["AgentArts 消息面 抽取记忆"]
+    LTM -->|retrieve searchMemories| P3["AgentArts 语义面 召回"]
+    P2 --> P3
+```
+
+**协同点**：真实对话消息经 `AgentArtsLongTermMemory.record` 以原生 role/parts 写入云上
+（`forceExtract=true`）→ 同一次写入既是"长期记忆的抽取源"，也相当于把对话原文留存在 AgentArts
+消息面（兼具短期存档意义）。短期 `AgentState` 则以 blob 形式另存（供 agent 恢复工作状态，不参与抽取）。
+
+**限制与取舍**：
+
+1. **短期 State 存为 blob，非原生消息**：`AgentStateStore` 拿到的是序列化的 `State` 对象，
+   无法在 store 层拆出单条消息按原生 role/parts 存——故 `MemoryAgentStateStore` 把整个 State 编码成
+   一条 `__S__` 文本消息。原生对话消息的存档/抽取由 `record` 路径承担，职责分离，不冲突。
+2. **AgentArts 无单条消息删除 / 清空**：消息面只有 `getMessage`/`listMessages`，没有
+   `deleteMessage`/`clear`（仅 Space TTL 自动清理、`deleteMemory` 删已抽取记忆）。故无法在
+   AgentArts 上完整实现带 `deleteMessage`/`clear` 的 `Memory` 接口——但 agentscope 的短期 Memory 是
+   `AgentStateMemoryView`（只读视图，不调 delete/clear），实际不需要，所以不构成阻塞。
+3. **每轮网络开销**：短期 State 的 save/get、长期 record/retrieve 都是云上 HTTP 调用，
+   比 `InMemoryMemory` 慢；`longTermMemoryAsyncRecord(true)` 可让 record 异步不阻塞主对话。
+
+**建议**：
+- **当前/交付**：用现有组合（`MemoryAgentStateStore` 短期 + `AgentArtsLongTermMemory` 长期）——已实现、
+  已验证（真实云上+LLM 跑通），职责清晰，规避了 delete/clear 缺口。
+- **若要"单一写入"极致协同**：可让 `AgentArtsLongTermMemory.record` 直接以原生消息写入（已是如此），
+  并把短期 State 的存档也复用同一 session（减少 blob 冗余）——但需接受 State 仍需 blob 编码的限制。
+  不建议为追求"短期也走原生消息"而把 `AgentStateStore` 耦合到 State 内部消息结构（侵入大、收益小）。
 
 ---
 
