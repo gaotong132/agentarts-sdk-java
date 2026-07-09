@@ -64,10 +64,11 @@ public interface LongTermMemory {
 | `Memory`（短期） | `InMemoryMemory` | `new InMemoryMemory()` | **默认**。进程内 `List<Msg>`，重启即失 |
 | `Memory`（短期） | `StateBackedMemory` | `new StateBackedMemory(AgentState)` | 把消息存进一个 `AgentState`，随 state 一起 `saveTo/loadFrom` |
 | `Memory`（短期） | `AgentStateMemoryView` | `new AgentStateMemoryView(Supplier<AgentState>)` | 对外部 `AgentState` 的只读视图（不持有数据） |
-| `LongTermMemory`（长期） | ——（无内置实现） | —— | **纯 SPI 接口**，core 不提供后端实现，由用户/平台对接（这正是 `AgentArtsLongTermMemory` 的定位） |
+| `LongTermMemory`（长期） | ——（core 无） | —— | core 不提供；`agentscope-extensions` 提供 mem0 / 百炼 / ReMe 等现成实现，AgentArts 同样以扩展形式对接（`AgentArtsLongTermMemory` 的定位） |
 
-> 即：短期记忆框架给了 3 个开箱即用的实现；长期记忆框架只给接口 + Hook + Tools + Mode，
-> **后端必须自己实现**——这也正是本 SDK 提供 `AgentArtsLongTermMemory`（对接 AgentArts 云上 Memory）的原因。
+> 即：短期记忆框架给了 3 个开箱即用的实现；长期记忆 core 只给接口 + Hook + Tools + Mode，
+> 后端实现在 `agentscope-extensions`（mem0 / 百炼 / ReMe 等）。本 SDK 的 `AgentArtsLongTermMemory`
+> 与这些扩展**同层级**——以扩展形式对接 AgentArts 云上 Memory，可与 mem0 等互换。
 
 ### 2.2 LongTermMemory 的三种模式
 
