@@ -7,6 +7,7 @@ import io.agentscope.core.memory.LongTermMemory;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -76,34 +77,85 @@ public class NavigationLongTermMemoryDemo {
     // ========================================================================
 
     private static void runScripted(boolean hasCloud) {
-        // 会话 A：record 写入用户画像（云上会自动抽取 semantic/user_preference/episodic）
-        System.out.println("\n########## 会话 A：record（建立长期记忆）##########");
+        // ===== 会话 A：多轮，体现短期记忆（同会话上下文）=====
+        System.out.println("\n########## 会话 A（多轮）：短期记忆（同会话上下文）##########");
         LongTermMemory ltmA = newLongTermMemory(hasCloud, ACTOR_ID);
-        ltmA.record(List.of(
-                Msg.builder().role(MsgRole.USER)
-                        .textContent("你好，我叫张三，我家在朝阳公园南门，公司在国贸。我偏好避开高速公路。")
-                        .build(),
-                Msg.builder().role(MsgRole.ASSISTANT)
-                        .textContent("好的，已为您记下家、公司位置与避开高速的偏好。")
-                        .build())).block();
-        System.out.println("👤 用户: 你好，我叫张三，我家在朝阳公园南门，公司在国贸。我偏好避开高速公路。");
-        System.out.println("🤖 助手: 好的，已为您记下家、公司位置与避开高速的偏好。");
-        System.out.println("  ↳ record() 已写入长期记忆（云上触发自动抽取）");
+        List<String> sessionABuffer = new ArrayList<>(); // 模拟短期对话缓冲（对应 AgentState.context）
 
-        // 会话 B：全新 LTM 实例（同 actor）—— retrieve 跨实例/跨会话召回
-        System.out.println("\n########## 会话 B：retrieve（全新会话，跨会话召回）##########");
-        LongTermMemory ltmB = newLongTermMemory(hasCloud, ACTOR_ID);
+        // A 轮1：自报画像 → record 到长期记忆 + 进短期缓冲
+        scriptedTurn(ltmA, sessionABuffer,
+                "我叫张三，我家在朝阳公园南门，公司在国贸，偏好避开高速公路。",
+                "好的，已记下家/公司位置与避开高速的偏好。", true);
 
+        // A 轮2（同会话）：问"我刚才说的公司地址" → 用短期缓冲回答（同会话上下文，无需跨会话召回）
+        scriptedTurn(ltmA, sessionABuffer,
+                "我刚才说的公司地址是哪？",
+                null, true);
+
+        // 云上抽取是异步的：等抽取完成，为会话 B 的长期召回做准备
+        if (hasCloud) {
+            System.out.println("\n⏳ 等待云上抽取（轮询，最长 60s）...");
+            String got = waitForRecall(ltmA,
+                    Msg.builder().role(MsgRole.USER).textContent("导航去公司").build(), 60000, 2000);
+            System.out.println(got == null || got.isEmpty() ? "   （超时）" : "   抽取就绪 ✓");
+        }
+
+        // ===== 会话 B：新会话，体现长期记忆（跨会话召回）=====
+        System.out.println("\n########## 会话 B（新会话）：长期记忆（跨会话召回）##########");
+        LongTermMemory ltmB = newLongTermMemory(hasCloud, ACTOR_ID); // 新实例、新缓冲
         recallAndAnswer(ltmB, "导航去公司", "国贸");
         recallAndAnswer(ltmB, "回家", "朝阳公园");
 
-        // 对照：另一 actor，无记忆
+        // ===== 对照：另一 actor，无长期记忆 =====
         System.out.println("\n########## 对照：另一用户，无长期记忆 ##########");
         LongTermMemory ltmC = newLongTermMemory(hasCloud, "user-lisi");
         String out = ltmC.retrieve(Msg.builder().role(MsgRole.USER).textContent("导航去公司").build()).block();
         System.out.println("👤 用户(lisi): 导航去公司");
         System.out.println("🧠 retrieve(): " + (out == null || out.isEmpty() ? "（无）" : "\n" + out));
         System.out.println("🤖 助手: 我还没有您的目的地信息，请先告诉我您常去的地方。");
+    }
+
+    /** 脚本驱动单轮：进短期缓冲；若问"刚才/前面"则从本会话缓冲答（短期），否则回 ack 并 record（长期）。 */
+    private static void scriptedTurn(LongTermMemory ltm, List<String> buffer,
+                                     String userMsg, String ackReply, boolean record) {
+        System.out.println("\n👤 用户: " + userMsg);
+        buffer.add(userMsg);
+        if (userMsg.contains("刚才") || userMsg.contains("前面")) {
+            // 短期记忆：同会话上下文
+            String company = extractFromBuffer(buffer, "公司在");
+            if (company != null) {
+                System.out.println("🧠 短期记忆(本会话上下文): 本会话历史里有 \"公司在" + company + "\"");
+                System.out.println("🤖 助手: 您刚才说的公司地址是" + company
+                        + "。（来自本会话上下文，无需跨会话召回）");
+            } else {
+                System.out.println("🧠 短期记忆(本会话上下文): （本会话未提及）");
+                System.out.println("🤖 助手: 本会话里没有提到公司地址。");
+            }
+        } else if (ackReply != null) {
+            System.out.println("🤖 助手: " + ackReply);
+        }
+        if (record) {
+            ltm.record(List.of(Msg.builder().role(MsgRole.USER).textContent(userMsg).build())).block();
+            System.out.println("  ↳ record() → 长期记忆（云上触发抽取）");
+        }
+    }
+
+    /** 从缓冲里找 marker（如"公司在"）后的地点，取到首个标点。 */
+    private static String extractFromBuffer(List<String> buffer, String marker) {
+        for (String msg : buffer) {
+            int idx = msg.indexOf(marker);
+            if (idx < 0) continue;
+            String rest = msg.substring(idx + marker.length());
+            for (int i = 0; i < rest.length(); i++) {
+                char c = rest.charAt(i);
+                if (c == '，' || c == ',' || c == '。' || c == '.'
+                        || c == '；' || c == ';') {
+                    return rest.substring(0, i).trim();
+                }
+            }
+            return rest.trim();
+        }
+        return null;
     }
 
     private static void recallAndAnswer(LongTermMemory ltm, String query, String expectKey) {
@@ -174,32 +226,41 @@ public class NavigationLongTermMemoryDemo {
                 .maxIters(5)
                 .build();
 
-        io.agentscope.core.agent.RuntimeContext ctx = io.agentscope.core.agent.RuntimeContext.builder()
-                .userId(ACTOR_ID).sessionId("nav-session-1").build();
+        io.agentscope.core.agent.RuntimeContext ctxA = io.agentscope.core.agent.RuntimeContext.builder()
+                .userId(ACTOR_ID).sessionId("nav-session-a").build();
 
         try {
-            // 第一轮：自报画像（会被 record 到云上并抽取）
+            // ===== 会话 A（多轮）：短期记忆（同会话上下文）=====
+            System.out.println("\n########## 会话 A（多轮）：短期记忆（同会话上下文）##########");
+
+            // A 轮1：自报画像（会被 record 到云上并抽取）
             System.out.println("\n👤 用户: 我家在朝阳公园南门，公司在国贸，偏好避开高速公路。");
-            Msg r1 = agent.call("我家在朝阳公园南门，公司在国贸，偏好避开高速公路。", ctx).block();
+            Msg r1 = agent.call("我家在朝阳公园南门，公司在国贸，偏好避开高速公路。", ctxA).block();
             System.out.println("🤖 助手: " + (r1 != null ? r1.getTextContent() : "(无回复)"));
 
-            // 云上抽取是异步的：第一轮 record 写消息后，Memory 资源由后台提炼，有延迟。
-            // 第二轮 retrieve 前，先轮询等待抽取完成，否则 Hook 的 retrieve 可能召回为空。
-            // （离线实现同步返回，立即命中；云上路径轮询到抽取完成）
-            System.out.println("\n⏳ 等待记忆就绪（轮询，最长 60s）...");
+            // A 轮2（同会话、同 ctx）：问"刚才说的公司地址" → 此时云上抽取可能尚未完成、
+            // Hook 的 retrieve 可能为空，但 Agent 的同会话上下文(AgentState.context 短期记忆)里有第1轮内容，
+            // 模型据此回答——体现短期记忆（无需跨会话召回）。
+            System.out.println("\n👤 用户: 我刚才说的公司地址是哪？");
+            Msg r2 = agent.call("我刚才说的公司地址是哪？", ctxA).block();
+            System.out.println("🤖 助手: " + (r2 != null ? r2.getTextContent() : "(无回复)"));
+
+            // 云上抽取是异步的：等抽取完成，为会话 B 的长期召回做准备
+            System.out.println("\n⏳ 等待云上抽取（轮询，最长 60s）...");
             String got = waitForRecall(raw,
                     Msg.builder().role(MsgRole.USER).textContent("导航去公司").build(),
                     60000, 2000);
             System.out.println(got == null || got.isEmpty()
-                    ? "   （超时仍未召回，第二轮 retrieve 可能依赖 Hook 实时结果）"
+                    ? "   （超时仍未召回，会话 B retrieve 可能依赖 Hook 实时结果）"
                     : "   抽取已就绪 ✓");
 
-            // 第二轮：全新会话，仅凭长期记忆回答（STATIC_CONTROL 自动 retrieve 注入）
-            io.agentscope.core.agent.RuntimeContext ctx2 = io.agentscope.core.agent.RuntimeContext.builder()
-                    .userId(ACTOR_ID).sessionId("nav-session-2").build();
+            // ===== 会话 B（新会话）：长期记忆（跨会话召回）=====
+            System.out.println("\n########## 会话 B（新会话）：长期记忆（跨会话召回）##########");
+            io.agentscope.core.agent.RuntimeContext ctxB = io.agentscope.core.agent.RuntimeContext.builder()
+                    .userId(ACTOR_ID).sessionId("nav-session-b").build();
             System.out.println("\n👤 用户: 导航去公司");
-            Msg r2 = agent.call("导航去公司", ctx2).block();
-            System.out.println("🤖 助手: " + (r2 != null ? r2.getTextContent() : "(无回复)"));
+            Msg r3 = agent.call("导航去公司", ctxB).block();
+            System.out.println("🤖 助手: " + (r3 != null ? r3.getTextContent() : "(无回复)"));
         } finally {
             agent.close();
             if (cloudClient != null) {

@@ -253,30 +253,41 @@ cp .env.example .env   # 填 AGENTARTS_MEMORY_API_KEY / SPACE_ID / OPENAI_API_KE
 
 | 阶段 | 用户输入 | 验证什么 |
 |---|---|---|
-| 会话 A | "我家在朝阳公园南门，公司在国贸，偏好避开高速公路" | **写入 + 自动抽取**：对话 `record` 到云上，云上自动提炼出位置/偏好记忆 |
-| 会话 B（全新会话） | "导航去公司" | **跨会话召回**：按用户在云上召回公司位置 + 避开高速偏好 → 直接给路线 |
+| 会话 A 轮1 | "家在朝阳公园，公司在国贸，偏好避开高速" | **短期进缓冲 + record 抽取**：进同会话上下文，并 record 到云上自动抽取 |
+| 会话 A 轮2（同会话） | "我刚才说的公司地址是哪？" | **短期记忆**：同会话上下文里有轮1内容，直接答"国贸"，无需跨会话召回 |
+| 会话 B（全新会话） | "导航去公司" | **长期记忆（跨会话召回）**：新会话无上下文，按用户 retrieve 召回公司位置 + 偏好 → 给路线 |
 | 对照（另一用户） | "导航去公司" | **按用户隔离**：另一用户无记忆 → 召回为空 → 提示信息不足 |
 
-### 4.2 调用流程（对应 STATIC_CONTROL 模式）
+### 4.2 调用流程（短期 + 长期，对应 STATIC_CONTROL 模式）
 
-会话 B 是关键——它是**全新会话**（与 A 不同 sessionId），却能在调用前 `retrieve` 到 A 写入的记忆，这正是"跨会话召回"的证明：
+会话 A 多轮体现**短期记忆**（同会话上下文），会话 B 新会话体现**长期记忆**（跨会话召回）：
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant U as 用户
     participant A as ReActAgent
+    participant S as 短期记忆
     participant L as AgentArtsLongTermMemory
     participant C as AgentArts 云上 Memory
     participant MM as 模型
 
-    Note over U,A: 会话 A 先建立记忆
-    U->>A: 我家在朝阳公园,公司在国贸,偏好避开高速
+    Note over U,A: 会话 A 轮1 建立记忆
+    U->>A: 家在朝阳公园,公司在国贸,偏好避开高速
+    A->>S: 进同会话上下文
     A->>L: record 本轮对话
-    L->>C: addMessages 触发自动抽取
-    Note over C: 抽取出 位置 加 偏好 记忆
+    L->>C: addMessages 触发抽取
+    Note over C: 抽取 位置 加 偏好 记忆
 
-    Note over U,A: 会话 B 全新会话
+    Note over U,A: 会话 A 轮2 同会话 短期记忆
+    U->>A: 我刚才说的公司地址是哪
+    Note over A,S: 用同会话上下文回答
+    A->>S: 取轮1的 公司在国贸
+    A->>MM: 本会话上下文含公司
+    MM-->>A: 国贸
+    A-->>U: 您刚才说的是国贸
+
+    Note over U,A: 会话 B 全新会话 长期记忆
     U->>A: 导航去公司
     Note over A,L: 调用开始 框架自动 retrieve
     A->>L: retrieve 导航去公司
@@ -290,7 +301,14 @@ sequenceDiagram
 
 ### 4.3 实际运行输出（上云 + 真实 LLM）
 
-会话 B 的关键输出（`LoggingLongTermMemory` 装饰器把黑盒的 record/retrieve 调用打印出来）：
+**会话 A 轮2（短期记忆，同会话上下文）**——此时云上抽取可能尚未完成，但同会话上下文里有轮1内容，模型据此回答：
+
+```
+👤 用户: 我刚才说的公司地址是哪？
+🤖 助手: 您刚才说的是国贸。（来自本会话上下文，无需跨会话召回）
+```
+
+**会话 B（长期记忆，跨会话召回）**——`LoggingLongTermMemory` 装饰器把 retrieve 调用打印出来：
 
 ```
 👤 用户: 导航去公司
@@ -303,14 +321,16 @@ sequenceDiagram
         已自动应用您"避开高速公路"的出行偏好 ... 全程避开高速及快速路主路。
 ```
 
-模型**用上了云上召回的记忆**：认出公司=国贸、应用了避开高速偏好。整条链路（框架自动 retrieve → `AgentArtsLongTermMemory` → 云上 `searchMemories` → 注入 Prompt → LLM 据此回答）真实跑通。
+- **短期**：会话 A 轮2 用同会话上下文答出"国贸"，不依赖云上抽取。
+- **长期**：会话 B 全新会话，框架自动 retrieve → `AgentArtsLongTermMemory` → 云上 `searchMemories` → 注入 Prompt → 模型用上召回的公司位置 + 避开高速偏好。
 
 ### 4.4 demo 对应的最佳实践
 
 | demo 体现的实践 | 在 demo 中如何体现 |
 |---|---|
 | 实现 `LongTermMemory` 接口 | `AgentArtsLongTermMemory implements LongTermMemory`，接 `.longTermMemory(...)` |
-| 起步 STATIC_CONTROL | `.longTermMemoryMode(STATIC_CONTROL)`，框架自动 record/retrieve + 注入 |
+| STATIC_CONTROL | `.longTermMemoryMode(STATIC_CONTROL)`，框架自动 record/retrieve + 注入 |
+| 短期记忆（同会话上下文） | 会话 A 轮2 用本会话上下文答出"国贸"，无需跨会话召回 |
 | 按用户隔离 + 跨会话召回 | 会话 A/B 同一 `actor=user-zhangsan`、不同 sessionId，B 召回到 A 的记忆 |
 | 写即抽取 | 会话 A `record` 后云上自动抽出 `<global_summary>` / `{"fact":...}` |
 | 召回而非全量 | `retrieve` topK=5，只注入相关记忆 |
