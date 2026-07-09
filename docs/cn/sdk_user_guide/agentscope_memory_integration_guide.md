@@ -346,11 +346,29 @@ AgentArts Memory 数据面同时提供**短期对话消息管理**（`addMessage
 `listMessages` / `getMessage`，原生 role/parts）与**长期语义记忆**（`searchMemories` 等）。
 客户希望把 agentscope 的短期记忆和长期记忆**同时**替换为 AgentArts。
 
-**关键事实**（`javap` 核实）：
-- agentscope 的短期 `Memory` **不可插拔**——`HookEvent.getMemory()` 对 ReActAgent 返回
-  `new AgentStateMemoryView(agent的AgentState)`，即短期记忆就是 `AgentState` 的只读视图。
-- 短期记忆唯一的可插拔持久化点是 **`AgentStateStore`**（`.stateStore(...)`）。
-- 长期记忆的可插拔点是 **`LongTermMemory`**（`.longTermMemory(...)`）。
+**关键事实**（`javap` + 运行时核实）：
+- 短期记忆**就是 `Memory` 接口**；ReActAgent 的 Memory 实现是 `AgentStateMemoryView`（`implements Memory`），
+  它是 `AgentState` 的**只读视图**——`addMessage`/`deleteMessage`/`clear` 全部 `throw readOnly()`，
+  只有 `getMessages()`（= `AgentState.context` 的 copy）可用。
+- 对话消息**写入** `AgentState.context`（agent 直接写，不经 `Memory.addMessage`）；**读取**经 `memory.getMessages()`。
+  `AgentStateMemoryView` 是 `final` 类、由 builder 内部硬接（无 `.memory()` builder；运行时探针
+  `hook.getMemory().getClass() = AgentStateMemoryView`）——**不能换成自定义 Memory 实现**。
+- 因此短期记忆的可插拔替换点是 **`AgentStateStore`**（`.stateStore(...)`，持久化含 `context` 的 `AgentState`）；
+  长期记忆的可插拔点是 **`LongTermMemory`**（`.longTermMemory(...)`）。
+
+因此"同时替换"= 在这两个插拔点对接 AgentArts：
+
+| | agentscope 接口 | AgentArts 实现 | 现状 |
+|---|---|---|---|
+| 短期记忆 | `Memory`（agent 用 `AgentStateMemoryView` 只读视图，底层 `AgentState.context`）；持久化经 `AgentStateStore` | `MemoryAgentStateStore`（已有）→ `addMessages`（State 编码为 `__S__` blob，`forceExtract=false`） | ✅ 已替换 |
+| 长期记忆 | `LongTermMemory`（record/retrieve） | `AgentArtsLongTermMemory`（新增）→ `addMessages`(真实消息,`forceExtract=true`) + `searchMemories` | ✅ 已替换 |
+
+> **为什么不直接"实现 `Memory` 接口"替换短期？** `Memory` 接口确实存在（`InMemoryMemory`/`StateBackedMemory`/`AgentStateMemoryView` 都是它的实现），
+> 但 ReActAgent 的对话缓冲是 `AgentState.context`，agent 直接写它、不经可插拔 Memory；且 builder 把 Memory 硬接成只读的
+> `AgentStateMemoryView`（`final`，无 `.memory()` 入口）。所以自己实现 `Memory`，agent 不会把对话写进去——
+> 短期替换只能走 `AgentStateStore`。若要短期对话以**原生消息**（非 blob）存 AgentArts 并喂抽取，
+> 可在自定义 `AgentStateStore.save` 里解码 `AgentState.getContext()` → 逐条原生 `TextMessage`（`forceExtract=true`），
+> 即短期+长期一次写入两用（见下"原生消息路径"）。
 
 因此"同时替换"= 同时实现这两个接口对接 AgentArts：
 
@@ -376,11 +394,42 @@ flowchart TD
 （`forceExtract=true`）→ 同一次写入既是"长期记忆的抽取源"，也相当于把对话原文留存在 AgentArts
 消息面（兼具短期存档意义）。短期 `AgentState` 则以 blob 形式另存（供 agent 恢复工作状态，不参与抽取）。
 
+#### 短期数据结构匹配 + 单次写入两用 + 冲突分析
+
+**① 数据结构匹配（高，可实现）**：
+
+| agentscope 短期 | AgentArts 消息面 | 转换 |
+|---|---|---|
+| `AgentState.context` = `List<Msg>` | Session 下消息序列 | 整体对应 |
+| `Msg.role`(USER/ASSISTANT/SYSTEM/TOOL) | `role`("user"/"assistant"/"system"/"tool") | 直接映射 |
+| `Msg.content` 的 `TextBlock` | `TextMessage`(parts:[{type:text}]) | `MessageConverter.toTextMessage` |
+| `ToolUseBlock` | `ToolCallMessage` | `MessageConverter.toToolCallMessage` |
+| `ToolResultBlock` | `ToolResultMessage` | `MessageConverter.toToolResultMessage` |
+
+SDK 自带 `MessageConverter`（3 对双向转换），Msg↔AgentArts 消息**无需新写转换**，结构完全对得上。
+
+**② AgentArts 单次写入两用（成立）**：`addMessages(role,parts,forceExtract=true)` 一次写入 →
+`listMessages`/`getLastKMessages` 可读回（短期）+ 触发抽取→`searchMemories` 可召回（长期）。
+
+**③ agentscope 框架内两路冲突分析**：
+
+| 设计 | 短期路径 | 长期路径 | 冲突？ |
+|---|---|---|---|
+| **当前（已实现）** | `MemoryAgentStateStore` 写 `__S__` blob，`forceExtract=false`，独立 session | `record` 写真实消息，`forceExtract=true`，actor session | **无冲突**（不同 session、blob 不抽取）✅ |
+| **统一（单次写入两用）** | 自定义 `AgentStateStore` 解码 `context`→原生消息逐条 `addMessages(forceExtract=true)` | 若 `record` 仍写真实消息 → **重复写/重复抽取** ⚠️ | 需把 `record` 改 no-op，仅留 `retrieve` |
+
+统一设计额外复杂度：`AgentStateStore.save` 每次拿到完整 `context`，全量 `addMessages` 会**累积重复消息**
+（第 N 轮重写前 N-1 轮），需 **delta 写**（只写新增，靠 `listMessages` 现有 seq 或 state meta 记 lastWrittenSeq
+推断增量）；`get` 用 `listMessages` 回填 `AgentState.context`。当前 blob 设计靠"一个 blob、取最新"天然规避此问题。
+
 **限制与取舍**：
 
-1. **短期 State 存为 blob，非原生消息**：`AgentStateStore` 拿到的是序列化的 `State` 对象，
-   无法在 store 层拆出单条消息按原生 role/parts 存——故 `MemoryAgentStateStore` 把整个 State 编码成
-   一条 `__S__` 文本消息。原生对话消息的存档/抽取由 `record` 路径承担，职责分离，不冲突。
+1. **短期 State 默认存为 blob，非原生消息**：`MemoryAgentStateStore` 把整个 `AgentState` 序列化成
+   一条 `__S__` 文本消息（`forceExtract=false`，不参与抽取）。原生对话消息的存档/抽取由 `record` 路径承担。
+   **若要让短期对话也以原生消息存并喂抽取**：自定义 `AgentStateStore`，在 `save(state)` 里判断 state 为
+   `AgentState` 时取 `state.getContext()`（`List<Msg>`）→ 逐条转 `TextMessage` 用 `addMessages(...,forceExtract=true)`
+   写入；`get` 时用 `getLastKMessages`/`listMessages` 回填 `AgentState.context`。这样短期+长期共用一次原生消息写入
+   （`record` 可改为 no-op，仅保留 `retrieve`）。代价：store 耦合 `AgentState` 的 context 结构 + 每条消息一次网络写。
 2. **AgentArts 无单条消息删除 / 清空**：消息面只有 `getMessage`/`listMessages`，没有
    `deleteMessage`/`clear`（仅 Space TTL 自动清理、`deleteMemory` 删已抽取记忆）。故无法在
    AgentArts 上完整实现带 `deleteMessage`/`clear` 的 `Memory` 接口——但 agentscope 的短期 Memory 是
