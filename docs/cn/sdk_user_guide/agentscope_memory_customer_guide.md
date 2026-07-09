@@ -46,41 +46,53 @@ flowchart LR
 
 ### 1.2 长期记忆的三种模式（由谁触发 record/retrieve）
 
-长期记忆的 `record`/`retrieve` 谁来调、何时调，由 `LongTermMemoryMode` 决定：
+长期记忆的 `record`/`retrieve` 谁来调、何时调，由 `LongTermMemoryMode` 决定；短期记忆的读写则在每次调用边界（见下方完整流程）：
 
 | 模式 | 触发方 | 特点 |
 |---|---|---|
-| **STATIC_CONTROL** | 框架自动 | 每轮自动 record + retrieve 并注入 Prompt，**零侵入**，LLM 无感 |
+| **STATIC_CONTROL** | 框架自动 | 每轮自动 record + retrieve 并注入 Prompt，零侵入，LLM 无感 |
 | **AGENT_CONTROL** | LLM 自主 | LLM 决定何时记忆/召回（通过工具），灵活但可能漏调 |
 | **BOTH** | 两者兼有 | 自动 + 工具都开 |
 
-两种自动模式的调用流程分别如下。
+### 1.3 完整调用流程（STATIC_CONTROL 模式）
 
-#### STATIC_CONTROL（框架自动，推荐起步）
+一张图看清短期记忆与长期记忆如何在一次调用中协同（短期在调用边界读写、长期在 PRE/POST_CALL 自动召回与写入）：
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant C as 客户端
     participant A as ReActAgent
+    participant S as 短期记忆存储
     participant H as 自动记忆Hook
     participant L as LongTermMemory
     participant MM as 模型
 
-    C->>A: call(用户消息)
-    Note over A,H: 调用开始
-    H->>L: retrieve(用户消息)
+    C->>A: call 用户消息
+    Note over A,S: 调用开始 读短期记忆
+    A->>S: 恢复历史消息
+    S-->>A: 历史对话
+    Note over A,H: PRE_CALL 自动召回长期记忆
+    H->>L: retrieve 用户消息
     L-->>H: 召回相关长期记忆
-    H->>A: 注入到 system 提示词
+    H->>A: 注入 system 提示词
     Note over A,MM: 推理-行动循环
-    A->>MM: system(含召回) + 历史
+    A->>MM: system 含召回 加 历史
     MM-->>A: 回复
-    Note over A,H: 调用结束
-    H->>L: record(本轮对话) 写入长期记忆
+    Note over A,H: POST_CALL 自动写入长期记忆
+    H->>L: record 本轮对话
+    Note over L: 云上自动抽取 位置 加 偏好 记忆
+    Note over A,S: 调用结束 写短期记忆
+    A->>S: 落盘本轮对话
     A-->>C: 回复
 ```
 
-#### AGENT_CONTROL（LLM 自主调工具）
+- **短期记忆**：调用开始恢复历史消息、调用结束落盘本轮对话（边界读写）；默认进程内，重启即失、多实例不共享——这正是上云要解决的问题。
+- **长期记忆**：`PRE_CALL` 自动 retrieve 召回并注入 Prompt；`POST_CALL` 自动 record 本轮对话 → 云上自动抽取成可检索记忆。
+
+### 1.4 AGENT_CONTROL 模式
+
+与 STATIC 不同，`retrieve`/`record` 不在调用边界自动触发，而由 LLM 在推理-行动循环里自主调用记忆工具（短期记忆的边界读写仍存在）：
 
 ```mermaid
 sequenceDiagram
@@ -91,7 +103,7 @@ sequenceDiagram
     participant L as LongTermMemory
     participant MM as 模型
 
-    C->>A: call(用户消息)
+    C->>A: call 用户消息
     Note over A: 开始不自动 retrieve
     loop 推理-行动循环
         A->>MM: system + 历史
@@ -106,37 +118,7 @@ sequenceDiagram
     A-->>C: 回复
 ```
 
-> **选哪个**：起步用 **STATIC_CONTROL**（零侵入，开箱即用）；确有"让模型自己决定记什么"的需求再切 AGENT_CONTROL/BOTH。
-
-### 1.3 短期记忆的读写时机
-
-短期记忆（对话缓冲）的存取发生在每次调用的边界：
-
-- **读**：调用开始，恢复之前的历史消息；
-- **写**：调用过程中本轮消息进入缓冲；调用结束，把缓冲落盘以便下次恢复；
-- **长期记忆读取短期**：STATIC 模式调用结束时，自动把短期缓冲里的本轮对话 `record` 到长期记忆。
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as 客户端
-    participant A as ReActAgent
-    participant S as 短期记忆存储
-    participant MM as 模型
-
-    C->>A: call
-    Note over A,S: 调用开始 读短期
-    A->>S: 恢复历史消息
-    S-->>A: 历史对话
-    Note over A,MM: 推理-行动循环
-    A->>MM: 历史加本轮
-    MM-->>A: 回复
-    Note over A,S: 调用结束 写短期
-    A->>S: 落盘本轮对话
-    A-->>C: 回复
-```
-
-> 默认短期记忆在进程内，**重启即失、多实例不共享**——这正是上云要解决的问题。
+> **两种模式**：STATIC_CONTROL 零侵入、开箱即用；AGENT_CONTROL 由 LLM 自主决定记忆/召回，灵活但可能漏调；BOTH 两者兼开。按场景选择。
 
 ---
 
