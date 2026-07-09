@@ -87,6 +87,18 @@ public enum LongTermMemoryMode {
 | **AGENT_CONTROL** | LLM 决策 | `LongTermMemoryTools`（`recordToMemory`/`retrieveFromMemory`，`@Tool` 注解）被注册为工具，LLM 自主调用 |
 | **BOTH** | 两者 | 同时挂 Hook + 注册工具 |
 
+> **两种模式下 `record`/`retrieve` 的实现有无差异？**（字节码核实 `LongTermMemoryTools`）
+>
+> - **retrieve 实现无差异**：`retrieveFromMemory(queries)` 只是把 LLM 给的关键词
+>   `String.join` 拼成一个字符串、包成 Msg、调 `ltm.retrieve(msg)`——与 STATIC 模式 Hook 调的是
+>   **同一个方法**。差异仅在调用方与 query 来源（原始输入 vs LLM 关键词）。
+> - **提取(抽取)仍由后端做，无法跳过**：`recordToMemory(summary, messages)` 把 LLM 给的 `summary`
+>   包成 ASSISTANT Msg、messages 包成 USER Msg，调 `ltm.record(List)`。AgentArts 没有"直接写 Memory"
+>   的 API，Memory 资源**只能由云上从消息抽取产生**，故两种模式后端都提取。
+> - 真实差异在 **record 的输入**：STATIC 把原始多轮对话交给云上抽取；AGENT 是 LLM 先总结成 `summary`
+>   再交云上抽取（输入更聚焦，但依赖 LLM 主动调工具，漏调则漏记）。
+> - **结论**：`AgentArtsLongTermMemory` 的 `record`/`retrieve` 无需为模式改逻辑，模式差异全在框架侧。
+
 相关类（`javap` 核实）：
 
 ```java
