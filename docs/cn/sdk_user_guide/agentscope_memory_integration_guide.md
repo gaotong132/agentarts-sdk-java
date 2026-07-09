@@ -113,30 +113,55 @@ sequenceDiagram
     autonumber
     participant C as 客户端
     participant A as ReActAgent
-    participant M as Memory(短期消息缓冲)
-    participant H as StaticLongTermMemoryHook
-    participant L as LongTermMemory(AgentArts实现)
+    participant M as Memory(短期)
+    participant H as Hook或Tools
+    participant L as LongTermMemory(AgentArts)
     participant MM as 模型
 
     C->>A: call(messages, RuntimeContext)
-
-    Note over A,H: PRE_CALL 事件
     A->>M: loadFrom(stateStore) 恢复短期记忆
-    H->>L: retrieve(query) 召回相关长期记忆
-    L-->>H: 召回字符串
-    H->>H: appendSystemContent(召回内容) 注入 system 消息
 
-    Note over A,MM: PRE_REASONING / 模型生成 / 工具调用循环
-    A->>MM: 带召回记忆的 system + 历史
-    MM-->>A: 回复
+    Note over A,H: ① 召回时机
+    alt STATIC_CONTROL
+        H->>L: retrieve(query) (PRE_CALL 事件自动触发)
+        L-->>H: 召回字符串
+        H->>A: appendSystemContent(召回内容) 注入 system
+    else AGENT_CONTROL
+        Note over A: 不在此召回,改由 LLM 在循环中调 retrieveFromMemory 工具
+    end
 
-    Note over A,H: POST_CALL 事件
-    H->>L: record(本轮 Msg) 写入长期记忆
-    A->>M: addMessage(回复) 存入短期记忆
-    A->>M: saveTo(stateStore) 持久化短期记忆
+    Note over A,MM: ② 推理-行动循环
+    loop ReAct(最多 maxIters 轮)
+        A->>MM: system(含召回) + 历史
+        MM-->>A: 文本 / 工具调用
+        alt AGENT_CONTROL
+            Note over A,H: LLM 自主决定何时记忆/召回
+            A->>H: 调 recordToMemory 或 retrieveFromMemory
+            H->>L: record 或 retrieve
+            L-->>H: 结果
+            H-->>A: 工具结果
+        end
+    end
 
+    Note over A,H: ③ 写入时机
+    alt STATIC_CONTROL
+        H->>L: record(本轮 Msg) (POST_CALL 事件自动触发)
+    else AGENT_CONTROL
+        Note over A: 已在循环中由 LLM 调 recordToMemory 写入,POST_CALL 不重复
+    end
+
+    A->>M: addMessage(回复) 并 saveTo(stateStore)
     A-->>C: Mono(Msg) 最终回复
 ```
+
+> **两种模式的核心区别**（图中 ①②③ 三个时机点）：
+> - **STATIC_CONTROL**：框架在 `PRE_CALL` 自动 `retrieve` 并 `appendSystemContent` 注入，
+>   在 `POST_CALL` 自动 `record`。LLM 无感，零侵入。
+> - **AGENT_CONTROL**：`retrieve`/`record` 不在事件点触发，而是 LLM 在推理-行动循环里
+>   **自主调用** `LongTermMemoryTools` 的 `retrieveFromMemory`/`recordToMemory` 工具。
+>   灵活但依赖模型主动调用，可能漏调。
+> - 共同点：无论哪种模式，最终都落到同一个 `LongTermMemory`（本实现 `AgentArtsLongTermMemory`）
+>   的 `record`/`retrieve`，即都接入 AgentArts 云上 Memory。
 
 > **两个接入点**：① `LongTermMemory.record/retrieve`（长期记忆）② `Memory.saveTo/loadFrom` 的后端
 > `AgentStateStore`（短期记忆持久化）。把它们换成 AgentArts 实现，记忆就上了云。
