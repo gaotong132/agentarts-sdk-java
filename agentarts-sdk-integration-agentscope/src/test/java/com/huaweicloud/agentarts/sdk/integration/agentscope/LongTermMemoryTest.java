@@ -112,28 +112,6 @@ class LongTermMemoryTest {
         }
 
         @Test
-        void waitForRecallReturnsImmediatelyWhenResultsExist() {
-            fake.searchResults = List.of(result("用户家在国贸", "semantic"));
-            AgentArtsLongTermMemory ltm = new AgentArtsLongTermMemory(fake, "space-1", "alice");
-            long t0 = System.currentTimeMillis();
-            String out = ltm.waitForRecall(
-                    Msg.builder().role(MsgRole.USER).textContent("回家").build(),
-                    5, 5000, 100);
-            assertTrue(System.currentTimeMillis() - t0 < 500, "有结果时应立即返回，不轮询");
-            assertTrue(out.contains("用户家在国贸"));
-        }
-
-        @Test
-        void waitForRecallReturnsEmptyOnTimeout() {
-            fake.searchResults = List.of(); // 云上尚未抽取完
-            AgentArtsLongTermMemory ltm = new AgentArtsLongTermMemory(fake, "space-1", "alice");
-            String out = ltm.waitForRecall(
-                    Msg.builder().role(MsgRole.USER).textContent("回家").build(),
-                    5, 400, 150); // 短超时
-            assertEquals("", out, "超时应返回空串");
-        }
-
-        @Test
         void recordUsesForceExtractByDefault() {
             AgentArtsLongTermMemory ltm = new AgentArtsLongTermMemory(fake, "space-1", "alice");
             ltm.record(List.of(Msg.builder().role(MsgRole.USER).textContent("hi").build())).block();

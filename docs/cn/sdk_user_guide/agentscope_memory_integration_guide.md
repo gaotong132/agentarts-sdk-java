@@ -251,7 +251,8 @@ flowchart TD
 - **容错**：`record` 失败 `onErrorResume` 吞掉（记忆不应让主对话挂掉）；`retrieve` 失败返回空串。
 - **角色映射**：`MsgRole.USER/ASSISTANT/SYSTEM/TOOL` → `"user"/"assistant"/"system"/"tool"`。
 - **抽取延迟**：`record` 写消息后云上**异步抽取**（秒~分钟级），立即 `retrieve` 可能为空。
-  `record` 用 `forceExtract=true` 尽快触发；紧邻的"写完就查"场景用 `waitForRecall` 轮询兜底。
+  `record` 用 `forceExtract=true` 尽快触发；紧邻的"写完就查"场景由**调用方**轮询 `retrieve` 兜底
+  （demo 里的 `waitForRecall` 是使用方胶水代码，不进适配层——适配层只暴露 `record`/`retrieve` 契约）。
   （`searchMemories` 的返回解析是适配层内部细节，已封装，用户不感知。）
 
 ### 4.2 短期记忆持久化：`MemoryAgentStateStore`（已有）
@@ -295,7 +296,7 @@ agentscope 官方扩展 `agentscope-extensions-mem0` 提供了 `Mem0LongTermMemo
 |------|------------------------------|--------------------------------------|
 | 契约 | `implements LongTermMemory`（record/retrieve） | **同**（可互换，业务侧只换实现类） |
 | 后端 | 外部 mem0 服务（platform 或 self-hosted），需单独部署 + `MEM0_API_KEY` | 华为云 AgentArts Memory（托管，AK/SK + API Key，无需自部署） |
-| 抽取时机 | `add(infer=true)` **同步抽取**——add 返回时记忆已抽取完，retrieve 立即可见 | `addMessages(forceExtract=true)` **异步抽取**——秒~分钟级，立即 retrieve 可能为空，需 `waitForRecall` 兜底 |
+| 抽取时机 | `add` 默认 `async_mode=true` **异步**抽取（可选 `async_mode=false` 同步）；`infer=true` 用 LLM 抽取 | `addMessages(forceExtract=true)` **异步**抽取（forceExtract 尽快触发，但不阻塞到完成）。两者默认都异步，"写完立刻查"都可能要轮询/等下一轮 |
 | 隔离维度 | `agentId` / `userId` / `runId` / `metadata`（丰富，多租户） | `actorId` / `assistantId`（简洁；`searchMemories` 亦支持 `session_id`/`strategy_type` 过滤） |
 | record 角色 | USER,SYSTEM→`user`；ASSISTANT,TOOL→`assistant` | 保留原角色：`user`/`assistant`/`system`/`tool` |
 | retrieve 返回 | 各记忆 `getMemory()` 文本，`\n` 拼接 | 含 `memory_type` + `score` 的格式化串（便于调试与排序） |
@@ -307,8 +308,9 @@ agentscope 官方扩展 `agentscope-extensions-mem0` 提供了 `Mem0LongTermMemo
 **迁移要点**（mem0 → AgentArts）：
 
 1. **接口不变**：都 `implements LongTermMemory`，`.longTermMemory(...)` 接法不变，模式不变。
-2. **抽取时序变了**：mem0 同步抽取，AgentArts 异步抽取——"写完立刻查"的场景要在 record 后
-   `waitForRecall` 轮询，或等下一轮再 retrieve（生产里通常天然有间隔）。
+2. **抽取时序基本一致**：mem0 默认 `async_mode=true` 也是异步抽取，和 AgentArts 一样；
+   mem0 可选 `async_mode=false` 走同步，AgentArts 则用 `forceExtract=true` 尽快触发 + 调用方按需轮询 `retrieve`。
+   差异不大——"写完立刻查"的场景两者都要处理抽取延迟。
 3. **隔离模型简化**：mem0 的 `agentId/userId/runId/metadata` → AgentArts 的 `actorId`（用户级），
    云端按 actor 跨会话召回；多租户用不同 actor 即可。
 4. **后端免运维**：mem0 要自己部署/运维 mem0 服务；AgentArts 是云上托管，开箱即用。

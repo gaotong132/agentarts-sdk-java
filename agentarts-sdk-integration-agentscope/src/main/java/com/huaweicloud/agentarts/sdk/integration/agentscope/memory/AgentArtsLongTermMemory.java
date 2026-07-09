@@ -77,7 +77,8 @@ public class AgentArtsLongTermMemory implements LongTermMemory {
      * @param forceExtract 写入消息时是否强制触发云上抽取（默认 true）。
      *                     云上抽取是<b>异步</b>的：record 只写消息，Memory 资源由后台策略引擎提炼，
      *                     有秒级~分钟级延迟。forceExtract=true 让写入后尽快进入抽取流程，
-     *                     但<b>不保证 retrieve 时一定已抽取完</b>——见 {@link #waitForRecall}。
+     *                     但<b>不保证 retrieve 时一定已抽取完</b>——云上抽取是异步的，
+     *                     紧邻的"写完即查"场景由调用方自行轮询 retrieve 兜底。
      */
     public AgentArtsLongTermMemory(MemoryClient client, String spaceId, String actorId,
                                    String assistantId, int retrieveTopK, boolean forceExtract) {
@@ -120,36 +121,6 @@ public class AgentArtsLongTermMemory implements LongTermMemory {
     }
 
     // ======================== 内部实现 ========================
-
-    /**
-     * 轮询召回，直到拿到非空结果或超时。用于 demo 在 record 后等云上抽取完成。
-     *
-     * <p>云上抽取是异步的：record 写消息后，Memory 资源由后台策略引擎提炼，有延迟。
-     * 立即 retrieve 可能返回空。本方法按 intervalMs 间隔重试，直到 recall 非空或达到 timeoutMs。</p>
-     *
-     * @return 召回字符串；超时仍为空则返回 ""
-     */
-    public String waitForRecall(Msg query, int topK, long timeoutMs, long intervalMs) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        String out = "";
-        int attempt = 0;
-        while (System.currentTimeMillis() < deadline) {
-            attempt++;
-            out = doRetrieve(query);
-            if (out != null && !out.isEmpty()) {
-                LOG.info("waitForRecall: 命中（第{}次轮询）", attempt);
-                return out;
-            }
-            try {
-                Thread.sleep(intervalMs);
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                break;
-            }
-        }
-        LOG.warn("waitForRecall: 超时（{}ms，共{}次）仍未召回，云上抽取可能仍在进行", timeoutMs, attempt);
-        return out;
-    }
 
     private void doRecord(List<Msg> messages) {
         if (messages == null || messages.isEmpty()) {

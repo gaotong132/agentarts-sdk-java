@@ -108,15 +108,10 @@ public class NavigationLongTermMemoryDemo {
 
     private static void recallAndAnswer(LongTermMemory ltm, String query, String expectKey) {
         System.out.println("\n👤 用户: " + query);
-        // 云上抽取是异步的：record 后立即 retrieve 可能为空。云上路径轮询等待抽取完成。
-        String recalled;
+        // 云上抽取是异步的：record 后立即 retrieve 可能为空。轮询等待抽取完成（离线实现同步返回，立即命中）。
         Msg queryMsg = Msg.builder().role(MsgRole.USER).textContent(query).build();
-        if (ltm instanceof AgentArtsLongTermMemory cloud) {
-            System.out.println("⏳ 等待云上记忆抽取（轮询中，最长 60s）...");
-            recalled = cloud.waitForRecall(queryMsg, 5, 60000, 2000);
-        } else {
-            recalled = ltm.retrieve(queryMsg).block();
-        }
+        System.out.println("⏳ 等待记忆就绪（轮询，最长 60s）...");
+        String recalled = waitForRecall(ltm, queryMsg, 60000, 2000);
         System.out.print("🧠 retrieve(): ");
         System.out.println(recalled == null || recalled.isEmpty() ? "（无）" : "\n" + recalled);
         // 真实场景下，agentscope 的 STATIC_CONTROL hook 会把上面这段 recalled 自动 appendSystemContent 注入。
@@ -190,15 +185,14 @@ public class NavigationLongTermMemoryDemo {
 
             // 云上抽取是异步的：第一轮 record 写消息后，Memory 资源由后台提炼，有延迟。
             // 第二轮 retrieve 前，先轮询等待抽取完成，否则 Hook 的 retrieve 可能召回为空。
-            if (hasCloud && raw instanceof AgentArtsLongTermMemory cloud) {
-                System.out.println("\n⏳ 等待云上记忆抽取（轮询中，最长 60s）...");
-                String got = cloud.waitForRecall(
-                        Msg.builder().role(MsgRole.USER).textContent("导航去公司").build(),
-                        5, 60000, 2000);
-                System.out.println(got == null || got.isEmpty()
-                        ? "   （超时仍未召回，第二轮 retrieve 可能依赖 Hook 实时结果）"
-                        : "   抽取已就绪 ✓");
-            }
+            // （离线实现同步返回，立即命中；云上路径轮询到抽取完成）
+            System.out.println("\n⏳ 等待记忆就绪（轮询，最长 60s）...");
+            String got = waitForRecall(raw,
+                    Msg.builder().role(MsgRole.USER).textContent("导航去公司").build(),
+                    60000, 2000);
+            System.out.println(got == null || got.isEmpty()
+                    ? "   （超时仍未召回，第二轮 retrieve 可能依赖 Hook 实时结果）"
+                    : "   抽取已就绪 ✓");
 
             // 第二轮：全新会话，仅凭长期记忆回答（STATIC_CONTROL 自动 retrieve 注入）
             io.agentscope.core.agent.RuntimeContext ctx2 = io.agentscope.core.agent.RuntimeContext.builder()
@@ -217,6 +211,34 @@ public class NavigationLongTermMemoryDemo {
     // ========================================================================
     // 构造工具
     // ========================================================================
+
+    /**
+     * 轮询 retrieve 直到非空或超时。demo 胶水代码，处理云上异步抽取的空窗
+     * （record 写消息后，云上后台抽取 Memory 有秒~分钟级延迟，立即 retrieve 可能为空）。
+     * 离线实现同步返回，首次即命中。属于"使用方"逻辑，不进适配层。
+     *
+     * @return 召回字符串；超时仍空则返回 ""
+     */
+    static String waitForRecall(LongTermMemory ltm, Msg query, long timeoutMs, long intervalMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        int attempt = 0;
+        while (System.currentTimeMillis() < deadline) {
+            attempt++;
+            String out = ltm.retrieve(query).block();
+            if (out != null && !out.isEmpty()) {
+                System.out.println("   第 " + attempt + " 次轮询命中 ✓");
+                return out;
+            }
+            try {
+                Thread.sleep(intervalMs);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return "";
+            }
+        }
+        System.out.println("   超时（" + attempt + " 次轮询）仍未召回");
+        return "";
+    }
 
     private static LongTermMemory newLongTermMemory(boolean hasCloud, String actorId) {
         if (hasCloud) {
