@@ -540,6 +540,26 @@ AgentArts 消息面是"**session 内 append 消息**"模型，agentscope `AgentS
 
 **要"真覆盖"需 AgentArts 新增**（当前无）：① `updateMessage`/`replaceSessionMessages`（消息层覆盖）；或 ② 独立 KV-state API（`put/get/delete by key`，不走消息）——后者能与 `AgentStateStore` 1:1 干净匹配。现状下 blob+take-latest 是最相容适配，代价是 TTL 内存储累积。
 
+#### 接口调用次数 & 跨重启缓存局限
+
+**每次操作在 AgentArts 侧的接口调用数**（基于 `MemoryAgentStateStore` + `MemoryClient.getLastKMessages` 实现）：
+
+| 操作 | AgentArts 调用 | 备注 |
+|---|---|---|
+| save(单值) | 1 `addMessages` + 首次 1 `createMemorySession`（缓存） | 写一条 `__S__` blob |
+| save(列表) | 1 `addMessages`（批次）+ 首次 `createMemorySession` | `__LB__`+N `__L__` 一次写 |
+| get(单值) | **2 `listMessages`** | `getLastKMessages(k=1)` 先查 total 再查末页 → 双打 |
+| getList | **3 `listMessages`** | 1 查 total + `getLastKMessages(total)`(=2) |
+| exists/delete/listSessionIds | 0（只查本地缓存） | 不打云 |
+| record(LTM) | 1 `addMessages` + 首次 `createMemorySession` | |
+| retrieve(LTM) | 1 `searchMemories` | |
+
+**get 双打**：`getLastKMessages` 实现 = 先 `listMessages(limit=1)` 取 total、再 `listMessages(k, offset=total-k)` 取末页，故每次 get 至少 2 次云调用。
+
+**⚠ 跨实例/跨重启 get 会失败**：`get` 首行 `sessionCache.get(logicalKey)`——`logicalKey→AgentArts UUID` 映射**只在进程内存**。重启/换实例后缓存冷启动，`get` 直接返回空（不调云），**之前写进 AgentArts 的 state 找不回**（session UUID 丢失，数据成孤儿）。故当前 `MemoryAgentStateStore` 只在**单进程内**持久化生效，**跨实例并不真正成立**——与"上云为跨实例"的初衷有 gap。
+
+**修法**：`createMemorySession` 不传 `null`（服务端随机 UUID），改用**确定性 UUID**（如 `UUID v5` 由 `(spaceId, userId, sessionId, key)` 哈希）→ 任意实例算出同一 UUID，冷启动 get 也能找回，且省掉随机性。这是让短期记忆真正跨实例的必要改动。
+
 **限制与取舍**：
 
 1. **短期 State 默认存为 blob，非原生消息**：`MemoryAgentStateStore` 把整个 `AgentState` 序列化成
