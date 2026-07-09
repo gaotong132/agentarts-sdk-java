@@ -197,8 +197,13 @@ public class AgentArtsLongTermMemory implements LongTermMemory {
         sb.append("[已从云上召回的长期记忆 · actor=").append(actorId).append("]\n");
         int i = 1;
         for (Map<String, Object> r : resp.getResults()) {
-            Object content = r.get("content");
-            Object type = r.get("memory_type");
+            // 真实 schema: {"record": {"content":..., "memory_type":...}, "score":...}
+            // 兼容 flat schema: {"content":..., "memory_type":..., "score":...}
+            Object recordObj = r.get("record");
+            Map<String, Object> rec = (recordObj instanceof Map)
+                    ? (Map<String, Object>) recordObj : r;
+            Object content = rec.get("content");
+            Object type = rec.get("memory_type");
             Object score = r.get("score");
             if (content == null) {
                 continue;
@@ -210,6 +215,10 @@ public class AgentArtsLongTermMemory implements LongTermMemory {
                 sb.append("  [score=").append(score).append("]");
             }
             sb.append("\n");
+        }
+        // 所有项都无 content 时，去掉空 header
+        if (i == 1) {
+            return "";
         }
         return sb.toString();
     }

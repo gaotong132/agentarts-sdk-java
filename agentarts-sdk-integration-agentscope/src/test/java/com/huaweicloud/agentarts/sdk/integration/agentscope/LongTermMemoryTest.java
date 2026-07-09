@@ -190,9 +190,12 @@ class LongTermMemoryTest {
     private static String unique() { return Integer.toString(++counter); }
 
     private static Map<String, Object> result(String content, String type) {
+        // 真实 searchMemories schema: {"record": {"content":..., "memory_type":...}, "score":...}
+        Map<String, Object> record = new LinkedHashMap<>();
+        record.put("content", content);
+        record.put("memory_type", type);
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("content", content);
-        m.put("memory_type", type);
+        m.put("record", record);
         m.put("score", "0.91");
         return m;
     }
