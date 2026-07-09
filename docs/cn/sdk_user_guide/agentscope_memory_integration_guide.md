@@ -556,6 +556,18 @@ AgentArts 消息面是"**session 内 append 消息**"模型，agentscope `AgentS
 
 **get 双打**：`getLastKMessages` 实现 = 先 `listMessages(limit=1)` 取 total、再 `listMessages(k, offset=total-k)` 取末页，故每次 get 至少 2 次云调用。
 
+**能否优化 get/getList 调用次数**：
+- **纯客户端侧优化不了**（安全前提下）：`listMessages` 是**升序**（oldest first），取"最后 k 条"必须先知道 `total` 算 offset → 2 次。"猜 limit=K 一次拿"不安全——session 累积所有历史 save 的 blob（每次 save 追加），N 可能很大，K 不够就取不到最新。
+- **需后端调整**（任一即可降为 1 次）：
+
+  | 后端能力 | 效果 | get(单值) | getList |
+  |---|---|---|---|
+  | **`listMessages` 支持 `order=desc`**（按 seq 降序） | `getLastKMessages` 一次 `listMessages(limit=k, order=desc)` 拿末 k 条 | 1 次 | 1 次（typical） |
+  | 或 `?last=N` 参数（取最后 N 条，一次返回） | 同上 | 1 次 | 1 次 |
+  | 或 `getLatestMessage`（只取最后 1 条） | get(单值) 专用 | 1 次 | 仍翻页 |
+
+  关键一条：**`listMessages` 支持 `order=desc`**（消息面当前只有 `limit/offset`，无排序，不像 `listMemories` 有 `sort_by/sort_order`）。有了它，SDK `getLastKMessages` 改一次调用，get 2→1、getList 3→1，对每次 agent 调用都 get 的场景是实打实的延迟/成本优化。
+
 **⚠ 跨实例/跨重启 get 会失败**：`get` 首行 `sessionCache.get(logicalKey)`——`logicalKey→AgentArts UUID` 映射**只在进程内存**。重启/换实例后缓存冷启动，`get` 直接返回空（不调云），**之前写进 AgentArts 的 state 找不回**（session UUID 丢失，数据成孤儿）。故当前 `MemoryAgentStateStore` 只在**单进程内**持久化生效，**跨实例并不真正成立**——与"上云为跨实例"的初衷有 gap。
 
 **修法**：`createMemorySession` 不传 `null`（服务端随机 UUID），改用**确定性 UUID**（如 `UUID v5` 由 `(spaceId, userId, sessionId, key)` 哈希）→ 任意实例算出同一 UUID，冷启动 get 也能找回，且省掉随机性。这是让短期记忆真正跨实例的必要改动。
