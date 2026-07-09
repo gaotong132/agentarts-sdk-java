@@ -510,7 +510,7 @@ AgentArts 消息面是"**session 内 append 消息**"模型，agentscope `AgentS
 | 写语义 | `addMessages` **追加** | `save` **覆盖**（最新赢） | 不匹配 → blob 用"取最新 `__S__`"模拟覆盖；原生消息需 **delta 写** |
 | 读语义 | `listMessages`/`getLastKMessages`（按 seq 列全部） | `get(key)` 返回**最新** State | 部分：都按序；但 get 是"取最新一条"，listMessages 是"列全部" |
 | 多值 | 消息序列 append | `save(List<State>)` 列表 | 不匹配 → `__LB__` 批次标记模拟全量替换 |
-| 删除 | **无** deleteMessage/deleteSession（仅 Space TTL） | `delete(userId,sessionId)` / `delete(key)` | 不匹配 → AgentArts 不能按需删，仅 TTL 过期；`MemoryAgentStateStore` 只清本地缓存 |
+| 删除 | **无** deleteMessage/deleteSession（仅 Space TTL） | `delete(userId,sessionId)` / `delete(key)` | 不匹配 → AgentArts 不能按需删，仅 TTL 过期；`MemoryAgentStateStore` 只清本地缓存。**但 agentscope-core 运行时不调 delete/exists/listSessionIds（全 jar 扫描核实）——这些是管理侧方法，agent 正常调用流只用 save/get，故此错配实际不阻塞，仅运维清理脚本会碰到** |
 | 生命周期 | Session 有 TTL 自动清理 | 无 TTL 概念 | 不匹配 |
 | actor 隔离 | actor_id | userId | 匹配 |
 | 消息顺序 | seq 有序 | `context` List<Msg> 有序 | 匹配 |
