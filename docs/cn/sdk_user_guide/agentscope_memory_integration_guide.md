@@ -467,6 +467,34 @@ sequenceDiagram
 > **长期抽取源**（同一次 `addMessages(forceExtract=true)` 触发抽取 → `searchMemories` 召回）。
 > `LongTermMemory.record` 退化为 no-op，避免与短期写入重复；`retrieve` 仍走 `searchMemories`。
 
+#### 重复写入 / 重复抽取的影响
+
+`addMessages` 是**追加**语义，且 `forceExtract=true` 每次都触发云上 LLM 抽取。重复写入同一批消息会有三层影响：
+
+| 影响 | 必然性 | 说明 |
+|---|---|---|
+| ① 重复消息（存储膨胀） | 必然 | 同一消息被多次 append，session 里出现 N 份 |
+| ② 重复抽取（算力/费用） | 必然 | 每次都跑 LLM 抽取，对旧内容反复抽取，浪费成本 |
+| ③ 重复 Memory 资源（召回噪声） | **取决于云上去重** | 若 AgentArts 按 content 去重（如 mem0 upsert）则不产生重复 Memory；若不去重，每次抽取生成新 Memory → `searchMemories` 返回同一条 N 次 → LLM 看到重复记忆。AgentArts 是否去重 SDK 未暴露，未证实 |
+
+**两个设计的重复来源**：
+
+| 设计 | 重复来源 | 严重度 |
+|---|---|---|
+| 当前（已实现） | Hook 的 `record` 传**全量 `getMessages()`**（字节码核实，无 subList/filter）；多轮**单 session** 下 `AgentState.context` 累积 → 旧消息每轮重写 | 中（仅一路；多轮单 session 才累积） |
+| 统一（单次写入） | 短期 save（若全量）+ record 两路都写 | 高（两路叠加） |
+
+> **demo 为何没暴露此问题**：导航 demo 每轮用**不同 sessionId**（`nav-session-1`/`nav-session-2`），
+> `AgentState.context` 不跨轮累积 → `getMessages()` 每轮只含当轮消息 → `record` 不重写旧消息。
+> 真正多轮单 session 场景才会触发重复。
+
+**缓解手段**：
+1. **record → no-op**（统一设计）：短期 save 已写+抽取，record 不重复。
+2. **delta 写**：`record`/save 只写新增——查 `listMessages` 现有 count，只写 tail。对 STATIC（全量 getMessages）可行；
+   对 AGENT（`recordToMemory` 传 summary 非前缀）不适用，需分别处理。
+3. **无状态 sessionId**：每轮不同 sessionId → context 不累积 → 不重复（简单，但牺牲单 session 多轮）。
+4. **依赖云上去重**：若 AgentArts 抽取按 content 去重，则 ③ 不发生（但 ①② 仍在），不能依赖未证实行为。
+
 **限制与取舍**：
 
 1. **短期 State 默认存为 blob，非原生消息**：`MemoryAgentStateStore` 把整个 `AgentState` 序列化成
