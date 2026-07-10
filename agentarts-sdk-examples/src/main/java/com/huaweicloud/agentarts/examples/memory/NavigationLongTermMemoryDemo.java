@@ -160,16 +160,13 @@ public class NavigationLongTermMemoryDemo {
 
     private static void recallAndAnswer(LongTermMemory ltm, String query, String expectKey) {
         System.out.println("\n👤 用户: " + query);
-        // 云上抽取是异步的：record 后立即 retrieve 可能为空。轮询等待抽取完成（离线实现同步返回，立即命中）。
         Msg queryMsg = Msg.builder().role(MsgRole.USER).textContent(query).build();
-        System.out.println("⏳ 等待记忆就绪（轮询，最长 60s）...");
-        String recalled = waitForRecall(ltm, queryMsg, 60000, 2000);
-        System.out.print("🧠 retrieve(): ");
-        System.out.println(recalled == null || recalled.isEmpty() ? "（无）" : "\n" + recalled);
-        // 真实场景下，agentscope 的 STATIC_CONTROL hook 会把上面这段 recalled 自动 appendSystemContent 注入。
-        // 这里用脚本演示"召回结果如何影响导航决策"：
+        String recalled = ltm.retrieve(queryMsg).block();
+        int n = (recalled == null || recalled.isEmpty()) ? 0 : recalled.split("\n").length;
+        System.out.println("  🧠 长期记忆 retrieve → " + (n == 0 ? "无相关记忆" : "召回 " + n + " 条"));
+        // 脚本演示：召回结果如何影响导航决策
         boolean hasInfo = recalled != null && recalled.contains(expectKey);
-        boolean avoidHighway = recalled != null && recalled.contains("避开"); // 记忆里含"偏好避开高速"
+        boolean avoidHighway = recalled != null && recalled.contains("避开");
         if (!hasInfo) {
             System.out.println("🤖 助手: 我还没有您的目的地信息，请先告诉我您常去的地方。");
             return;
@@ -208,10 +205,11 @@ public class NavigationLongTermMemoryDemo {
         // 套日志装饰器：让 agentscope Hook 对 record/retrieve 的调用在运行时可见
         LongTermMemory ltm = new LoggingLongTermMemory(raw, hasCloud ? "AgentArtsLTM" : "InMemoryLTM");
 
-        io.agentscope.core.state.AgentStateStore stateStore = hasCloud
-                ? new com.huaweicloud.agentarts.sdk.integration.agentscope.state
-                        .MemoryAgentStateStore(cloudClient, spaceId)
-                : new io.agentscope.core.state.InMemoryAgentStateStore();
+        io.agentscope.core.state.AgentStateStore stateStore = new LoggingAgentStateStore(
+                hasCloud
+                        ? new com.huaweicloud.agentarts.sdk.integration.agentscope.state
+                                .MemoryAgentStateStore(cloudClient, spaceId)
+                        : new io.agentscope.core.state.InMemoryAgentStateStore());
 
         io.agentscope.core.ReActAgent agent = io.agentscope.core.ReActAgent.builder()
                 .name("nav-agent")
