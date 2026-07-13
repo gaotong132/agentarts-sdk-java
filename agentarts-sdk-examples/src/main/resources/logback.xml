@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- 定义一个控制台输出器 (ConsoleAppender) -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <!-- 定义日志的输出格式 -->
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 设置根日志记录器 (Root Logger) -->
+    <root level="INFO">
+        <!-- 将日志输出到上面定义的控制台输出器 -->
+        <appender-ref ref="CONSOLE" />
+    </root>
+</configuration>
