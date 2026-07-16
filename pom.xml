@@ -71,9 +71,7 @@
         <!-- Spring Boot (optional, for starter) -->
         <spring-boot.version>3.5.16</spring-boot.version>
 
-        <!-- Testing -->
-        <junit-bom.version>6.0.2</junit-bom.version>
-        <mockito-bom.version>5.23.0</mockito-bom.version>
+        <!-- Testing (JUnit and Mockito are managed by the supported Spring Boot BOM) -->
         <test.timeout.default>30 s</test.timeout.default>
         <test.fork.timeout.seconds>180</test.fork.timeout.seconds>
 
@@ -87,6 +85,8 @@
         <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
         <jacoco-maven-plugin.version>0.8.15</jacoco-maven-plugin.version>
         <cyclonedx-maven-plugin.version>2.9.2</cyclonedx-maven-plugin.version>
+        <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
+        <japicmp-maven-plugin.version>0.26.1</japicmp-maven-plugin.version>
         <jacoco.minimum.line.coverage>0.50</jacoco.minimum.line.coverage>
     </properties>
 
@@ -288,23 +288,6 @@
                 <version>${slf4j.version}</version>
             </dependency>
 
-            <!-- ==================== -->
-            <!-- Testing -->
-            <!-- ==================== -->
-            <dependency>
-                <groupId>org.junit</groupId>
-                <artifactId>junit-bom</artifactId>
-                <version>${junit-bom.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.mockito</groupId>
-                <artifactId>mockito-bom</artifactId>
-                <version>${mockito-bom.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -520,6 +503,61 @@
                                 </configuration>
                             </execution>
                         </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven-gpg-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-release-artifacts</id>
+                                <phase>verify</phase>
+                                <goals><goal>sign</goal></goals>
+                                <configuration>
+                                    <bestPractices>true</bestPractices>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>api-compatibility</id>
+            <activation>
+                <property>
+                    <name>compatibility.version</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.github.siom79.japicmp</groupId>
+                        <artifactId>japicmp-maven-plugin</artifactId>
+                        <version>${japicmp-maven-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>verify-public-api-compatibility</id>
+                                <phase>verify</phase>
+                                <goals><goal>cmp</goal></goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <oldVersion>
+                                <dependency>
+                                    <groupId>${project.groupId}</groupId>
+                                    <artifactId>${project.artifactId}</artifactId>
+                                    <version>${compatibility.version}</version>
+                                    <type>jar</type>
+                                </dependency>
+                            </oldVersion>
+                            <parameter>
+                                <breakBuildOnBinaryIncompatibleModifications>true</breakBuildOnBinaryIncompatibleModifications>
+                                <breakBuildOnSourceIncompatibleModifications>true</breakBuildOnSourceIncompatibleModifications>
+                                <ignoreMissingClasses>true</ignoreMissingClasses>
+                                <onlyModified>true</onlyModified>
+                            </parameter>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>
