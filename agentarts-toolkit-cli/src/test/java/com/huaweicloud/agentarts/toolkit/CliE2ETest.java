@@ -445,6 +445,33 @@ class CliE2ETest {
                         "atomic configuration writes must not leave temporary files behind");
             }
         }
+
+        @Test
+        void missingConfigTargetsReturnNonZero() {
+            assertNotEquals(0, cli.execute("config", "set-default", "missing"));
+            assertNotEquals(0, cli.execute(
+                    "config", "get", "base.region", "--agent", "missing"));
+            assertNotEquals(0, cli.execute(
+                    "config", "set", "base.description", "value", "--agent", "missing"));
+            assertNotEquals(0, cli.execute("config", "remove", "missing"));
+            assertNotEquals(0, cli.execute(
+                    "config", "remove-env", "MISSING", "--agent", "missing"));
+        }
+
+        @Test
+        void renamingAgentUpdatesMapKeyAndDefaultSelector() {
+            assertEquals(0, cli.execute("config", "-n", "old-name"));
+            assertEquals(0, cli.execute(
+                    "config", "set", "base.name", "new-name", "--agent", "old-name"));
+
+            String yaml = readConfig();
+            assertTrue(yaml.contains("\n  new-name:"));
+            assertFalse(yaml.contains("\n  old-name:"));
+            assertTrue(yaml.lines().anyMatch(
+                    line -> line.matches("^default_agent:\\s*\"?new-name\"?\\s*$")));
+            assertEquals(0, cli.execute(
+                    "config", "get", "base.name", "--agent", "new-name"));
+        }
     }
 
     // ============================================================

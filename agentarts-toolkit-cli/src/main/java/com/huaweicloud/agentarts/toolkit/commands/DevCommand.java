@@ -35,7 +35,7 @@ public class DevCommand implements Runnable {
         try {
             DevOperation.runDevServer(port, host, reload, configPath, projectPath, envVars);
         } catch (Exception e) {
-            System.err.println("Error starting dev server: " + e.getMessage());
+            CliSupport.fail("Error starting dev server: " + e.getMessage());
         }
     }
 }

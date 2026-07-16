@@ -154,8 +154,7 @@ public class ConfigOperation {
     public static void setDefaultAgent(String name) {
         AgentArtsConfigList config = loadConfig();
         if (config.getAgent(name) == null) {
-            System.err.println("Agent '" + name + "' not found.");
-            return;
+            CliSupport.failCli("Agent '" + name + "' not found");
         }
         config.setDefaultAgent(name);
         saveConfig(config);
@@ -168,14 +167,13 @@ public class ConfigOperation {
         String name = agentName != null ? agentName : config.getDefaultAgent();
         AgentArtsConfig agent = config.getAgent(name);
         if (agent == null) {
-            System.err.println("Agent '" + name + "' not found.");
-            return;
+            CliSupport.failCli("Agent '" + name + "' not found");
         }
         try {
             JsonNode redacted = CliSupport.redactSensitiveValues(YAML_MAPPER.valueToTree(agent));
             System.out.println(YAML_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(redacted));
         } catch (Exception e) {
-            System.err.println("Error: " + e.getMessage());
+            CliSupport.failCli("Unable to serialize agent configuration safely");
         }
     }
 
@@ -191,10 +189,9 @@ public class ConfigOperation {
     public static void getConfigValue(String key, String agentName) {
         JsonNode root = loadConfigTree();
         String name = agentName != null ? agentName : root.path("default_agent").asText(null);
-        JsonNode agent = root.path("agents").path(name);
-        if (name == null || agent.isMissingNode() || agent.isNull()) {
-            System.err.println("Agent '" + name + "' not found.");
-            return;
+        JsonNode agent = name == null ? null : root.path("agents").get(name);
+        if (agent == null || agent.isMissingNode() || agent.isNull()) {
+            CliSupport.failCli("Agent '" + name + "' not found");
         }
         JsonNode value = agent;
         for (String part : key.split("\\.")) {
@@ -206,7 +203,7 @@ public class ConfigOperation {
             }
         }
         if (value == null || value.isMissingNode() || value.isNull()) {
-            System.err.println("Unknown key: " + key);
+            CliSupport.failCli("Unknown configuration key: " + key);
         } else {
             if (CliSupport.isSensitiveName(key)) {
                 System.out.println("[REDACTED]");
@@ -221,10 +218,6 @@ public class ConfigOperation {
      * {@code base.description}). Operates on the raw YAML tree so arbitrary
      * dotted paths under an agent are persisted (matching the Python toolkit's
      * generic dict-walking mutator).
-     *
-     * <p>TODO: renaming an agent via {@code base.name} (Python renames the agent
-     * key and updates the default selector) is not yet implemented; the leaf
-     * value is updated but the agents-map key is left unchanged.</p>
      *
      * @param key        dotted config key
      * @param value      config value
@@ -241,12 +234,14 @@ public class ConfigOperation {
             agentsNode = YAML_MAPPER.createObjectNode();
             ((ObjectNode) root).set("agents", agentsNode);
         }
-        JsonNode agent = agentsNode.get(name);
-        if (name == null || agent.isMissingNode() || agent.isNull() || !agent.isObject()) {
-            System.err.println("Agent '" + name + "' not found.");
-            return;
+        JsonNode agent = name == null ? null : agentsNode.get(name);
+        if (name == null || agent == null || agent.isMissingNode() || agent.isNull() || !agent.isObject()) {
+            CliSupport.failCli("Agent '" + name + "' not found");
         }
         String[] parts = key.split("\\.");
+        if (parts.length == 0 || java.util.Arrays.stream(parts).anyMatch(String::isBlank)) {
+            CliSupport.failCli("Configuration key must contain non-empty dot-separated segments");
+        }
         ObjectNode current = (ObjectNode) agent;
         for (int i = 0; i < parts.length - 1; i++) {
             JsonNode child = current.get(parts[i]);
@@ -257,6 +252,20 @@ public class ConfigOperation {
             current = (ObjectNode) child;
         }
         current.put(parts[parts.length - 1], value);
+        if ("base.name".equals(key) && !name.equals(value)) {
+            if (value == null || value.isBlank()) {
+                CliSupport.failCli("Agent name must not be blank");
+            }
+            ObjectNode agents = (ObjectNode) agentsNode;
+            if (agents.has(value)) {
+                CliSupport.failCli("Agent '" + value + "' already exists");
+            }
+            agents.set(value, agent);
+            agents.remove(name);
+            if (name.equals(root.path("default_agent").asText(null))) {
+                ((ObjectNode) root).put("default_agent", value);
+            }
+        }
         saveConfigTree(root);
         String displayed = CliSupport.isSensitiveName(key) ? "[REDACTED]" : value;
         System.out.println("Set " + key + " = " + displayed);
@@ -335,8 +344,7 @@ public class ConfigOperation {
     public static void removeAgent(String name) {
         AgentArtsConfigList config = loadConfig();
         if (config.getAgent(name) == null) {
-            System.err.println("Agent '" + name + "' not found.");
-            return;
+            CliSupport.failCli("Agent '" + name + "' not found");
         }
         config.removeAgent(name);
         saveConfig(config);
@@ -349,8 +357,7 @@ public class ConfigOperation {
         String name = agentName != null ? agentName : config.getDefaultAgent();
         AgentArtsConfig agent = config.getAgent(name);
         if (agent == null) {
-            System.err.println("Agent '" + name + "' not found.");
-            return;
+            CliSupport.failCli("Agent '" + name + "' not found");
         }
         if (agent.getRuntime().getEnvironmentVariables() == null) {
             agent.getRuntime().setEnvironmentVariables(new java.util.HashMap<>());
@@ -365,7 +372,13 @@ public class ConfigOperation {
         AgentArtsConfigList config = loadConfig();
         String name = agentName != null ? agentName : config.getDefaultAgent();
         AgentArtsConfig agent = config.getAgent(name);
-        if (agent == null || agent.getRuntime().getEnvironmentVariables() == null) return;
+        if (agent == null) {
+            CliSupport.failCli("Agent '" + name + "' not found");
+        }
+        if (agent.getRuntime().getEnvironmentVariables() == null
+                || !agent.getRuntime().getEnvironmentVariables().containsKey(key)) {
+            CliSupport.failCli("Environment variable '" + key + "' not found");
+        }
         agent.getRuntime().getEnvironmentVariables().remove(key);
         saveConfig(config);
         System.out.println("Removed env " + key + " for agent '" + name + "'.");
@@ -376,7 +389,10 @@ public class ConfigOperation {
         AgentArtsConfigList config = loadConfig();
         String name = agentName != null ? agentName : config.getDefaultAgent();
         AgentArtsConfig agent = config.getAgent(name);
-        if (agent == null || agent.getRuntime().getEnvironmentVariables() == null) {
+        if (agent == null) {
+            CliSupport.failCli("Agent '" + name + "' not found");
+        }
+        if (agent.getRuntime().getEnvironmentVariables() == null) {
             System.out.println("No environment variables configured.");
             return;
         }
