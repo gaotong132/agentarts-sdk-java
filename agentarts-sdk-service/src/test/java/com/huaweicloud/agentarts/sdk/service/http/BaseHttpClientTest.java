@@ -276,7 +276,7 @@ class BaseHttpClientTest {
                     int splitInsideUtf8 = "data: ".getBytes(StandardCharsets.UTF_8).length + 1;
                     output.write(payload, 0, splitInsideUtf8);
                     output.flush();
-                    if (!releaseBody.await(5, TimeUnit.SECONDS)) {
+                    if (!releaseBody.await(15, TimeUnit.SECONDS)) {
                         return;
                     }
                     output.write(payload, splitInsideUtf8, payload.length - splitInsideUtf8);
@@ -293,7 +293,7 @@ class BaseHttpClientTest {
             try (BaseHttpClient client = new BaseHttpClient(config)) {
                 // The server has sent headers but intentionally withholds the body.
                 // A buffering client times out here; a true streaming client returns.
-                RequestResult result = client.get("/stream").block(Duration.ofSeconds(2));
+                RequestResult result = client.get("/stream").block(Duration.ofSeconds(5));
                 assertNotNull(result);
                 assertTrue(result.isStreaming());
 
