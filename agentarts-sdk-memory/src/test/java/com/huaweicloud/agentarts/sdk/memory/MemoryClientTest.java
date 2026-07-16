@@ -182,6 +182,10 @@ class MemoryClientTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> client.addMessages("space", "session", java.util.Arrays.asList((Object) null)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> client.addMessages(
+                        "space", "session", java.util.Collections.nCopies(101, "unsupported")));
 
         verifyNoInteractions(dataPlane);
     }

@@ -340,6 +340,9 @@ public class MemoryClient implements AutoCloseable {
         if (messages == null || messages.isEmpty()) {
             throw new IllegalArgumentException("messages must not be null or empty");
         }
+        if (messages.size() > 100) {
+            throw new IllegalArgumentException("messages can contain at most 100 items");
+        }
         List<Map<String, Object>> msgDicts = new ArrayList<>();
         for (Object msg : messages) {
             if (msg instanceof TextMessage tm) {
