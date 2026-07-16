@@ -187,11 +187,14 @@ public class RuntimeClient implements AutoCloseable {
     }
 
     public AgentListResponse getAgents(String agentName, int offset, int limit) {
-        StringBuilder url = new StringBuilder("/runtimes?offset=").append(offset).append("&limit=").append(limit);
+        Map<String, List<String>> query = new LinkedHashMap<>();
+        query.put("offset", List.of(String.valueOf(offset)));
+        query.put("limit", List.of(String.valueOf(limit)));
         if (JsonUtils.isNotBlank(agentName)) {
-            url.append("&name=").append(agentName);
+            query.put("name", List.of(agentName));
         }
-        RequestResult result = getControlClient().get(url.toString()).block();
+        RequestResult result = getControlClient()
+                .request("GET", "/runtimes", null, null, query).block();
         return parseResult(result, AgentListResponse.class, "get_agents");
     }
 

@@ -1,9 +1,15 @@
 package com.huaweicloud.agentarts.sdk.service.runtime;
 
+import com.huaweicloud.agentarts.sdk.core.SignMode;
+import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
+import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
+import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import com.huaweicloud.agentarts.sdk.service.runtime.model.CreateAgentRequest;
 import com.huaweicloud.agentarts.sdk.service.runtime.model.UpdateAgentRequest;
 import org.junit.jupiter.api.*;
+import org.mockito.ArgumentCaptor;
 import com.sun.net.httpserver.HttpServer;
+import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
@@ -13,6 +19,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 /**
  * Tests for RuntimeClient and LocalRuntimeClient.
@@ -104,6 +112,35 @@ class RuntimeClientTest {
             } finally {
                 server.stop(0);
             }
+        }
+
+        @Test
+        void agentFiltersArePassedAsEncodedQueryParameters() throws Exception {
+            BaseHttpClient controlClient = mock(BaseHttpClient.class);
+            BaseHttpClient dataClient = mock(BaseHttpClient.class);
+            RequestResult response = RequestResult.builder()
+                    .success(true)
+                    .statusCode(200)
+                    .data(JsonUtils.MAPPER.readTree("{\"items\":[],\"total\":0}"))
+                    .build();
+            when(controlClient.request(eq("GET"), eq("/runtimes"),
+                    isNull(), isNull(), anyMap())).thenReturn(Mono.just(response));
+
+            try (RuntimeClient client = new RuntimeClient(
+                    "test-region", true, SignMode.SDK_HMAC_SHA256,
+                    controlClient, dataClient)) {
+                assertEquals(0, client.getAgents("agent&limit=999", 2, 10).getTotal());
+            }
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Map<String, List<String>>> query = ArgumentCaptor.forClass(Map.class);
+            verify(controlClient).request(eq("GET"), eq("/runtimes"),
+                    isNull(), isNull(), query.capture());
+            assertEquals(List.of("agent&limit=999"), query.getValue().get("name"));
+            assertEquals(List.of("2"), query.getValue().get("offset"));
+            assertEquals(List.of("10"), query.getValue().get("limit"));
+            verify(controlClient).close();
+            verify(dataClient).close();
         }
     }
 
