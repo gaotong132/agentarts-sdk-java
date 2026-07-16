@@ -161,6 +161,43 @@ class CliE2ETest {
         }
 
         @Test
+        void runtimeExecStreamsChunkedNdjsonAndSetsProtocolHeader() throws Exception {
+            AtomicReference<String> commandType = new AtomicReference<>();
+            AtomicReference<String> requestBody = new AtomicReference<>();
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/runtimes/unit-agent/commands", exchange -> {
+                commandType.set(exchange.getRequestHeaders().getFirst("Command-Type"));
+                requestBody.set(new String(
+                        exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                byte[] response = ("{\"stdout\":\"one\"}\n"
+                        + "{\"exit_code\":0}\n").getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/x-ndjson");
+                exchange.sendResponseHeaders(200, response.length);
+                exchange.getResponseBody().write(response);
+                exchange.close();
+            });
+            server.start();
+
+            try {
+                String endpoint = "http://127.0.0.1:" + server.getAddress().getPort();
+                int exit = CliSupport.withCleanExit(new CommandLine(new AgentArtsCli())).execute(
+                        "runtime", "exec-command", "echo one",
+                        "--agent", "unit-agent", "--endpoint", endpoint,
+                        "--bearer-token", "unit-token", "--chunked", "--timeout", "5");
+                assertEquals(0, exit);
+                assertEquals("chunked", commandType.get());
+                JsonNode body = new com.fasterxml.jackson.databind.ObjectMapper()
+                        .readTree(requestBody.get());
+                assertFalse(body.has("chunked"));
+                String text = output.toString(StandardCharsets.UTF_8);
+                assertTrue(text.contains("{\"stdout\":\"one\"}"));
+                assertTrue(text.contains("{\"exit_code\":0}"));
+            } finally {
+                server.stop(0);
+            }
+        }
+
+        @Test
         void runtimeDownloadPreservesBinaryBytesAndRequiresForceToReplace(
                 @TempDir Path tempDir) throws Exception {
             byte[] response = new byte[] {0, 1, 2, (byte) 0x80, (byte) 0xff};

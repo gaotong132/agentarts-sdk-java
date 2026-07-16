@@ -10,6 +10,7 @@ import picocli.CommandLine.Parameters;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -92,10 +93,21 @@ public class RuntimeCommand implements Runnable {
                 if (JsonUtils.isNotBlank(resolvedBearerToken)) {
                     client.setAuthToken(resolvedBearerToken);
                 }
-                Map<String, Object> result = client.execCommand(
-                        agentName, sessionId, commandArray, chunked,
-                        resolvedBearerToken, endpoint, userId, timeout);
-                CliSupport.printJson(result);
+                if (chunked) {
+                    try (RequestResult result = client.execCommandRaw(
+                            agentName, sessionId, commandArray, true,
+                            resolvedBearerToken, endpoint, userId, timeout)) {
+                        result.iterLines()
+                                .filter(line -> !line.isEmpty())
+                                .doOnNext(System.out::println)
+                                .blockLast(Duration.ofSeconds(timeout));
+                    }
+                } else {
+                    Map<String, Object> result = client.execCommand(
+                            agentName, sessionId, commandArray, false,
+                            resolvedBearerToken, endpoint, userId, timeout);
+                    CliSupport.printJson(result);
+                }
             } catch (Exception e) {
                 if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to execute command: " + e.getMessage());

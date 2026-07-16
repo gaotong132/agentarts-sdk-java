@@ -350,16 +350,42 @@ public class RuntimeClient implements AutoCloseable {
     public Map<String, Object> execCommand(String agentName, String sessionId, List<String> command,
                                             boolean chunked, String bearerToken, String endpoint,
                                             String userId, int timeout) {
-        ExecCommandRequest req = new ExecCommandRequest()
-                .withCommand(command)
-                .withChunked(chunked);
+        try (RequestResult result = execCommandRaw(agentName, sessionId, command, chunked,
+                bearerToken, endpoint, userId, timeout)) {
+            if (result.isStreaming()) {
+                throw new APIException(result.getStatusCode(), "exec_command",
+                        "streaming response requires execCommandRaw");
+            }
+            return check(result, "exec_command");
+        }
+    }
+
+    /**
+     * Execute a command and return the raw response, including an NDJSON stream in chunked mode.
+     */
+    public RequestResult execCommandRaw(
+            String agentName, String sessionId, List<String> command,
+            boolean chunked, String bearerToken, String endpoint,
+            String userId, int timeout) {
+        ExecCommandRequest req = new ExecCommandRequest().withCommand(command);
 
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
+        if (chunked) {
+            headers.put("Command-Type", "chunked");
+        }
         RequestResult result = getDataClient().request(
                 "POST", dataUrl("/runtimes/" + UrlUtils.encodePathSegment(agentName, "agentName")
                         + "/commands", endpoint),
                 headers, req, null, (double) timeout).block();
-        return check(result, "exec_command");
+        if (result == null) {
+            throw new APIException(0, "exec_command", "null response");
+        }
+        if (!result.isSuccess()) {
+            try (result) {
+                throw new APIException(result.getStatusCode(), "exec_command", result.getError());
+            }
+        }
+        return result;
     }
 
     public Map<String, Object> execCommand(String agentName, String sessionId, String command) {

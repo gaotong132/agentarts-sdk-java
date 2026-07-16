@@ -1,6 +1,7 @@
 package com.huaweicloud.agentarts.sdk.service.runtime.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
@@ -15,7 +16,12 @@ public class ExecCommandRequest {
     @JsonProperty("command")
     private List<String> command;
 
-    @JsonProperty("chunked")
+    /**
+     * Compatibility property retained for callers of older prerelease builds.
+     * Chunked mode is a wire-protocol header and must not be serialized in the request body.
+     */
+    @Deprecated
+    @JsonIgnore
     private boolean chunked;
 
     public ExecCommandRequest withCommand(List<String> command) {
@@ -23,6 +29,7 @@ public class ExecCommandRequest {
         return this;
     }
 
+    @Deprecated
     public ExecCommandRequest withChunked(boolean chunked) {
         this.chunked = chunked;
         return this;
@@ -36,10 +43,12 @@ public class ExecCommandRequest {
         this.command = command;
     }
 
+    @Deprecated
     public boolean isChunked() {
         return chunked;
     }
 
+    @Deprecated
     public void setChunked(boolean chunked) {
         this.chunked = chunked;
     }

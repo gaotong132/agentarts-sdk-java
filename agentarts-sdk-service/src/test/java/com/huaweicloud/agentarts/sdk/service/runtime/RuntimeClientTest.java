@@ -11,6 +11,7 @@ import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
 import com.sun.net.httpserver.HttpServer;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
 import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -62,6 +64,8 @@ class RuntimeClientTest {
             assertNotNull(cls.getMethod("invokeAgentRaw", String.class, String.class, String.class,
                     String.class, String.class, int.class, String.class, String.class));
             assertNotNull(cls.getMethod("execCommand", String.class, String.class, String.class));
+            assertNotNull(cls.getMethod("execCommandRaw", String.class, String.class, List.class,
+                    boolean.class, String.class, String.class, String.class, int.class));
             assertNotNull(cls.getMethod("uploadFiles", String.class, String.class, List.class));
             assertNotNull(cls.getMethod("downloadFiles", String.class, String.class, String.class));
             assertNotNull(cls.getMethod("startSession", String.class));
@@ -179,6 +183,47 @@ class RuntimeClientTest {
             }
             verify(dataClient, never()).request(
                     anyString(), anyString(), any(), any(), any(), anyDouble());
+        }
+
+        @Test
+        void chunkedCommandUsesHeaderAndExposesNdjsonStream() {
+            BaseHttpClient controlClient = mock(BaseHttpClient.class);
+            BaseHttpClient dataClient = mock(BaseHttpClient.class);
+            AtomicBoolean closed = new AtomicBoolean();
+            RequestResult response = RequestResult.builder()
+                    .success(true)
+                    .statusCode(200)
+                    .streaming(true)
+                    .lineStream(Flux.just("{\"stdout\":\"one\"}", "{\"exit_code\":0}"))
+                    .closeAction(() -> closed.set(true))
+                    .build();
+            when(dataClient.request(eq("POST"), eq("https://runtime.example/runtimes/agent/commands"),
+                    anyMap(), any(), isNull(), eq(12.0))).thenReturn(Mono.just(response));
+
+            try (RuntimeClient client = new RuntimeClient(
+                    "test-region", true, SignMode.SDK_HMAC_SHA256,
+                    controlClient, dataClient);
+                 RequestResult result = client.execCommandRaw(
+                         "agent", "session", List.of("echo", "one"), true,
+                         "token", "https://runtime.example", "user", 12)) {
+                assertEquals(List.of("{\"stdout\":\"one\"}", "{\"exit_code\":0}"),
+                        result.iterLines().collectList().block());
+            }
+            assertTrue(closed.get());
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Map<String, String>> headers = ArgumentCaptor.forClass(Map.class);
+            ArgumentCaptor<Object> body = ArgumentCaptor.forClass(Object.class);
+            verify(dataClient).request(eq("POST"),
+                    eq("https://runtime.example/runtimes/agent/commands"),
+                    headers.capture(), body.capture(), isNull(), eq(12.0));
+            assertEquals("chunked", headers.getValue().get("Command-Type"));
+            assertEquals("Bearer token", headers.getValue().get("Authorization"));
+            assertEquals(List.of("echo", "one"),
+                    ((com.huaweicloud.agentarts.sdk.service.runtime.model.ExecCommandRequest)
+                            body.getValue()).getCommand());
+            assertFalse(((com.huaweicloud.agentarts.sdk.service.runtime.model.ExecCommandRequest)
+                    body.getValue()).isChunked());
         }
     }
 
