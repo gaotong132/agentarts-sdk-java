@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
+import com.huaweicloud.agentarts.sdk.core.util.UrlUtils;
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
@@ -191,7 +192,9 @@ public class CodeInterpreterClient implements AutoCloseable {
                 .withObservability(observability)
                 .withTags(tags);
 
-        RequestResult r = getControlClient().put("/code-interpreters/" + codeInterpreterId, null, req).block();
+        RequestResult r = getControlClient().put(
+                "/code-interpreters/" + UrlUtils.encodePathSegment(
+                        codeInterpreterId, "codeInterpreterId"), null, req).block();
         return parseResult(r, CodeInterpreterInfo.class);
     }
 
@@ -204,12 +207,16 @@ public class CodeInterpreterClient implements AutoCloseable {
     }
 
     public CodeInterpreterInfo getCodeInterpreter(String codeInterpreterId) {
-        RequestResult r = getControlClient().get("/code-interpreters/" + codeInterpreterId).block();
+        RequestResult r = getControlClient().get(
+                "/code-interpreters/" + UrlUtils.encodePathSegment(
+                        codeInterpreterId, "codeInterpreterId")).block();
         return parseResult(r, CodeInterpreterInfo.class);
     }
 
     public void deleteCodeInterpreter(String codeInterpreterId) {
-        ensureSuccess(getControlClient().delete("/code-interpreters/" + codeInterpreterId).block());
+        ensureSuccess(getControlClient().delete(
+                "/code-interpreters/" + UrlUtils.encodePathSegment(
+                        codeInterpreterId, "codeInterpreterId")).block());
     }
 
     // ========================
@@ -225,7 +232,8 @@ public class CodeInterpreterClient implements AutoCloseable {
                 .withName(sessionName)
                 .withSessionTimeout(sessionTimeout);
 
-        String url = "/v1/code-interpreters/" + codeInterpreterName + "/sessions-start";
+        String url = "/v1/code-interpreters/" + UrlUtils.encodePathSegment(
+                codeInterpreterName, "codeInterpreterName") + "/sessions-start";
         RequestResult r = getDataClient().put(url, null, req).block();
         Map<String, Object> data = parseMap(r);
         this.codeInterpreterName = codeInterpreterName;
@@ -243,7 +251,8 @@ public class CodeInterpreterClient implements AutoCloseable {
      */
     public CodeInterpreterSessionInfo getSession(String codeInterpreterName, String sessionId) {
         String sid = sessionId != null ? sessionId : this.sessionId;
-        String url = "/v1/code-interpreters/" + codeInterpreterName + "/sessions-get";
+        String url = "/v1/code-interpreters/" + UrlUtils.encodePathSegment(
+                codeInterpreterName, "codeInterpreterName") + "/sessions-get";
         Map<String, String> headers = sid != null
                 ? Map.of(Constants.CODE_INTERPRETER_SESSION_HEADER, sid) : null;
         RequestResult r = getDataClient().get(url, headers).block();
@@ -257,7 +266,8 @@ public class CodeInterpreterClient implements AutoCloseable {
     public boolean stopSession() {
         if (sessionId == null || codeInterpreterName == null) return true;
 
-        String url = "/v1/code-interpreters/" + codeInterpreterName + "/sessions-stop";
+        String url = "/v1/code-interpreters/" + UrlUtils.encodePathSegment(
+                codeInterpreterName, "codeInterpreterName") + "/sessions-stop";
         Map<String, String> headers = Map.of(Constants.CODE_INTERPRETER_SESSION_HEADER, sessionId);
         RequestResult r = getDataClient().put(url, headers, null).block();
         ensureSuccess(r);
@@ -283,7 +293,8 @@ public class CodeInterpreterClient implements AutoCloseable {
                 .withOperateType(operateType)
                 .withArguments(arguments);
 
-        String url = "/v1/code-interpreters/" + codeInterpreterName + "/invoke";
+        String url = "/v1/code-interpreters/" + UrlUtils.encodePathSegment(
+                codeInterpreterName, "codeInterpreterName") + "/invoke";
         Map<String, String> headers = Map.of(Constants.CODE_INTERPRETER_SESSION_HEADER, sessionId);
         RequestResult r = getDataClient().post(url, headers, req).block();
         return parseMap(r);

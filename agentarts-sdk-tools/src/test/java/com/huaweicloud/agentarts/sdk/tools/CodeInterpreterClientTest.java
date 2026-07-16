@@ -110,6 +110,24 @@ class CodeInterpreterClientTest {
     }
 
     @Test
+    void encodesUntrustedResourceNamesInRequestPaths() throws Exception {
+        when(controlClient.get("/code-interpreters/..%2Fcontrol%20name"))
+                .thenReturn(Mono.just(success("{\"id\":\"encoded\"}")));
+        when(dataClient.put(eq("/v1/code-interpreters/..%2Fdata%20name/sessions-start"),
+                isNull(), any()))
+                .thenReturn(Mono.just(success("{\"session_id\":\"session\"}")));
+
+        assertEquals("encoded", client.getCodeInterpreter("../control name").getId());
+        assertEquals("session", client.startSession("../data name", null, null));
+
+        verify(controlClient).get("/code-interpreters/..%2Fcontrol%20name");
+        verify(dataClient).put(eq("/v1/code-interpreters/..%2Fdata%20name/sessions-start"),
+                isNull(), any());
+        assertThrows(IllegalArgumentException.class, () -> client.getCodeInterpreter(" "));
+        assertThrows(IllegalArgumentException.class, () -> client.startSession("", null, null));
+    }
+
+    @Test
     void buildsInvokeRequestsForHighLevelOperations() throws Exception {
         activateSession();
         when(dataClient.post(eq("/v1/code-interpreters/interpreter/invoke"), anyMap(), any()))
