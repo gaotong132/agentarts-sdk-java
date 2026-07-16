@@ -41,6 +41,8 @@ class CliModuleTest {
             assertNotNull(subs.get("destroy"), "destroy command missing");
             assertNotNull(subs.get("runtime"), "runtime command missing");
             assertNotNull(subs.get("mcp-gateway"), "mcp-gateway command missing");
+            assertSame(subs.get("mcp-gateway"), subs.get("gateway"),
+                    "Python-compatible gateway alias missing");
             assertNotNull(subs.get("memory"), "memory command missing");
         }
 
@@ -98,7 +100,7 @@ class CliModuleTest {
 
         @Test
         void mcpGatewaySubcommandsMatchPython() {
-            // Python mcp-gateway: 10 CRUD commands
+            // Java names remain supported; Python gateway names are aliases.
             CommandLine mcpCmd = cli.getSubcommands().get("mcp-gateway");
             Map<String, CommandLine> subs = mcpCmd.getSubcommands();
             assertNotNull(subs.get("create-mcp-gateway"));
@@ -111,7 +113,16 @@ class CliModuleTest {
             assertNotNull(subs.get("delete-mcp-gateway-target"));
             assertNotNull(subs.get("get-mcp-gateway-target"));
             assertNotNull(subs.get("list-mcp-gateway-targets"));
-            assertEquals(10, subs.size(), "Expected 10 mcp-gateway subcommands");
+            String[] pythonNames = {
+                    "create", "update", "delete", "get", "list",
+                    "create-target", "update-target", "delete-target",
+                    "get-target", "list-targets"
+            };
+            for (String name : pythonNames) {
+                assertNotNull(subs.get(name), "Python gateway command alias missing: " + name);
+            }
+            assertEquals(10, new java.util.HashSet<>(subs.values()).size(),
+                    "Expected 10 distinct gateway subcommands");
         }
 
         @Test
