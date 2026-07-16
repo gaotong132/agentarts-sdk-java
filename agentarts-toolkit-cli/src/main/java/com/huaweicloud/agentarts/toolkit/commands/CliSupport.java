@@ -2,6 +2,8 @@ package com.huaweicloud.agentarts.toolkit.commands;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import picocli.CommandLine;
 
@@ -33,14 +35,45 @@ public final class CliSupport {
             return;
         }
         try {
-            System.out.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(data));
+            JsonNode redacted = redactSensitiveValues(MAPPER.valueToTree(data));
+            System.out.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(redacted));
         } catch (Exception e) {
-            if (data instanceof JsonNode node) {
-                System.out.println(node.toString());
-            } else {
-                System.out.println(String.valueOf(data));
-            }
+            fail("Unable to serialize CLI output safely");
         }
+    }
+
+    /** Return a deep copy with credential-like fields replaced by a fixed marker. */
+    public static JsonNode redactSensitiveValues(JsonNode source) {
+        if (source == null) return MAPPER.nullNode();
+        if (source.isObject()) {
+            ObjectNode result = MAPPER.createObjectNode();
+            source.fields().forEachRemaining(entry -> result.set(
+                    entry.getKey(),
+                    isSensitiveName(entry.getKey())
+                            ? MAPPER.getNodeFactory().textNode("[REDACTED]")
+                            : redactSensitiveValues(entry.getValue())));
+            return result;
+        }
+        if (source.isArray()) {
+            ArrayNode result = MAPPER.createArrayNode();
+            source.forEach(value -> result.add(redactSensitiveValues(value)));
+            return result;
+        }
+        return source.deepCopy();
+    }
+
+    /** Whether a field or environment-variable name is likely to contain credentials. */
+    public static boolean isSensitiveName(String name) {
+        if (name == null) return false;
+        String normalized = name.toUpperCase(java.util.Locale.ROOT).replace('-', '_');
+        return normalized.contains("PASSWORD")
+                || normalized.contains("SECRET")
+                || normalized.contains("TOKEN")
+                || normalized.contains("API_KEY")
+                || normalized.contains("ACCESS_KEY")
+                || normalized.contains("PRIVATE_KEY")
+                || normalized.contains("AUTHORIZATION")
+                || normalized.contains("CREDENTIAL");
     }
 
     /**

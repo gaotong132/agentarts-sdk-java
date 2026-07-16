@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
+import com.huaweicloud.agentarts.toolkit.commands.CliSupport;
 
 import java.io.File;
 import java.io.IOException;
@@ -163,7 +164,8 @@ public class ConfigOperation {
             return;
         }
         try {
-            System.out.println(YAML_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(agent));
+            JsonNode redacted = CliSupport.redactSensitiveValues(YAML_MAPPER.valueToTree(agent));
+            System.out.println(YAML_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(redacted));
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
         }
@@ -198,7 +200,11 @@ public class ConfigOperation {
         if (value == null || value.isMissingNode() || value.isNull()) {
             System.err.println("Unknown key: " + key);
         } else {
-            System.out.println(value.isTextual() ? value.asText() : value.toString());
+            if (CliSupport.isSensitiveName(key)) {
+                System.out.println("[REDACTED]");
+            } else {
+                System.out.println(value.isTextual() ? value.asText() : value.toString());
+            }
         }
     }
 
@@ -244,7 +250,8 @@ public class ConfigOperation {
         }
         current.put(parts[parts.length - 1], value);
         saveConfigTree(root);
-        System.out.println("Set " + key + " = " + value);
+        String displayed = CliSupport.isSensitiveName(key) ? "[REDACTED]" : value;
+        System.out.println("Set " + key + " = " + displayed);
     }
 
     /** Load the config file as a raw {@link JsonNode} tree (preserves all keys). */
@@ -297,7 +304,7 @@ public class ConfigOperation {
         }
         agent.getRuntime().getEnvironmentVariables().put(key, value);
         saveConfig(config);
-        System.out.println("Set env " + key + "=" + value + " for agent '" + name + "'.");
+        System.out.println("Set env " + key + "=[REDACTED] for agent '" + name + "'.");
     }
 
     /** Remove an environment variable from an agent's runtime configuration. */
@@ -321,7 +328,7 @@ public class ConfigOperation {
             return;
         }
         agent.getRuntime().getEnvironmentVariables().forEach((k, v) ->
-                System.out.println("  " + k + "=" + v));
+                System.out.println("  " + k + "=[REDACTED]"));
     }
 
     private static String capitalize(String s) {

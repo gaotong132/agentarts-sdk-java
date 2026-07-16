@@ -245,6 +245,34 @@ class CliE2ETest {
                     "config should no longer contain the removed env var");
         }
 
+        @Test
+        void configCommandsNeverEchoCredentialValues() {
+            String credentialMarker = "unit-sensitive-value";
+            cli.execute("config", "-n", "myagent", "-e", "com.example.MyAgent");
+            outBuf.reset();
+
+            assertEquals(0, cli.execute(
+                    "config", "set-env", "SERVICE_API_KEY", credentialMarker,
+                    "-a", "myagent"));
+            assertFalse(stdout().contains(credentialMarker));
+            assertTrue(stdout().contains("[REDACTED]"));
+
+            outBuf.reset();
+            assertEquals(0, cli.execute("config", "list-env", "-a", "myagent"));
+            assertFalse(stdout().contains(credentialMarker));
+            assertTrue(stdout().contains("SERVICE_API_KEY=[REDACTED]"));
+
+            outBuf.reset();
+            assertEquals(0, cli.execute(
+                    "config", "get", "runtime.environment_variables.SERVICE_API_KEY",
+                    "-a", "myagent"));
+            assertEquals("[REDACTED]", stdout().trim());
+
+            outBuf.reset();
+            assertEquals(0, cli.execute("config", "get", "-a", "myagent"));
+            assertFalse(stdout().contains(credentialMarker));
+        }
+
         /** Mirrors {@code test_config_set_default_and_remove}: adding two agents,
          *  setting the default, and removing one leaves the survivor in the YAML. */
         @Test

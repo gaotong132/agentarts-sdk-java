@@ -48,7 +48,7 @@ public class DevOperation {
                 if (eq > 0) {
                     String key = env.substring(0, eq);
                     String value = env.substring(eq + 1);
-                    System.out.println("Setting env: " + key + "=" + value);
+                    System.out.println("Setting env: " + key + "=[REDACTED]");
                     System.setProperty(key, value);
                 }
             }
