@@ -12,6 +12,7 @@ import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.http.ServerWebSocket;
+import io.vertx.core.http.ServerWebSocketHandshake;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import io.vertx.ext.web.handler.BodyHandler;
@@ -213,7 +214,7 @@ public class AgentArtsRuntimeApp {
         // WebSocket
         HttpServerOptions options = new HttpServerOptions().setPort(port);
         httpServer = vertx.createHttpServer(options);
-        httpServer.webSocketHandler(this::handleWebSocket);
+        httpServer.webSocketHandshakeHandler(this::handleWebSocketHandshake);
         httpServer.requestHandler(router);
 
         httpServer.listen(port).onSuccess(server -> {
@@ -383,17 +384,24 @@ public class AgentArtsRuntimeApp {
     // WS /ws
     // ========================
 
-    private void handleWebSocket(ServerWebSocket ws) {
-        if (!"/ws".equals(ws.path())) {
-            ws.reject();
+    private void handleWebSocketHandshake(ServerWebSocketHandshake handshake) {
+        if (!"/ws".equals(handshake.path())) {
+            handshake.reject(404).onFailure(error ->
+                    LOG.debug("Failed to reject WebSocket handshake: {}", error.getMessage()));
             return;
         }
-
         if (wsHandler == null) {
-            ws.close((short) 1011, "No WebSocket handler registered");
+            handshake.reject(503).onFailure(error ->
+                    LOG.debug("Failed to reject WebSocket handshake: {}", error.getMessage()));
             return;
         }
 
+        handshake.accept()
+                .onSuccess(this::handleWebSocket)
+                .onFailure(error -> LOG.debug("WebSocket handshake failed: {}", error.getMessage()));
+    }
+
+    private void handleWebSocket(ServerWebSocket ws) {
         RequestContext ctx = RequestContext.fromHeaders(name ->
                 ws.headers().get(name));
         AgentArtsRuntimeContext.fromRequestContext(ctx);
