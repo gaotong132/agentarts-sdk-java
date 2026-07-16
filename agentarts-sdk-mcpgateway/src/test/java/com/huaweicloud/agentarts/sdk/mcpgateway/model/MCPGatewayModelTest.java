@@ -4,6 +4,7 @@ import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Nested;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -28,6 +29,11 @@ class MCPGatewayModelTest {
             assertNull(req.getProtocolType());
             assertNull(req.getAuthorizerType());
             assertNull(req.getAgencyName());
+            assertNull(req.getAuthorizerConfiguration());
+            assertNull(req.getProtocolConfiguration());
+            assertNull(req.getLogDeliveryConfiguration());
+            assertNull(req.getOutboundNetworkConfiguration());
+            assertNull(req.getTags());
         }
 
         @Test
@@ -37,13 +43,23 @@ class MCPGatewayModelTest {
                     .withDescription("Test gateway")
                     .withProtocolType("mcp")
                     .withAuthorizerType("iam")
-                    .withAgencyName("my-agency");
+                    .withAgencyName("my-agency")
+                    .withAuthorizerConfiguration(Map.of("type", "iam"))
+                    .withProtocolConfiguration(Map.of("version", "2025-06-18"))
+                    .withLogDeliveryConfiguration(Map.of("enabled", true))
+                    .withOutboundNetworkConfiguration(Map.of("network_mode", "public"))
+                    .withTags(List.of(Map.of("key", "env", "value", "test")));
 
             assertEquals("my-gateway", req.getName());
             assertEquals("Test gateway", req.getDescription());
             assertEquals("mcp", req.getProtocolType());
             assertEquals("iam", req.getAuthorizerType());
             assertEquals("my-agency", req.getAgencyName());
+            assertEquals("iam", req.getAuthorizerConfiguration().get("type"));
+            assertEquals("2025-06-18", req.getProtocolConfiguration().get("version"));
+            assertEquals(true, req.getLogDeliveryConfiguration().get("enabled"));
+            assertEquals("public", req.getOutboundNetworkConfiguration().get("network_mode"));
+            assertEquals("env", req.getTags().get(0).get("key"));
         }
 
         @Test
@@ -51,11 +67,15 @@ class MCPGatewayModelTest {
             CreateMcpGatewayRequest req = new CreateMcpGatewayRequest()
                     .withName("gw-1")
                     .withProtocolType("mcp")
-                    .withAuthorizerType("iam");
+                    .withAuthorizerType("iam")
+                    .withProtocolConfiguration(Map.of("version", "1"))
+                    .withTags(List.of(Map.of("key", "env", "value", "test")));
             String json = JsonUtils.toJson(req);
             assertTrue(json.contains("\"name\":\"gw-1\""));
             assertTrue(json.contains("\"protocol_type\":\"mcp\""));
             assertTrue(json.contains("\"authorizer_type\":\"iam\""));
+            assertTrue(json.contains("\"protocol_configuration\""));
+            assertTrue(json.contains("\"tags\""));
         }
 
         @Test
@@ -72,13 +92,16 @@ class MCPGatewayModelTest {
         void jsonDeserialization() throws Exception {
             String json = "{\"name\":\"from-json\",\"description\":\"desc\","
                     + "\"protocol_type\":\"mcp\",\"authorizer_type\":\"iam\","
-                    + "\"agency_name\":\"agency\"}";
+                    + "\"agency_name\":\"agency\",\"protocol_configuration\":{\"version\":\"1\"},"
+                    + "\"tags\":[{\"key\":\"env\",\"value\":\"test\"}]}";
             CreateMcpGatewayRequest req = JsonUtils.MAPPER.readValue(json, CreateMcpGatewayRequest.class);
             assertEquals("from-json", req.getName());
             assertEquals("desc", req.getDescription());
             assertEquals("mcp", req.getProtocolType());
             assertEquals("iam", req.getAuthorizerType());
             assertEquals("agency", req.getAgencyName());
+            assertEquals("1", req.getProtocolConfiguration().get("version"));
+            assertEquals("env", req.getTags().get(0).get("key"));
         }
 
         @Test
@@ -133,23 +156,40 @@ class MCPGatewayModelTest {
         @Test
         void fluentApi() {
             UpdateMcpGatewayRequest req = new UpdateMcpGatewayRequest()
-                    .withDescription("Updated description");
+                    .withDescription("Updated description")
+                    .withProtocolConfiguration(Map.of("version", "1"))
+                    .withLogDeliveryConfiguration(Map.of("enabled", true))
+                    .withTags(List.of(Map.of("key", "env", "value", "prod")));
             assertEquals("Updated description", req.getDescription());
+            assertEquals("1", req.getProtocolConfiguration().get("version"));
+            assertEquals(true, req.getLogDeliveryConfiguration().get("enabled"));
+            assertEquals("prod", req.getTags().get(0).get("value"));
         }
 
         @Test
         void jsonSerialization() {
             UpdateMcpGatewayRequest req = new UpdateMcpGatewayRequest()
-                    .withDescription("Updated");
+                    .withDescription("Updated")
+                    .withProtocolConfiguration(Map.of("version", "1"))
+                    .withLogDeliveryConfiguration(Map.of("enabled", false))
+                    .withTags(List.of(Map.of("key", "env", "value", "prod")));
             String json = JsonUtils.toJson(req);
             assertTrue(json.contains("\"description\":\"Updated\""));
+            assertTrue(json.contains("\"protocol_configuration\""));
+            assertTrue(json.contains("\"log_delivery_configuration\""));
+            assertTrue(json.contains("\"tags\""));
         }
 
         @Test
         void jsonDeserialization() throws Exception {
-            String json = "{\"description\":\"new desc\"}";
+            String json = "{\"description\":\"new desc\",\"protocol_configuration\":{\"version\":\"1\"},"
+                    + "\"log_delivery_configuration\":{\"enabled\":true},"
+                    + "\"tags\":[{\"key\":\"env\",\"value\":\"prod\"}]}";
             UpdateMcpGatewayRequest req = JsonUtils.MAPPER.readValue(json, UpdateMcpGatewayRequest.class);
             assertEquals("new desc", req.getDescription());
+            assertEquals("1", req.getProtocolConfiguration().get("version"));
+            assertEquals(true, req.getLogDeliveryConfiguration().get("enabled"));
+            assertEquals("prod", req.getTags().get(0).get("value"));
         }
 
         @Test

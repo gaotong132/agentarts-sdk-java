@@ -3,6 +3,7 @@ package com.huaweicloud.agentarts.sdk.mcpgateway.model;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -30,11 +31,17 @@ public class CreateMcpGatewayRequest {
     @JsonProperty("authorizer_configuration")
     private Map<String, Object> authorizerConfiguration;
 
+    @JsonProperty("protocol_configuration")
+    private Map<String, Object> protocolConfiguration;
+
     @JsonProperty("log_delivery_configuration")
     private Map<String, Object> logDeliveryConfiguration;
 
     @JsonProperty("outbound_network_configuration")
     private Map<String, Object> outboundNetworkConfiguration;
+
+    @JsonProperty("tags")
+    private List<Map<String, String>> tags;
 
     public CreateMcpGatewayRequest() {
     }
@@ -104,17 +111,70 @@ public class CreateMcpGatewayRequest {
         return this;
     }
 
-    public Map<String, Object> getAuthorizerConfiguration() { return authorizerConfiguration; }
-    public void setAuthorizerConfiguration(Map<String, Object> v) { this.authorizerConfiguration = v; }
-    public CreateMcpGatewayRequest withAuthorizerConfiguration(Map<String, Object> v) { this.authorizerConfiguration = v; return this; }
+    public Map<String, Object> getAuthorizerConfiguration() {
+        return authorizerConfiguration;
+    }
 
-    public Map<String, Object> getLogDeliveryConfiguration() { return logDeliveryConfiguration; }
-    public void setLogDeliveryConfiguration(Map<String, Object> v) { this.logDeliveryConfiguration = v; }
-    public CreateMcpGatewayRequest withLogDeliveryConfiguration(Map<String, Object> v) { this.logDeliveryConfiguration = v; return this; }
+    public void setAuthorizerConfiguration(Map<String, Object> authorizerConfiguration) {
+        this.authorizerConfiguration = authorizerConfiguration;
+    }
 
-    public Map<String, Object> getOutboundNetworkConfiguration() { return outboundNetworkConfiguration; }
-    public void setOutboundNetworkConfiguration(Map<String, Object> v) { this.outboundNetworkConfiguration = v; }
-    public CreateMcpGatewayRequest withOutboundNetworkConfiguration(Map<String, Object> v) { this.outboundNetworkConfiguration = v; return this; }
+    public CreateMcpGatewayRequest withAuthorizerConfiguration(Map<String, Object> authorizerConfiguration) {
+        this.authorizerConfiguration = authorizerConfiguration;
+        return this;
+    }
+
+    public Map<String, Object> getProtocolConfiguration() {
+        return protocolConfiguration;
+    }
+
+    public void setProtocolConfiguration(Map<String, Object> protocolConfiguration) {
+        this.protocolConfiguration = protocolConfiguration;
+    }
+
+    public CreateMcpGatewayRequest withProtocolConfiguration(Map<String, Object> protocolConfiguration) {
+        this.protocolConfiguration = protocolConfiguration;
+        return this;
+    }
+
+    public Map<String, Object> getLogDeliveryConfiguration() {
+        return logDeliveryConfiguration;
+    }
+
+    public void setLogDeliveryConfiguration(Map<String, Object> logDeliveryConfiguration) {
+        this.logDeliveryConfiguration = logDeliveryConfiguration;
+    }
+
+    public CreateMcpGatewayRequest withLogDeliveryConfiguration(Map<String, Object> logDeliveryConfiguration) {
+        this.logDeliveryConfiguration = logDeliveryConfiguration;
+        return this;
+    }
+
+    public Map<String, Object> getOutboundNetworkConfiguration() {
+        return outboundNetworkConfiguration;
+    }
+
+    public void setOutboundNetworkConfiguration(Map<String, Object> outboundNetworkConfiguration) {
+        this.outboundNetworkConfiguration = outboundNetworkConfiguration;
+    }
+
+    public CreateMcpGatewayRequest withOutboundNetworkConfiguration(Map<String, Object> outboundNetworkConfiguration) {
+        this.outboundNetworkConfiguration = outboundNetworkConfiguration;
+        return this;
+    }
+
+    public List<Map<String, String>> getTags() {
+        return tags;
+    }
+
+    public void setTags(List<Map<String, String>> tags) {
+        this.tags = tags;
+    }
+
+    public CreateMcpGatewayRequest withTags(List<Map<String, String>> tags) {
+        this.tags = tags;
+        return this;
+    }
 
     @Override
     public boolean equals(Object o) {
@@ -125,12 +185,19 @@ public class CreateMcpGatewayRequest {
                 && Objects.equals(description, that.description)
                 && Objects.equals(protocolType, that.protocolType)
                 && Objects.equals(authorizerType, that.authorizerType)
-                && Objects.equals(agencyName, that.agencyName);
+                && Objects.equals(agencyName, that.agencyName)
+                && Objects.equals(authorizerConfiguration, that.authorizerConfiguration)
+                && Objects.equals(protocolConfiguration, that.protocolConfiguration)
+                && Objects.equals(logDeliveryConfiguration, that.logDeliveryConfiguration)
+                && Objects.equals(outboundNetworkConfiguration, that.outboundNetworkConfiguration)
+                && Objects.equals(tags, that.tags);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, description, protocolType, authorizerType, agencyName);
+        return Objects.hash(name, description, protocolType, authorizerType, agencyName,
+                authorizerConfiguration, protocolConfiguration, logDeliveryConfiguration,
+                outboundNetworkConfiguration, tags);
     }
 
     @Override
