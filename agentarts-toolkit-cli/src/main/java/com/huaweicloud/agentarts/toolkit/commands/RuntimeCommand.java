@@ -8,6 +8,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -217,6 +218,15 @@ public class RuntimeCommand implements Runnable {
             if (timeout < 1) {
                 CliSupport.fail("timeout must be greater than zero");
             }
+            String filename = remotePath.contains("/")
+                    ? remotePath.substring(remotePath.lastIndexOf('/') + 1)
+                    : remotePath;
+            if (filename.isEmpty()) filename = "downloaded";
+            String out = outputPath != null && !outputPath.isEmpty() ? outputPath : filename;
+            Path requestedOutput = Path.of(out);
+            if (Files.exists(requestedOutput) && !force) {
+                CliSupport.fail("Output file already exists; use --force to replace it: " + out);
+            }
             try (RuntimeClient client = RuntimeResolver.resolve(
                     agentName, region, !skipSsl, resolvedBearerToken, endpoint)) {
                 if (JsonUtils.isNotBlank(resolvedBearerToken)) {
@@ -230,24 +240,33 @@ public class RuntimeCommand implements Runnable {
                         CliSupport.fail("Failed to download files (HTTP "
                                 + result.getStatusCode() + "): " + result.getError());
                     }
-                    String filename = remotePath.contains("/")
-                            ? remotePath.substring(remotePath.lastIndexOf('/') + 1)
-                            : remotePath;
-                    if (filename.isEmpty()) filename = "downloaded";
-                    String out = outputPath != null && !outputPath.isEmpty() ? outputPath : filename;
-
-                    byte[] bytes = result.getDataAsBytes();
-                    if (bytes == null && result.getDataAsString() != null) {
-                        bytes = result.getDataAsString()
-                                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    long size;
+                    Path savedPath;
+                    if (result.isStreaming()) {
+                        long[] written = {0L};
+                        Iterable<byte[]> chunks = result.iterBytes()
+                                .map(chunk -> {
+                                    written[0] += chunk.length;
+                                    return chunk;
+                                })
+                                .toIterable(1);
+                        savedPath = CliSupport.writeChunksAtomically(requestedOutput, chunks, force);
+                        size = written[0];
+                    } else {
+                        byte[] bytes = result.getDataAsBytes();
+                        if (bytes == null && result.getDataAsString() != null) {
+                            bytes = result.getDataAsString()
+                                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                        }
+                        if (bytes == null) {
+                            CliSupport.fail("Download returned no file content");
+                        }
+                        savedPath = CliSupport.writeFileAtomically(requestedOutput, bytes, force);
+                        size = bytes.length;
                     }
-                    if (bytes == null) {
-                        CliSupport.fail("Download returned no file content");
-                    }
-                    Path savedPath = CliSupport.writeFileAtomically(Path.of(out), bytes, force);
                     Map<String, Object> outMap = new LinkedHashMap<>();
                     outMap.put("saved_path", savedPath.toString());
-                    outMap.put("size", bytes.length);
+                    outMap.put("size", size);
                     outMap.put("content_type", result.getHeaders().get("Content-Type"));
                     outMap.put("path", remotePath);
                     CliSupport.printJson(outMap);

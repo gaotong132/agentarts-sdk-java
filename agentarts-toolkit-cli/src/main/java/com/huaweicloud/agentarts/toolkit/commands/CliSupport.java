@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -193,8 +194,15 @@ public final class CliSupport {
 
     /** Persist downloaded bytes through a same-directory temporary file. */
     public static Path writeFileAtomically(Path outputPath, byte[] bytes, boolean replaceExisting) {
-        if (outputPath == null) throw new IllegalArgumentException("outputPath must not be null");
         if (bytes == null) throw new IllegalArgumentException("bytes must not be null");
+        return writeChunksAtomically(outputPath, List.of(bytes), replaceExisting);
+    }
+
+    /** Persist a bounded-memory byte stream through a same-directory temporary file. */
+    public static Path writeChunksAtomically(Path outputPath, Iterable<byte[]> chunks,
+                                             boolean replaceExisting) {
+        if (outputPath == null) throw new IllegalArgumentException("outputPath must not be null");
+        if (chunks == null) throw new IllegalArgumentException("chunks must not be null");
         Path target = outputPath.toAbsolutePath().normalize();
         Path parent = target.getParent();
         if (parent == null) throw new IllegalArgumentException("Output path has no parent: " + outputPath);
@@ -206,7 +214,15 @@ public final class CliSupport {
             }
             String filename = target.getFileName() != null ? target.getFileName().toString() : "download";
             temporary = Files.createTempFile(parent, "." + filename + ".", ".tmp");
-            Files.write(temporary, bytes, StandardOpenOption.TRUNCATE_EXISTING);
+            try (OutputStream output = Files.newOutputStream(
+                    temporary, StandardOpenOption.TRUNCATE_EXISTING)) {
+                for (byte[] chunk : chunks) {
+                    if (chunk == null) {
+                        throw new IllegalArgumentException("Download stream emitted a null chunk");
+                    }
+                    output.write(chunk);
+                }
+            }
             try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.WRITE)) {
                 channel.force(true);
             }
