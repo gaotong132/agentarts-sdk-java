@@ -85,10 +85,12 @@ class RuntimeClientTest {
         void perCallEndpointBearerAndEncodedQueryAreApplied() throws Exception {
             AtomicReference<String> authorization = new AtomicReference<>();
             AtomicReference<String> rawQuery = new AtomicReference<>();
+            AtomicReference<String> rawPath = new AtomicReference<>();
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/", exchange -> {
                 authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
                 rawQuery.set(exchange.getRequestURI().getRawQuery());
+                rawPath.set(exchange.getRequestURI().getRawPath());
                 byte[] response = "{}".getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(200, response.length);
@@ -100,13 +102,14 @@ class RuntimeClientTest {
             String endpoint = "http://127.0.0.1:" + server.getAddress().getPort();
             try (RuntimeClient client = new RuntimeClient("cn-southwest-2")) {
                 Map<String, Object> result = client.invokeAgent(
-                        "agent", "session", "{}", "per-call-token", endpoint,
+                        "agent/name", "session", "{}", "per-call-token", endpoint,
                         2, "user", null);
                 assertNotNull(result);
                 assertEquals("Bearer per-call-token", authorization.get());
+                assertEquals("/runtimes/agent%2Fname/invocations", rawPath.get());
 
                 client.downloadFiles(
-                        "agent", "session", "/home/user/a b.txt", true,
+                        "agent/name", "session", "/home/user/a b.txt", true,
                         "download-token", endpoint, null, 2);
                 assertEquals("Bearer download-token", authorization.get());
                 assertTrue(rawQuery.get().contains("path=%2Fhome%2Fuser%2Fa%20b.txt"));
@@ -222,6 +225,15 @@ class RuntimeClientTest {
                 assertEquals("unit-user", user.get());
             } finally {
                 server.stop(0);
+            }
+        }
+
+        @Test
+        void localCustomPathRejectsTraversalBeforeRequest() {
+            try (LocalRuntimeClient client = new LocalRuntimeClient(1, "127.0.0.1", 1)) {
+                assertThrows(IllegalArgumentException.class,
+                        () -> client.invokeAgentRaw(
+                                "{}", null, null, null, null, "../admin"));
             }
         }
     }

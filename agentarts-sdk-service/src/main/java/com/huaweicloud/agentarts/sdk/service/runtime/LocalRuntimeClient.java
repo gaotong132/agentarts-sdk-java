@@ -3,6 +3,7 @@ package com.huaweicloud.agentarts.sdk.service.runtime;
 import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
+import com.huaweicloud.agentarts.sdk.core.util.UrlUtils;
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
@@ -89,7 +90,7 @@ public class LocalRuntimeClient implements AutoCloseable {
                                          String userId, String customPath) {
         String path = "/invocations";
         if (JsonUtils.isNotBlank(customPath)) {
-            path += "/" + customPath;
+            path += "/" + UrlUtils.encodeRelativePath(customPath, "customPath");
         }
 
         Map<String, String> headers = new LinkedHashMap<>();

@@ -5,6 +5,7 @@ import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
+import com.huaweicloud.agentarts.sdk.core.util.UrlUtils;
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
@@ -153,7 +154,8 @@ public class RuntimeClient implements AutoCloseable {
     public AgentInfo updateAgent(String agentId, UpdateAgentRequest req) {
         Objects.requireNonNull(agentId, "agentId must not be null");
         Objects.requireNonNull(req, "UpdateAgentRequest must not be null");
-        RequestResult result = getControlClient().put("/runtimes/" + agentId, req).block();
+        RequestResult result = getControlClient().put(
+                "/runtimes/" + UrlUtils.encodePathSegment(agentId, "agentId"), req).block();
         return parseResult(result, AgentInfo.class, "update_agent");
     }
 
@@ -213,7 +215,8 @@ public class RuntimeClient implements AutoCloseable {
 
     public AgentInfo findAgentById(String agentId) {
         try {
-            RequestResult result = getControlClient().get("/runtimes/" + agentId).block();
+        RequestResult result = getControlClient().get(
+                "/runtimes/" + UrlUtils.encodePathSegment(agentId, "agentId")).block();
             return parseResult(result, AgentInfo.class, "find_agent_by_id");
         } catch (Exception e) {
             LOG.debug("findAgentById failed: {}", e.getMessage());
@@ -224,7 +227,8 @@ public class RuntimeClient implements AutoCloseable {
     public boolean deleteAgentByName(String agentName) {
         AgentInfo agent = findAgentByName(agentName);
         if (agent == null) return false;
-        RequestResult result = getControlClient().delete("/runtimes/" + agent.getId()).block();
+        RequestResult result = getControlClient().delete(
+                "/runtimes/" + UrlUtils.encodePathSegment(agent.getId(), "agentId")).block();
         return result != null && result.isSuccess();
     }
 
@@ -243,7 +247,8 @@ public class RuntimeClient implements AutoCloseable {
                 .withTargetVersionName(targetVersionName)
                 .withConfig(config);
 
-        RequestResult result = getControlClient().post("/runtimes/" + agentId + "/endpoints", req).block();
+        RequestResult result = getControlClient().post(
+                "/runtimes/" + UrlUtils.encodePathSegment(agentId, "agentId") + "/endpoints", req).block();
         return parseResult(result, AgentEndpointInfo.class, "create_agent_endpoint");
     }
 
@@ -264,7 +269,8 @@ public class RuntimeClient implements AutoCloseable {
                 .withConfig(config);
 
         RequestResult result = getControlClient().put(
-                "/runtimes/" + agentId + "/endpoints/" + endpointId, req).block();
+                "/runtimes/" + UrlUtils.encodePathSegment(agentId, "agentId")
+                        + "/endpoints/" + UrlUtils.encodePathSegment(endpointId, "endpointId"), req).block();
         return parseResult(result, AgentEndpointInfo.class, "update_agent_endpoint");
     }
 
@@ -276,7 +282,8 @@ public class RuntimeClient implements AutoCloseable {
      */
     public AgentEndpointInfo deleteAgentEndpoint(String agentId, String endpointId) {
         RequestResult result = getControlClient().delete(
-                "/runtimes/" + agentId + "/endpoints/" + endpointId).block();
+                "/runtimes/" + UrlUtils.encodePathSegment(agentId, "agentId")
+                        + "/endpoints/" + UrlUtils.encodePathSegment(endpointId, "endpointId")).block();
         return parseResult(result, AgentEndpointInfo.class, "delete_agent_endpoint");
     }
 
@@ -289,7 +296,8 @@ public class RuntimeClient implements AutoCloseable {
      */
     public AgentEndpointInfo findAgentEndpoint(String agentId, String endpointId) {
         RequestResult result = getControlClient().get(
-                "/runtimes/" + agentId + "/endpoints/" + endpointId).block();
+                "/runtimes/" + UrlUtils.encodePathSegment(agentId, "agentId")
+                        + "/endpoints/" + UrlUtils.encodePathSegment(endpointId, "endpointId")).block();
         return parseResult(result, AgentEndpointInfo.class, "find_agent_endpoint");
     }
 
@@ -315,9 +323,9 @@ public class RuntimeClient implements AutoCloseable {
     public RequestResult invokeAgentRaw(String agentName, String sessionId, String payload,
                                          String bearerToken, String endpoint, int timeout,
                                          String userId, String customPath) {
-        String path = "/runtimes/" + agentName + "/invocations";
+        String path = "/runtimes/" + UrlUtils.encodePathSegment(agentName, "agentName") + "/invocations";
         if (JsonUtils.isNotBlank(customPath)) {
-            path += "/" + customPath;
+            path += "/" + UrlUtils.encodeRelativePath(customPath, "customPath");
         }
 
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
@@ -348,7 +356,8 @@ public class RuntimeClient implements AutoCloseable {
 
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
         RequestResult result = getDataClient().request(
-                "POST", dataUrl("/runtimes/" + agentName + "/commands", endpoint),
+                "POST", dataUrl("/runtimes/" + UrlUtils.encodePathSegment(agentName, "agentName")
+                        + "/commands", endpoint),
                 headers, req, null, (double) timeout).block();
         return check(result, "exec_command");
     }
@@ -379,7 +388,8 @@ public class RuntimeClient implements AutoCloseable {
         if (fileGroupId != null) params.put("group_id", List.of(String.valueOf(fileGroupId)));
         if (fileMode != null) params.put("file_mode", List.of(fileMode));
 
-        final String uploadUrl = "/runtimes/" + agentName + "/upload-files";
+        final String uploadUrl = "/runtimes/" + UrlUtils.encodePathSegment(agentName, "agentName")
+                + "/upload-files";
         RequestResult result;
         if (files.size() == 1) {
             // Single file: application/octet-stream, raw bytes streamed, path = remote FILE path.
@@ -460,7 +470,8 @@ public class RuntimeClient implements AutoCloseable {
         params.put("path", List.of(path));
         if (recursive) params.put("recursive", List.of("true"));
         return getDataClient().request(
-                "GET", dataUrl("/runtimes/" + agentName + "/download-files", endpoint),
+                "GET", dataUrl("/runtimes/" + UrlUtils.encodePathSegment(agentName, "agentName")
+                        + "/download-files", endpoint),
                 headers, null, params, (double) timeout).block();
     }
 
@@ -477,7 +488,8 @@ public class RuntimeClient implements AutoCloseable {
                                              String endpoint, String userId, int timeout) {
         Map<String, String> headers = buildDataHeaders(null, bearerToken, userId);
         RequestResult result = getDataClient().request(
-                "POST", dataUrl("/runtimes/" + agentName + "/sessions-start", endpoint),
+                "POST", dataUrl("/runtimes/" + UrlUtils.encodePathSegment(agentName, "agentName")
+                        + "/sessions-start", endpoint),
                 headers, Map.of(), null, (double) timeout).block();
         return check(result, "start_session");
     }
@@ -495,7 +507,8 @@ public class RuntimeClient implements AutoCloseable {
 
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
         RequestResult result = getDataClient().request(
-                "POST", dataUrl("/runtimes/" + agentName + "/sessions-stop", endpoint),
+                "POST", dataUrl("/runtimes/" + UrlUtils.encodePathSegment(agentName, "agentName")
+                        + "/sessions-stop", endpoint),
                 headers, req, null, (double) timeout).block();
         return check(result, "stop_session");
     }
