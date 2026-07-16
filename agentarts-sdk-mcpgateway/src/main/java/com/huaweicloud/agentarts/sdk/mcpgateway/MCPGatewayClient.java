@@ -32,15 +32,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * MCP Gateway client for managing gateways and targets via AK/SK signed requests.
  * Always uses AK/SK signing (SDK-HMAC-SHA256). Base URL is control plane + /v1/core.
  *
- * <p>When creating a gateway with {@code authorizerType="iam"} and no explicit
- * {@code agencyName}, an IAM agency named {@value #DEFAULT_AGENCY_NAME} is
+ * <p>When creating a gateway with no explicit {@code agencyName}, an IAM agency
+ * named {@value #DEFAULT_AGENCY_NAME} is
  * automatically created (or reused if it already exists).</p>
  *
  * <h2>Gateway management:</h2>
@@ -124,30 +126,55 @@ public class MCPGatewayClient implements AutoCloseable {
     /**
      * Create an MCP gateway with all parameters.
      *
-     * <p>When {@code authorizerType} is "iam" and {@code agencyName} is null,
-     * an IAM agency named {@value #DEFAULT_AGENCY_NAME} is automatically created
+     * <p>When {@code agencyName} is null, an IAM agency named
+     * {@value #DEFAULT_AGENCY_NAME} is automatically created
      * (or reused if it already exists), matching the Python SDK behavior.</p>
      */
     public RequestResult createMcpGateway(String name, String description,
                                            String protocolType, String authorizerType,
                                            String agencyName) {
+        return createMcpGateway(name, description, protocolType, authorizerType, agencyName,
+                null, null, null, null, null);
+    }
+
+    /**
+     * Create an MCP gateway with the complete set of options supported by the service.
+     */
+    public RequestResult createMcpGateway(
+            String name,
+            String description,
+            String protocolType,
+            String authorizerType,
+            String agencyName,
+            Map<String, Object> authorizerConfiguration,
+            Map<String, Object> protocolConfiguration,
+            Map<String, Object> logDeliveryConfiguration,
+            Map<String, Object> outboundNetworkConfiguration,
+            List<Map<String, String>> tags) {
+        String resolvedName = name != null ? name : randomName("gateway-");
         String protocol = protocolType != null ? protocolType : "mcp";
         String authorizer = authorizerType != null ? authorizerType : "iam";
 
-        // Auto-create IAM agency when using IAM auth and no agency name provided
+        // The gateway uses this agency for resource credentials independently of
+        // its inbound authorizer, matching the reference SDK's behavior.
         String resolvedAgencyName = agencyName;
-        if ("iam".equals(authorizer) && agencyName == null) {
+        if (agencyName == null) {
             resolvedAgencyName = ensureIamAgency();
         }
 
         CreateMcpGatewayRequest req = new CreateMcpGatewayRequest()
-                .withName(name)
+                .withName(resolvedName)
                 .withDescription(description)
                 .withProtocolType(protocol)
                 .withAuthorizerType(authorizer)
                 .withAgencyName(resolvedAgencyName)
-                .withLogDeliveryConfiguration(Map.of("enabled", false))
-                .withOutboundNetworkConfiguration(Map.of("network_mode", "public"));
+                .withAuthorizerConfiguration(authorizerConfiguration)
+                .withProtocolConfiguration(protocolConfiguration)
+                .withLogDeliveryConfiguration(logDeliveryConfiguration != null
+                        ? logDeliveryConfiguration : Map.of("enabled", false))
+                .withOutboundNetworkConfiguration(outboundNetworkConfiguration != null
+                        ? outboundNetworkConfiguration : Map.of("network_mode", "public"))
+                .withTags(tags);
         return httpClient.post("/gateways", null, req).block();
     }
 
@@ -156,8 +183,27 @@ public class MCPGatewayClient implements AutoCloseable {
     }
 
     public RequestResult updateMcpGateway(String gatewayId, String description) {
+        return updateMcpGateway(gatewayId, description, null, null, null);
+    }
+
+    /**
+     * Update an MCP gateway. At least one updateable field must be supplied.
+     */
+    public RequestResult updateMcpGateway(
+            String gatewayId,
+            String description,
+            Map<String, Object> protocolConfiguration,
+            Map<String, Object> logDeliveryConfiguration,
+            List<Map<String, String>> tags) {
+        if (description == null && protocolConfiguration == null
+                && logDeliveryConfiguration == null && tags == null) {
+            throw new IllegalArgumentException("At least one gateway field must be provided for update");
+        }
         UpdateMcpGatewayRequest req = new UpdateMcpGatewayRequest()
-                .withDescription(description);
+                .withDescription(description)
+                .withProtocolConfiguration(protocolConfiguration)
+                .withLogDeliveryConfiguration(logDeliveryConfiguration)
+                .withTags(tags);
         return httpClient.put("/gateways/" + gatewayId, null, req).block();
     }
 
@@ -170,8 +216,30 @@ public class MCPGatewayClient implements AutoCloseable {
     }
 
     public RequestResult listMcpGateways(String name, Integer limit, Integer offset) {
-        Map<String, List<String>> query = new HashMap<>();
+        return listMcpGateways(name, null, null, null, null, null, null, limit, offset);
+    }
+
+    /**
+     * List MCP gateways using the complete set of service-side filters.
+     */
+    public RequestResult listMcpGateways(
+            String name,
+            String status,
+            String gatewayId,
+            List<String> tagKeyExists,
+            List<String> tagKeyMatches,
+            List<String> tagValueMatches,
+            String tagMatchPolicy,
+            Integer limit,
+            Integer offset) {
+        Map<String, List<String>> query = new LinkedHashMap<>();
         if (name != null) query.put("name", List.of(name));
+        if (status != null) query.put("status", List.of(status));
+        if (gatewayId != null) query.put("gateway_id", List.of(gatewayId));
+        if (tagKeyExists != null) query.put("tag_key_exists", List.copyOf(tagKeyExists));
+        if (tagKeyMatches != null) query.put("tag_key_matches", List.copyOf(tagKeyMatches));
+        if (tagValueMatches != null) query.put("tag_value_matches", List.copyOf(tagValueMatches));
+        if (tagMatchPolicy != null) query.put("tag_match_policy", List.of(tagMatchPolicy));
         if (limit != null) query.put("limit", List.of(String.valueOf(limit)));
         if (offset != null) query.put("offset", List.of(String.valueOf(offset)));
         return httpClient.request("GET", "/gateways", null, null, query).block();
@@ -196,7 +264,7 @@ public class MCPGatewayClient implements AutoCloseable {
                 ? credentialProviderConfiguration
                 : Map.of("credential_provider_type", "none");
         CreateMcpGatewayTargetRequest req = new CreateMcpGatewayTargetRequest()
-                .withName(name)
+                .withName(name != null ? name : randomName("target-"))
                 .withDescription(description)
                 .withTargetConfiguration(targetConfiguration)
                 .withCredentialProviderConfiguration(credConfig);
@@ -211,6 +279,10 @@ public class MCPGatewayClient implements AutoCloseable {
                                                    String name, String description,
                                                    Map<String, Object> targetConfiguration,
                                                    Map<String, Object> credentialProviderConfiguration) {
+        if (name == null && description == null && targetConfiguration == null
+                && credentialProviderConfiguration == null) {
+            throw new IllegalArgumentException("At least one gateway target field must be provided for update");
+        }
         UpdateMcpGatewayTargetRequest req = new UpdateMcpGatewayTargetRequest()
                 .withName(name)
                 .withDescription(description)
@@ -247,6 +319,10 @@ public class MCPGatewayClient implements AutoCloseable {
     // ========================
     // Internal helpers
     // ========================
+
+    private static String randomName(String prefix) {
+        return prefix + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    }
 
     /**
      * Ensure the default IAM agency exists with the identity policy attached,
