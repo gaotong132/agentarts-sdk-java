@@ -99,12 +99,15 @@ public class MemoryAgentStateStore implements AgentStateStore {
 
         try {
             List<TextMessage> messages = new ArrayList<>();
+            String batchId = UUID.randomUUID().toString();
             // Batch marker: indicates start of a new list save (enables full-replacement semantics)
-            messages.add(new TextMessage("system", LIST_BATCH + values.size()));
+            messages.add(new TextMessage(
+                    "system", LIST_BATCH + batchId + ":" + values.size()));
             for (State item : values) {
                 String json = mapper.writeValueAsString(item);
                 String className = item.getClass().getName();
-                messages.add(new TextMessage("system", LIST_PREFIX + className + ":" + json));
+                messages.add(new TextMessage(
+                        "system", LIST_PREFIX + batchId + ":" + className + ":" + json));
             }
             appendMessagesInBatches(memSessionId, messages);
             appendIndex("upsert", userId, sessionId, key);
@@ -167,23 +170,30 @@ public class MemoryAgentStateStore implements AgentStateStore {
 
             // 从末尾找到最后一个 __LB__: 批次标记，只读取该批次的 __L__: 消息
             int batchStart = -1;
-            int batchCount = 0;
+            ListBatch batch = null;
             for (int i = allMsgs.size() - 1; i >= 0; i--) {
                 String text = extractText(allMsgs.get(i));
                 if (text != null && text.startsWith(LIST_BATCH)) {
                     batchStart = i;
-                    batchCount = Integer.parseInt(text.substring(LIST_BATCH.length()));
+                    batch = parseListBatch(text);
                     break;
                 }
             }
-            if (batchStart < 0) return List.of();
+            if (batchStart < 0 || batch == null) return List.of();
 
             // 读取 batchStart 之后的 batchCount 条 __L__: 消息
             List<T> result = new ArrayList<>();
-            for (int i = batchStart + 1; i < allMsgs.size() && result.size() < batchCount; i++) {
+            for (int i = batchStart + 1;
+                    i < allMsgs.size() && result.size() < batch.count();
+                    i++) {
                 String text = extractText(allMsgs.get(i));
                 if (text != null && text.startsWith(LIST_PREFIX)) {
                     String body = text.substring(LIST_PREFIX.length());
+                    if (batch.id() != null) {
+                        String batchPrefix = batch.id() + ":";
+                        if (!body.startsWith(batchPrefix)) continue;
+                        body = body.substring(batchPrefix.length());
+                    }
                     int colonIdx = body.indexOf(':');
                     if (colonIdx > 0) {
                         String json = body.substring(colonIdx + 1);
@@ -191,7 +201,7 @@ public class MemoryAgentStateStore implements AgentStateStore {
                     }
                 }
             }
-            if (result.size() != batchCount) {
+            if (result.size() != batch.count()) {
                 throw new AgentStateStoreException(
                         "AgentScope state list contains an incomplete message batch");
             }
@@ -373,6 +383,21 @@ public class MemoryAgentStateStore implements AgentStateStore {
         }
     }
 
+    private static ListBatch parseListBatch(String text) {
+        String body = text.substring(LIST_BATCH.length());
+        int separator = body.indexOf(':');
+        if (separator < 0) {
+            return new ListBatch(null, Integer.parseInt(body));
+        }
+        String batchId = body.substring(0, separator);
+        if (batchId.isBlank()) {
+            throw new AgentStateStoreException("AgentScope state list batch ID is empty");
+        }
+        return new ListBatch(
+                batchId,
+                Integer.parseInt(body.substring(separator + 1)));
+    }
+
     private List<MessageInfo> listAllMessages(String memorySessionId) {
         List<MessageInfo> result = new ArrayList<>();
         int offset = 0;
@@ -507,6 +532,15 @@ public class MemoryAgentStateStore implements AgentStateStore {
         private Set<String> sessionIds(String userId) {
             Map<String, Set<String>> sessions = keysByUserAndSession.get(userId);
             return sessions == null ? Set.of() : Set.copyOf(sessions.keySet());
+        }
+    }
+
+    private record ListBatch(String id, int count) {
+        private ListBatch {
+            if (count < 0) {
+                throw new AgentStateStoreException(
+                        "AgentScope state list batch count must not be negative");
+            }
         }
     }
 }
