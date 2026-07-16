@@ -96,14 +96,14 @@ class AuthDecoratorsTest {
     /** Handler interface whose last param is the injected API key response. */
     public interface ApiKeyHandler {
         @RequireApiKey(providerName = API_KEY_PROVIDER)
-        String handle(Map<String, Object> payload, GetResourceApiKeyResponse apiKey);
+        String handle(Map<String, Object> payload, String apiKey);
     }
 
     // 1. test_require_api_key_injects_key
     @Test @Order(1)
     @DisplayName("@RequireApiKey injects API key response into handler")
     void testRequireApiKeyInjectsKey() {
-        AtomicReference<GetResourceApiKeyResponse> captured = new AtomicReference<>();
+        AtomicReference<String> captured = new AtomicReference<>();
         ApiKeyHandler impl = (payload, apiKey) -> {
             captured.set(apiKey);
             return "ok";
@@ -119,8 +119,7 @@ class AuthDecoratorsTest {
             String result = proxy.handle(Map.of("x", 1), null);
             assertEquals("ok", result);
             assertNotNull(captured.get(), "API key response should be injected");
-            assertNotNull(captured.get().getApiKey(), "injected api key must be non-empty");
-            assertFalse(captured.get().getApiKey().isEmpty());
+            assertFalse(captured.get().isEmpty(), "injected api key must be non-empty");
         } finally {
             AgentArtsRuntimeContext.clear();
         }
@@ -129,7 +128,7 @@ class AuthDecoratorsTest {
     /** Handler interface whose last param is the injected STS credentials. */
     public interface StsHandler {
         @RequireStsToken(providerName = STS_PROVIDER, agencySessionName = STS_SESSION)
-        String handle(GetResourceStsTokenResponse stsCredentials);
+        String handle(GetResourceStsTokenResponseBodyCredentials stsCredentials);
     }
 
     // 2. test_require_sts_token_injects_credentials
@@ -157,7 +156,7 @@ class AuthDecoratorsTest {
                 },
                 "sts-provider:" + STS_PROVIDER);
 
-        AtomicReference<GetResourceStsTokenResponse> captured = new AtomicReference<>();
+        AtomicReference<GetResourceStsTokenResponseBodyCredentials> captured = new AtomicReference<>();
         StsHandler impl = creds -> {
             captured.set(creds);
             return "ok";
@@ -170,10 +169,9 @@ class AuthDecoratorsTest {
             String result = proxy.handle(null);
             assertEquals("ok", result);
             assertNotNull(captured.get(), "STS credentials response should be injected");
-            assertNotNull(captured.get().getCredentials(), "credentials must be present");
-            assertNotNull(captured.get().getCredentials().getAccessKeyId(),
+            assertNotNull(captured.get().getAccessKeyId(),
                     "access_key_id must be non-null");
-            assertNotNull(captured.get().getCredentials().getSecretAccessKey(),
+            assertNotNull(captured.get().getSecretAccessKey(),
                     "secret_access_key must be non-null");
         } finally {
             AgentArtsRuntimeContext.clear();

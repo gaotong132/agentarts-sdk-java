@@ -2,12 +2,15 @@ package com.huaweicloud.agentarts.sdk.identity;
 
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.identity.config.LocalIdentityConfig;
+import com.huaweicloud.agentarts.sdk.identity.auth.TokenPoller;
+import com.huaweicloud.agentarts.sdk.identity.auth.AuthCredentialResolver;
 import com.huaweicloud.agentarts.sdk.service.identity.IdentityServiceClient;
 import com.huaweicloud.sdk.agentidentity.v1.model.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * High-level Identity client for AgentArts workload identity management.
@@ -16,7 +19,7 @@ import java.util.List;
  * Wraps {@link IdentityServiceClient} and provides convenience methods for
  * workload identity bootstrap, token creation, and resource token retrieval.</p>
  */
-public class IdentityClient {
+public class IdentityClient implements AuthCredentialResolver {
 
     private static final Logger LOG = LoggerFactory.getLogger(IdentityClient.class);
 
@@ -267,15 +270,87 @@ public class IdentityClient {
     }
 
     /**
+     * Get the API key value, matching the high-level Python SDK contract.
+     */
+    public String getResourceApiKeyValue(String providerName, String workloadAccessToken) {
+        GetResourceApiKeyResponse response = getResourceApiKey(providerName, workloadAccessToken);
+        if (response == null || response.getApiKey() == null || response.getApiKey().isBlank()) {
+            throw new IllegalStateException("Identity service returned an empty API key");
+        }
+        return response.getApiKey();
+    }
+
+    /**
      * Get an OAuth2 token from a credential provider.
      */
     public GetResourceOauth2TokenResponse getResourceOauth2Token(
             String providerName, String workloadAccessToken) {
-        GetResourceOauth2TokenRequest request = new GetResourceOauth2TokenRequest()
-                .withBody(new GetResourceOauth2TokenRequestBody()
-                        .withResourceCredentialProviderName(providerName)
-                        .withWorkloadAccessToken(workloadAccessToken));
-        return serviceClient.getResourceOauth2Token(request);
+        return getResourceOauth2Token(providerName, workloadAccessToken, null, null,
+                null, false, null, null, null);
+    }
+
+    /**
+     * Get an OAuth2 token response with the complete request contract.
+     */
+    public GetResourceOauth2TokenResponse getResourceOauth2Token(
+            String providerName, String workloadAccessToken,
+            GetResourceOauth2TokenRequestBody.Oauth2FlowEnum authFlow,
+            List<String> scopes, String callbackUrl, boolean forceAuthentication,
+            String customState, Map<String, String> customParameters, String sessionUri) {
+        GetResourceOauth2TokenRequestBody body = new GetResourceOauth2TokenRequestBody()
+                .withResourceCredentialProviderName(providerName)
+                .withWorkloadAccessToken(workloadAccessToken)
+                .withOauth2Flow(authFlow)
+                .withScopes(scopes)
+                .withResourceOauth2ReturnUrl(callbackUrl)
+                .withForceAuthentication(forceAuthentication)
+                .withCustomState(customState)
+                .withCustomParameters(customParameters)
+                .withSessionUri(sessionUri);
+        return serviceClient.getResourceOauth2Token(
+                new GetResourceOauth2TokenRequest().withBody(body));
+    }
+
+    /**
+     * Resolve an OAuth2 access-token value. USER_FEDERATION responses are polled
+     * after the authorization URL has been emitted to the application log.
+     */
+    public String getResourceOauth2AccessToken(
+            String providerName, String workloadAccessToken,
+            GetResourceOauth2TokenRequestBody.Oauth2FlowEnum authFlow,
+            List<String> scopes, String callbackUrl, boolean forceAuthentication) {
+        GetResourceOauth2TokenResponse initial = getResourceOauth2Token(
+                providerName, workloadAccessToken, authFlow, scopes, callbackUrl,
+                forceAuthentication, null, null, null);
+        if (initial != null && initial.getAccessToken() != null && !initial.getAccessToken().isBlank()) {
+            return initial.getAccessToken();
+        }
+        if (initial == null || initial.getAuthorizationUrl() == null
+                || initial.getAuthorizationUrl().isBlank() || initial.getSessionUri() == null) {
+            throw new IllegalStateException(
+                    "Identity service returned neither an access token nor an authorization URL");
+        }
+
+        LOG.info("OAuth2 user authorization required: {}", initial.getAuthorizationUrl());
+        String sessionUri = initial.getSessionUri();
+        return new TokenPoller() {
+            @Override
+            public PollResult poll() {
+                GetResourceOauth2TokenResponse response = getResourceOauth2Token(
+                        providerName, workloadAccessToken, authFlow, scopes, callbackUrl,
+                        false, null, null, sessionUri);
+                if (response != null && response.getAccessToken() != null
+                        && !response.getAccessToken().isBlank()) {
+                    return PollResult.completed(response.getAccessToken());
+                }
+                if (response != null
+                        && GetResourceOauth2TokenResponse.SessionStatusEnum.FAILED
+                        .equals(response.getSessionStatus())) {
+                    return PollResult.failed("OAuth2 authorization failed");
+                }
+                return PollResult.inProgress();
+            }
+        }.waitForToken();
     }
 
     /**
@@ -284,22 +359,66 @@ public class IdentityClient {
     public GetResourceStsTokenResponse getResourceStsToken(
             String providerName, String workloadAccessToken,
             String agencySessionName) {
+        return getResourceStsToken(providerName, workloadAccessToken, agencySessionName,
+                null, null, null, null, null);
+    }
+
+    /**
+     * Get STS credentials with all optional restriction fields.
+     */
+    public GetResourceStsTokenResponse getResourceStsToken(
+            String providerName, String workloadAccessToken, String agencySessionName,
+            Integer durationSeconds, String policy, String sourceIdentity,
+            List<StsTag> tags, List<String> transitiveTagKeys) {
         GetResourceStsTokenRequest request = new GetResourceStsTokenRequest()
                 .withBody(new GetResourceStsTokenRequestBody()
                         .withResourceCredentialProviderName(providerName)
                         .withWorkloadAccessToken(workloadAccessToken)
-                        .withAgencySessionName(agencySessionName));
+                        .withAgencySessionName(agencySessionName)
+                        .withDurationSeconds(durationSeconds)
+                        .withPolicy(policy)
+                        .withSourceIdentity(sourceIdentity)
+                        .withTags(tags)
+                        .withTransitiveTagKeys(transitiveTagKeys));
         return serviceClient.getResourceStsToken(request);
+    }
+
+    /**
+     * Get the STS credentials value, matching the high-level Python SDK contract.
+     */
+    public GetResourceStsTokenResponseBodyCredentials getResourceStsCredentials(
+            String providerName, String workloadAccessToken, String agencySessionName,
+            Integer durationSeconds, String policy, String sourceIdentity,
+            List<StsTag> tags, List<String> transitiveTagKeys) {
+        GetResourceStsTokenResponse response = getResourceStsToken(
+                providerName, workloadAccessToken, agencySessionName, durationSeconds,
+                policy, sourceIdentity, tags, transitiveTagKeys);
+        if (response == null || response.getCredentials() == null) {
+            throw new IllegalStateException("Identity service returned empty STS credentials");
+        }
+        return response.getCredentials();
     }
 
     /**
      * Complete resource token auth (confirm OAuth2 user session).
      */
-    public CompleteResourceTokenAuthResponse completeResourceTokenAuth(String sessionUri) {
+    public CompleteResourceTokenAuthResponse completeResourceTokenAuth(
+            String sessionUri, UserIdentifier userIdentifier) {
         CompleteResourceTokenAuthRequest request = new CompleteResourceTokenAuthRequest()
                 .withBody(new CompleteResourceTokenAuthRequestBody()
-                        .withSessionUri(sessionUri));
+                        .withSessionUri(sessionUri)
+                        .withUserIdentifier(userIdentifier));
         return serviceClient.completeResourceTokenAuth(request);
+    }
+
+    /**
+     * @deprecated use {@link #completeResourceTokenAuth(String, UserIdentifier)}
+     * so the user identity is explicitly bound to the authorization session.
+     */
+    @Deprecated
+    public CompleteResourceTokenAuthResponse completeResourceTokenAuth(String sessionUri) {
+        throw new IllegalArgumentException(
+                "userIdentifier is required; use completeResourceTokenAuth(sessionUri, userIdentifier)");
     }
 
     // ========================

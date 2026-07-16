@@ -48,8 +48,8 @@ String token = client.createWorkloadAccessToken("my-agent");
 // 创建 API Key 凭证提供者
 client.createApiKeyCredentialProvider("my-api-key-provider", "your-api-key-value");
 
-// 获取资源 API Key
-var apiKey = client.getResourceApiKey("my-api-key-provider", token);
+// 获取资源 API Key 字符串
+String apiKey = client.getResourceApiKeyValue("my-api-key-provider", token);
 ```
 
 ### 使用注解（装饰器模式）
@@ -60,7 +60,7 @@ Java SDK 提供与 Python `@require_*` 等价的注解：
 import com.huaweicloud.agentarts.sdk.core.annotation.RequireAccessToken;
 import com.huaweicloud.agentarts.sdk.core.annotation.RequireApiKey;
 import com.huaweicloud.agentarts.sdk.core.annotation.RequireStsToken;
-import com.huaweicloud.sdk.agentidentity.v1.model.GetResourceStsTokenResponse;
+import com.huaweicloud.sdk.agentidentity.v1.model.GetResourceStsTokenResponseBodyCredentials;
 
 // OAuth2 USER_FEDERATION 流程
 @RequireAccessToken(providerName = "my-oauth2-provider",
@@ -84,10 +84,10 @@ public void handleApiKey(String apiKey) {
 
 // STS Token
 @RequireStsToken(providerName = "my-sts-provider", agencySessionName = "my-session")
-public void handleSts(GetResourceStsTokenResponse stsCredentials) {
-    // stsCredentials.getCredentials().getAccessKeyId()
-    // stsCredentials.getCredentials().getSecretAccessKey()
-    // stsCredentials.getCredentials().getSecurityToken()
+public void handleSts(GetResourceStsTokenResponseBodyCredentials stsCredentials) {
+    // stsCredentials.getAccessKeyId()
+    // stsCredentials.getSecretAccessKey()
+    // stsCredentials.getSecurityToken()
 }
 ```
 
@@ -131,9 +131,10 @@ IdentityClient client = new IdentityClient();  // 使用默认区域
 | 方法 | 说明 |
 |------|------|
 | `getResourceApiKey(providerName, workloadAccessToken)` | 获取资源 API Key |
+| `getResourceApiKeyValue(providerName, workloadAccessToken)` | 获取资源 API Key 字符串（注解注入使用） |
 | `getResourceOauth2Token(providerName, workloadAccessToken)` | 获取资源 OAuth2 令牌 |
 | `getResourceStsToken(providerName, workloadAccessToken, agencySessionName)` | 获取资源 STS 令牌 |
-| `completeResourceTokenAuth(sessionUri)` | 完成资源令牌授权 |
+| `completeResourceTokenAuth(sessionUri, userIdentifier)` | 完成资源令牌授权并绑定用户标识 |
 
 ### 本地身份管理
 
