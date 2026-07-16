@@ -6,6 +6,8 @@ import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.message.MessageConverter;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.message.MessageConversionException;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.runtime.AgentscopeRuntimeHost;
+import com.huaweicloud.agentarts.sdk.integration.agentscope.runtime.AgentscopeRequestContext;
+import com.huaweicloud.agentarts.sdk.integration.agentscope.runtime.AgentscopeSessionExecutor;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.state.AgentStateStoreException;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.state.MemoryAgentStateStore;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.tool.CodeInterpreterTool;
@@ -15,14 +17,17 @@ import com.huaweicloud.agentarts.sdk.memory.MemoryClient;
 import com.huaweicloud.agentarts.sdk.memory.model.*;
 import com.huaweicloud.agentarts.sdk.runtime.AgentArtsRuntimeApp;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
-import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.TextBlock;
+import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.ImageBlock;
 import io.agentscope.core.message.ThinkingBlock;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.message.URLSource;
-import io.agentscope.core.state.AgentStateStore;
+import io.agentscope.core.session.Session;
+import io.agentscope.core.session.InMemorySession;
+import io.agentscope.core.ReActAgent;
 import io.agentscope.core.state.State;
 import io.agentscope.core.tool.AgentTool;
 import io.agentscope.core.tool.ToolCallParam;
@@ -35,6 +40,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -44,12 +50,18 @@ import static org.mockito.Mockito.*;
  */
 class IntegrationModuleTest {
 
+    private static String resultText(ToolResultBlock result) {
+        assertNotNull(result);
+        assertFalse(result.getOutput().isEmpty());
+        return ((TextBlock) result.getOutput().get(0)).getText();
+    }
+
     // ========================
-    // MemoryAgentStateStore — AgentStateStore interface contract
+    // MemoryAgentStateStore — AgentScope Session contract
     // ========================
 
     @Nested
-    @DisplayName("MemoryAgentStateStore implements AgentStateStore")
+    @DisplayName("MemoryAgentStateStore implements Session")
     class StateStoreTests {
 
         private MemoryAgentStateStore store;
@@ -62,8 +74,8 @@ class IntegrationModuleTest {
         }
 
         @Test
-        void implementsAgentStateStore() {
-            assertTrue(AgentStateStore.class.isAssignableFrom(MemoryAgentStateStore.class));
+        void implementsAgentScopeSession() {
+            assertTrue(Session.class.isAssignableFrom(MemoryAgentStateStore.class));
         }
 
         @Test
@@ -364,9 +376,9 @@ class IntegrationModuleTest {
         }
 
         @Test
-        void getStrictReturnsFalseForDynamicToolArguments() {
+        void implementsCurrentAgentToolContract() {
             MCPGatewayTool tool = new MCPGatewayTool(mock(MCPGatewayClient.class));
-            assertFalse(tool.getStrict());
+            assertInstanceOf(AgentTool.class, tool);
         }
 
         @Test
@@ -389,16 +401,13 @@ class IntegrationModuleTest {
             MCPGatewayTool tool = new MCPGatewayTool(gatewayClient,
                     (endpoint, authorization, sessionId, toolName, arguments) -> {
                         invocation.set(List.of(endpoint, authorization, sessionId, toolName, arguments));
-                        return Mono.just(ToolResultBlock.text("real MCP result")
-                                .withState(io.agentscope.core.message.ToolResultState.SUCCESS));
+                        return Mono.just(ToolResultBlock.text("real MCP result"));
                     });
-            RuntimeContext runtimeContext = RuntimeContext.builder()
-                    .sessionId("session-1")
-                    .put("workloadAccessToken", "unit-test-token")
-                    .build();
+            AgentscopeRequestContext runtimeContext = new AgentscopeRequestContext(
+                    "session-1", "user-1", "request-1", "unit-test-token");
 
             ToolResultBlock result = tool.callAsync(ToolCallParam.builder()
-                    .runtimeContext(runtimeContext)
+                    .context(runtimeContext.toToolExecutionContext())
                     .input(Map.of(
                             "gateway_id", gatewayId,
                             "tool_name", "target___echo",
@@ -406,7 +415,7 @@ class IntegrationModuleTest {
                     .build()).block();
 
             assertNotNull(result);
-            assertEquals(io.agentscope.core.message.ToolResultState.SUCCESS, result.getState());
+            assertEquals("real MCP result", resultText(result));
             assertEquals("https://gateway.example.test/mcp", invocation.get().get(0));
             assertEquals("Bearer unit-test-token", invocation.get().get(1));
             assertEquals("session-1", invocation.get().get(2));
@@ -426,7 +435,7 @@ class IntegrationModuleTest {
                     .build()).block();
 
             assertNotNull(result);
-            assertEquals(io.agentscope.core.message.ToolResultState.ERROR, result.getState());
+            assertTrue(resultText(result).startsWith("Error:"));
             verifyNoInteractions(gatewayClient);
         }
 
@@ -442,12 +451,12 @@ class IntegrationModuleTest {
                     .build()).block();
 
             assertNotNull(result);
-            assertEquals(io.agentscope.core.message.ToolResultState.ERROR, result.getState());
+            assertTrue(resultText(result).startsWith("Error:"));
             verifyNoInteractions(gatewayClient);
         }
 
         @Test
-        void failsClosedWhenCustomInvokerReturnsRunningResult() throws Exception {
+        void preservesCustomInvokerResult() throws Exception {
             String gatewayId = "01234567-89ab-cdef-0123-456789abcdef";
             MCPGatewayClient gatewayClient = mock(MCPGatewayClient.class);
             when(gatewayClient.getMcpGateway(gatewayId)).thenReturn(RequestResult.builder()
@@ -465,7 +474,7 @@ class IntegrationModuleTest {
                     .build()).block();
 
             assertNotNull(result);
-            assertEquals(io.agentscope.core.message.ToolResultState.ERROR, result.getState());
+            assertEquals("still running", resultText(result));
         }
 
         @Test
@@ -523,7 +532,7 @@ class IntegrationModuleTest {
                     .build()).block();
 
             assertNotNull(result);
-            assertEquals(io.agentscope.core.message.ToolResultState.ERROR, result.getState());
+            assertTrue(resultText(result).startsWith("Error:"));
             verifyNoInteractions(interpreter);
         }
 
@@ -539,7 +548,6 @@ class IntegrationModuleTest {
                     .build()).block();
 
             assertNotNull(result);
-            assertEquals(io.agentscope.core.message.ToolResultState.SUCCESS, result.getState());
             assertEquals("{\"stdout\":\"ok\"}",
                     ((TextBlock) result.getOutput().get(0)).getText());
         }
@@ -561,38 +569,38 @@ class IntegrationModuleTest {
         @Test
         void bridgeContextMapsSessionId() {
             RequestContext rc = new RequestContext("req-1", "sess-123", "user-456", "token-789");
-            RuntimeContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
-            assertEquals("sess-123", ctx.getSessionId());
+            AgentscopeRequestContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
+            assertEquals("sess-123", ctx.sessionId());
         }
 
         @Test
         void bridgeContextMapsUserId() {
             RequestContext rc = new RequestContext("req-1", "sess-123", "user-456", "token-789");
-            RuntimeContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
-            assertEquals("user-456", ctx.getUserId());
+            AgentscopeRequestContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
+            assertEquals("user-456", ctx.userId());
         }
 
         @Test
         void bridgeContextMapsRequestId() {
             RequestContext rc = new RequestContext("req-1", "sess-123", "user-456", "token-789");
-            RuntimeContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
-            assertEquals("req-1", ctx.get(AgentscopeRuntimeHost.REQUEST_ID_KEY));
+            AgentscopeRequestContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
+            assertEquals("req-1", ctx.requestId());
         }
 
         @Test
         void bridgeContextMapsWorkloadAccessToken() {
             RequestContext rc = new RequestContext("req-1", "sess-123", "user-456", "token-789");
-            RuntimeContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
-            assertEquals("token-789", ctx.get(AgentscopeRuntimeHost.WORKLOAD_ACCESS_TOKEN_KEY));
+            AgentscopeRequestContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
+            assertEquals("token-789", ctx.workloadAccessToken());
         }
 
         @Test
         void bridgeContextHandlesNullFields() {
             RequestContext rc = new RequestContext(null, null, null, null);
-            RuntimeContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
+            AgentscopeRequestContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
             assertNotNull(ctx);
-            assertNull(ctx.getSessionId());
-            assertNull(ctx.getUserId());
+            assertNull(ctx.sessionId());
+            assertNull(ctx.userId());
         }
 
         @Test
@@ -618,6 +626,42 @@ class IntegrationModuleTest {
 
             verify(app).setPingHandler(probe);
             verify(app).setEntrypoint(any(java.util.function.BiFunction.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("AgentscopeSessionExecutor bounded session execution")
+    class SessionExecutorTests {
+
+        @Test
+        void loadsCallsAndPersistsSuccessfulState() {
+            Session session = mock(Session.class);
+            ReActAgent agent = mock(ReActAgent.class);
+            Msg reply = Msg.builder().role(MsgRole.ASSISTANT).textContent("ok").build();
+            when(agent.call(any(Msg.class))).thenReturn(Mono.just(reply));
+            AgentscopeRequestContext context = new AgentscopeRequestContext(
+                    "session", "user", "request", null);
+
+            Msg result = new AgentscopeSessionExecutor(session, Duration.ofSeconds(1))
+                    .call(agent, "hello", context);
+
+            assertSame(reply, result);
+            verify(agent).loadIfExists(session, context.sessionKey());
+            verify(agent).saveTo(session, context.sessionKey());
+        }
+
+        @Test
+        void rejectsInvalidConfigurationAndMessages() {
+            assertThrows(NullPointerException.class,
+                    () -> new AgentscopeSessionExecutor(null));
+            assertThrows(IllegalArgumentException.class,
+                    () -> new AgentscopeSessionExecutor(
+                            new InMemorySession(), Duration.ZERO));
+            AgentscopeSessionExecutor executor = new AgentscopeSessionExecutor(
+                    new InMemorySession(), Duration.ofSeconds(1));
+            assertThrows(IllegalArgumentException.class,
+                    () -> executor.call(mock(ReActAgent.class), " ",
+                            new AgentscopeRequestContext(null, null, null, null)));
         }
     }
 
@@ -672,28 +716,28 @@ class IntegrationModuleTest {
             ToolResultBlock block = MessageConverter.toToolResultBlock(msg);
             assertEquals("call-1", block.getId());
             assertFalse(block.getOutput().isEmpty());
-            assertEquals(io.agentscope.core.message.ToolResultState.SUCCESS, block.getState());
+            assertTrue(block.getMetadata().isEmpty());
         }
 
         @Test
         void toolResultBlockToToolResultMessage() {
             TextBlock textOut = TextBlock.builder().text("output text").build();
-            ToolResultBlock block = ToolResultBlock.of("call-1", "tool", textOut)
-                    .withState(io.agentscope.core.message.ToolResultState.SUCCESS);
+            ToolResultBlock block = ToolResultBlock.of("call-1", "tool", textOut);
             ToolResultMessage msg = MessageConverter.toToolResultMessage(block);
             assertEquals("call-1", msg.getToolCallId());
             assertEquals("output text", msg.getContent());
         }
 
         @Test
-        void toolResultStateSurvivesRoundTrip() {
-            ToolResultBlock block = ToolResultBlock.error("failed")
-                    .withState(io.agentscope.core.message.ToolResultState.ERROR);
+        void toolResultMetadataSurvivesRoundTrip() {
+            ToolResultBlock block = ToolResultBlock.of(
+                    "call-1", "tool", TextBlock.builder().text("failed").build(),
+                    Map.of("trace_id", "trace-1"));
 
             ToolResultMessage memoryMessage = MessageConverter.toToolResultMessage(block);
             ToolResultBlock restored = MessageConverter.toToolResultBlock(memoryMessage);
 
-            assertEquals(io.agentscope.core.message.ToolResultState.ERROR, restored.getState());
+            assertEquals("trace-1", restored.getMetadata().get("trace_id"));
         }
 
         @Test
@@ -704,8 +748,7 @@ class IntegrationModuleTest {
             ToolResultBlock source = ToolResultBlock.of(
                             "call-id",
                             "image-tool",
-                            List.of(TextBlock.builder().text("caption").build(), image))
-                    .withState(io.agentscope.core.message.ToolResultState.SUCCESS);
+                            List.of(TextBlock.builder().text("caption").build(), image));
 
             ToolResultMessage memory = MessageConverter.toToolResultMessage(source);
             ToolResultBlock restored = MessageConverter.toToolResultBlock(memory);
@@ -722,8 +765,7 @@ class IntegrationModuleTest {
         @Test
         void rejectsUnsupportedToolResultBlocksInsteadOfDroppingThem() {
             ThinkingBlock thinking = ThinkingBlock.builder().thinking("internal").build();
-            ToolResultBlock source = ToolResultBlock.of("call-id", "tool", thinking)
-                    .withState(io.agentscope.core.message.ToolResultState.SUCCESS);
+            ToolResultBlock source = ToolResultBlock.of("call-id", "tool", thinking);
 
             assertThrows(
                     MessageConversionException.class,
@@ -731,9 +773,11 @@ class IntegrationModuleTest {
         }
 
         @Test
-        void rejectsRunningToolResults() {
-            assertThrows(IllegalArgumentException.class,
-                    () -> MessageConverter.toToolResultMessage(ToolResultBlock.text("pending")));
+        void acceptsToolMethodResultWithoutCallIdentity() {
+            ToolResultMessage message = MessageConverter.toToolResultMessage(
+                    ToolResultBlock.text("complete"));
+            assertEquals("", message.getToolCallId());
+            assertEquals("complete", message.getContent());
         }
 
         @Test

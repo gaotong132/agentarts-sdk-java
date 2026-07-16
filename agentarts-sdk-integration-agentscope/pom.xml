@@ -13,7 +13,7 @@
     <artifactId>agentarts-sdk-integration-agentscope</artifactId>
 
     <name>AgentArts SDK :: Integration :: AgentScope</name>
-    <description>AgentScope integration: AgentscopeRuntimeHost, MemoryAgentStateStore, AgentTool extensions, MessageConverter</description>
+    <description>AgentScope integration: runtime context bridge, bounded session execution, AgentArts Memory Session, tools, and message conversion</description>
 
     <dependencies>
         <!-- AgentArts SDK modules -->

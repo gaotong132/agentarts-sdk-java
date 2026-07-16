@@ -4,11 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
-import io.agentscope.core.agent.RuntimeContext;
+import com.huaweicloud.agentarts.sdk.integration.agentscope.runtime.AgentscopeRequestContext;
 import io.agentscope.core.message.ToolResultBlock;
-import io.agentscope.core.message.ToolResultState;
 import io.agentscope.core.tool.AgentTool;
 import io.agentscope.core.tool.ToolCallParam;
+import io.agentscope.core.tool.ToolExecutionContext;
 import io.agentscope.core.tool.mcp.McpClientBuilder;
 import io.agentscope.core.tool.mcp.McpClientWrapper;
 import io.agentscope.core.tool.mcp.McpContentConverter;
@@ -97,11 +97,6 @@ public final class MCPGatewayTool implements AgentTool {
         schema.put("required", List.of("gateway_id", "tool_name"));
         schema.put("additionalProperties", false);
         return schema;
-    }
-
-    @Override
-    public Boolean getStrict() {
-        return Boolean.FALSE;
     }
 
     @Override
@@ -194,7 +189,7 @@ public final class MCPGatewayTool implements AgentTool {
     }
 
     private static String resolveAuthorization(ToolCallParam param) {
-        RuntimeContext context = param.getRuntimeContext();
+        ToolExecutionContext context = param.getContext();
         if (context == null) {
             return null;
         }
@@ -205,7 +200,9 @@ public final class MCPGatewayTool implements AgentTool {
             }
             return authorization.trim();
         }
-        String workloadToken = context.get("workloadAccessToken", String.class);
+        AgentscopeRequestContext requestContext = context.get(AgentscopeRequestContext.class);
+        String workloadToken = requestContext != null
+                ? requestContext.workloadAccessToken() : null;
         if (workloadToken == null || workloadToken.isBlank()) {
             return null;
         }
@@ -216,11 +213,13 @@ public final class MCPGatewayTool implements AgentTool {
     }
 
     private static String resolveSessionId(ToolCallParam param) {
-        RuntimeContext context = param.getRuntimeContext();
-        if (context == null || context.getSessionId() == null) {
+        ToolExecutionContext context = param.getContext();
+        AgentscopeRequestContext requestContext = context != null
+                ? context.get(AgentscopeRequestContext.class) : null;
+        if (requestContext == null || requestContext.sessionId() == null) {
             return null;
         }
-        String sessionId = context.getSessionId();
+        String sessionId = requestContext.sessionId();
         if (sessionId.length() > MAX_HEADER_VALUE_LENGTH) {
             throw new IllegalArgumentException("sessionId exceeds 4096 characters");
         }
@@ -259,9 +258,7 @@ public final class MCPGatewayTool implements AgentTool {
             String toolName,
             Map<String, Object> arguments) {
         return Mono.defer(() -> client.callTool(toolName, arguments)
-                        .map(result -> McpContentConverter.convertCallToolResult(result)
-                                .withState(Boolean.TRUE.equals(result.isError())
-                                        ? ToolResultState.ERROR : ToolResultState.SUCCESS)))
+                        .map(McpContentConverter::convertCallToolResult))
                 .doFinally(ignored -> closeQuietly(client));
     }
 
@@ -277,14 +274,11 @@ public final class MCPGatewayTool implements AgentTool {
         if (result == null) {
             return error("MCP gateway returned no tool result");
         }
-        if (result.getState() == ToolResultState.RUNNING) {
-            return error("MCP gateway returned a non-terminal tool result");
-        }
         return result;
     }
 
     private static ToolResultBlock error(String message) {
-        return ToolResultBlock.error(message).withState(ToolResultState.ERROR);
+        return ToolResultBlock.error(message);
     }
 
     /** Transport abstraction for MCP invocation and application-specific policies. */

@@ -3,7 +3,6 @@ package com.huaweicloud.agentarts.sdk.integration.agentscope.tool;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.tools.CodeInterpreterClient;
 import io.agentscope.core.message.ToolResultBlock;
-import io.agentscope.core.message.ToolResultState;
 import io.agentscope.core.tool.AgentTool;
 import io.agentscope.core.tool.ToolCallParam;
 import reactor.core.publisher.Mono;
@@ -61,11 +60,6 @@ public class CodeInterpreterTool implements AgentTool {
     }
 
     @Override
-    public Boolean getStrict() {
-        return null;
-    }
-
-    @Override
     public Map<String, Object> getOutputSchema() {
         return null;
     }
@@ -91,7 +85,7 @@ public class CodeInterpreterTool implements AgentTool {
                 Map<String, Object> result = interpreterClient.executeCode(
                         (String) codeValue, (String) languageValue, false);
                 String output = result != null ? JsonUtils.toJson(result) : "No output";
-                return ToolResultBlock.text(output).withState(ToolResultState.SUCCESS);
+                return ToolResultBlock.text(output);
             } catch (Exception e) {
                 return error("Code execution failed");
             }
@@ -99,6 +93,6 @@ public class CodeInterpreterTool implements AgentTool {
     }
 
     private static ToolResultBlock error(String message) {
-        return ToolResultBlock.error(message).withState(ToolResultState.ERROR);
+        return ToolResultBlock.error(message);
     }
 }

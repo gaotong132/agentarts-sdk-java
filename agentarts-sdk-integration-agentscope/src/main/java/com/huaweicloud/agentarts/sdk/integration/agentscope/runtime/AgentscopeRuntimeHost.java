@@ -3,7 +3,6 @@ package com.huaweicloud.agentarts.sdk.integration.agentscope.runtime;
 import com.huaweicloud.agentarts.sdk.core.PingStatus;
 import com.huaweicloud.agentarts.sdk.runtime.AgentArtsRuntimeApp;
 import com.huaweicloud.agentarts.sdk.runtime.context.RequestContext;
-import io.agentscope.core.agent.RuntimeContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,14 +15,14 @@ import java.util.function.Supplier;
  * Bridge layer between AgentArts Runtime and agentscope-java.
  *
  * <p>Registers entrypoint and ping handlers on the AgentArts Runtime
- * that translate between AgentArts RequestContext and agentscope RuntimeContext.</p>
+ * that translate between AgentArts RequestContext and an immutable AgentScope request context.</p>
  *
  * <h2>Context mapping:</h2>
  * <ul>
- *   <li>RequestContext.sessionId → RuntimeContext.sessionId</li>
- *   <li>RequestContext.userId → RuntimeContext.userId</li>
- *   <li>RequestContext.requestId → RuntimeContext.put("requestId", ...)</li>
- *   <li>RequestContext.workloadAccessToken → RuntimeContext.put("workloadAccessToken", ...)</li>
+ *   <li>RequestContext.sessionId → AgentscopeRequestContext.sessionId</li>
+ *   <li>RequestContext.userId → AgentscopeRequestContext.userId</li>
+ *   <li>RequestContext.requestId → AgentscopeRequestContext.requestId</li>
+ *   <li>RequestContext.workloadAccessToken → AgentscopeRequestContext.workloadAccessToken</li>
  * </ul>
  *
  * <h2>Usage:</h2>
@@ -37,34 +36,31 @@ import java.util.function.Supplier;
 public final class AgentscopeRuntimeHost {
 
     private static final Logger LOG = LoggerFactory.getLogger(AgentscopeRuntimeHost.class);
-    public static final String REQUEST_ID_KEY = "requestId";
-    public static final String WORKLOAD_ACCESS_TOKEN_KEY = "workloadAccessToken";
-
     private final AgentArtsRuntimeApp app;
 
     /**
      * Create a runtime host that bridges AgentArts Runtime with an agentscope handler.
      *
      * @param app     the AgentArts runtime app
-     * @param handler function that receives (payload, RuntimeContext) and returns a result
+     * @param handler function that receives payload and request context and returns a result
      */
     public AgentscopeRuntimeHost(AgentArtsRuntimeApp app,
-                                  BiFunction<Map<String, Object>, RuntimeContext, Object> handler) {
+                                  BiFunction<Map<String, Object>, AgentscopeRequestContext, Object> handler) {
         this(app, handler, () -> PingStatus.HEALTHY);
     }
 
     /** Create a runtime host with an application-specific readiness probe. */
     public AgentscopeRuntimeHost(
             AgentArtsRuntimeApp app,
-            BiFunction<Map<String, Object>, RuntimeContext, Object> handler,
+            BiFunction<Map<String, Object>, AgentscopeRequestContext, Object> handler,
             Supplier<PingStatus> pingHandler) {
         this.app = Objects.requireNonNull(app, "app must not be null");
         Objects.requireNonNull(handler, "handler must not be null");
         Objects.requireNonNull(pingHandler, "pingHandler must not be null");
 
-        // Register entrypoint that bridges RequestContext → RuntimeContext
+        // Register entrypoint that bridges the immutable request context.
         this.app.setEntrypoint((Map<String, Object> payload, RequestContext requestCtx) -> {
-            RuntimeContext runtimeCtx = bridgeContext(requestCtx);
+            AgentscopeRequestContext runtimeCtx = bridgeContext(requestCtx);
             return handler.apply(payload, runtimeCtx);
         });
 
@@ -75,26 +71,15 @@ public final class AgentscopeRuntimeHost {
     }
 
     /**
-     * Bridge AgentArts RequestContext to agentscope RuntimeContext.
+     * Bridge AgentArts RequestContext to an AgentScope invocation context.
      */
-    public static RuntimeContext bridgeContext(RequestContext requestCtx) {
+    public static AgentscopeRequestContext bridgeContext(RequestContext requestCtx) {
         Objects.requireNonNull(requestCtx, "requestCtx must not be null");
-        RuntimeContext.Builder builder = RuntimeContext.builder();
-
-        if (requestCtx.getSessionId() != null) {
-            builder.sessionId(requestCtx.getSessionId());
-        }
-        if (requestCtx.getUserId() != null) {
-            builder.userId(requestCtx.getUserId());
-        }
-        if (requestCtx.getRequestId() != null) {
-            builder.put(REQUEST_ID_KEY, requestCtx.getRequestId());
-        }
-        if (requestCtx.getWorkloadAccessToken() != null) {
-            builder.put(WORKLOAD_ACCESS_TOKEN_KEY, requestCtx.getWorkloadAccessToken());
-        }
-
-        return builder.build();
+        return new AgentscopeRequestContext(
+                requestCtx.getSessionId(),
+                requestCtx.getUserId(),
+                requestCtx.getRequestId(),
+                requestCtx.getWorkloadAccessToken());
     }
 
     public AgentArtsRuntimeApp getApp() {

@@ -9,6 +9,8 @@ import com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient;
 import com.huaweicloud.agentarts.sdk.runtime.AgentArtsRuntimeApp;
 import com.huaweicloud.agentarts.sdk.tools.CodeInterpreterClient;
 import io.agentscope.core.ReActAgent;
+import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.model.OpenAIChatModel;
 import io.agentscope.core.tool.Toolkit;
 import org.junit.jupiter.api.Test;
@@ -41,9 +43,9 @@ class AgentscopeIntegrationSnippetTest {
         OpenAIChatModel model = OpenAIChatModel.builder()
                 .apiKey("dummy-key").modelName("gpt-4o").stream(true).build();
 
+        MemoryAgentStateStore session = new MemoryAgentStateStore(memoryClient, spaceId);
         ReActAgent agent = ReActAgent.builder()
                 .name("my-agent").model(model).toolkit(toolkit)
-                .stateStore(new MemoryAgentStateStore(memoryClient, spaceId))
                 .build();
         // build() success is the smoke test — no filler assertNotNull needed.
 
@@ -52,14 +54,18 @@ class AgentscopeIntegrationSnippetTest {
         AgentArtsRuntimeApp app = new AgentArtsRuntimeApp();
         new AgentscopeRuntimeHost(app, (payload, ctx) -> {
             String message = (String) payload.getOrDefault("message", "");
-            var reply = agent.call(message, ctx).block();
-            return Map.of("reply", reply != null ? reply.getTextContent() : "");
+            synchronized (agent) {
+                agent.loadIfExists(session, ctx.sessionKey());
+                Msg input = Msg.builder().role(MsgRole.USER).textContent(message).build();
+                var reply = agent.call(input).block();
+                agent.saveTo(session, ctx.sessionKey());
+                return Map.of("reply", reply != null ? reply.getTextContent() : "");
+            }
         });
         // Construction of AgentscopeRuntimeHost is the smoke test — no filler assertNotNull.
 
-        agent.close();
         gatewayClient.close();
         interpreterClient.close();
-        memoryClient.close();
+        session.close();
     }
 }

@@ -8,10 +8,8 @@ import com.huaweicloud.agentarts.sdk.memory.model.ToolResultMessage;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.message.ToolResultBlock;
-import io.agentscope.core.message.ToolResultState;
 import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.AudioBlock;
-import io.agentscope.core.message.DataBlock;
 import io.agentscope.core.message.ImageBlock;
 import io.agentscope.core.message.Source;
 import io.agentscope.core.message.URLSource;
@@ -19,7 +17,6 @@ import io.agentscope.core.message.VideoBlock;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -34,8 +31,6 @@ import java.util.Objects;
  * </ul>
  */
 public final class MessageConverter {
-
-    private static final String STATE_META_KEY = "agentscope_tool_result_state";
 
     private MessageConverter() {
     }
@@ -94,8 +89,8 @@ public final class MessageConverter {
         if (output.isEmpty()) {
             output.add(TextBlock.builder().text("").build());
         }
-        return ToolResultBlock.of(msg.getToolCallId(), "tool_result", output)
-                .withState(readState(msg.getMeta()));
+        return ToolResultBlock.of(
+                msg.getToolCallId(), "tool_result", output, readMetadata(msg.getMeta()));
     }
 
     // ========================
@@ -133,9 +128,6 @@ public final class MessageConverter {
      */
     public static ToolResultMessage toToolResultMessage(ToolResultBlock block) {
         Objects.requireNonNull(block, "block");
-        if (block.getState() == ToolResultState.RUNNING) {
-            throw new IllegalArgumentException("A running tool result cannot be persisted");
-        }
         StringBuilder content = new StringBuilder();
         AssetRef asset = null;
         if (block.getOutput() != null) {
@@ -157,9 +149,9 @@ public final class MessageConverter {
         }
         ToolResultMessage result = new ToolResultMessage(
                 block.getId() != null ? block.getId() : "", content.toString());
-        Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put(STATE_META_KEY, block.getState().getValue());
-        result.setMeta(JsonUtils.toJson(meta));
+        if (!block.getMetadata().isEmpty()) {
+            result.setMeta(JsonUtils.toJson(block.getMetadata()));
+        }
         if (asset != null) result.setAssetRef(asset.toDict());
         return result;
     }
@@ -167,15 +159,12 @@ public final class MessageConverter {
     private static boolean isAssetBlock(ContentBlock block) {
         return block instanceof ImageBlock
                 || block instanceof AudioBlock
-                || block instanceof VideoBlock
-                || block instanceof DataBlock;
+                || block instanceof VideoBlock;
     }
 
     private static AssetRef toAssetRef(ContentBlock block) {
         Source source;
         String mime;
-        String assetId = "";
-        String filename = null;
         if (block instanceof ImageBlock image) {
             source = image.getSource();
             mime = "image/*";
@@ -185,11 +174,6 @@ public final class MessageConverter {
         } else if (block instanceof VideoBlock video) {
             source = video.getSource();
             mime = "video/*";
-        } else if (block instanceof DataBlock data) {
-            source = data.getSource();
-            mime = "application/octet-stream";
-            assetId = data.getId() == null ? "" : data.getId();
-            filename = data.getName();
         } else {
             throw new MessageConversionException("Unsupported asset block");
         }
@@ -200,10 +184,10 @@ public final class MessageConverter {
                     "Only non-blank URL sources can be persisted as Memory asset references");
         }
         return new AssetRef()
-                .withAssetId(assetId)
+                .withAssetId("")
                 .withUri(urlSource.getUrl())
                 .withMime(mime)
-                .withFilename(filename);
+                .withFilename(null);
     }
 
     private static ContentBlock toAssetBlock(Object rawAsset) {
@@ -230,35 +214,22 @@ public final class MessageConverter {
         if (mime != null && mime.startsWith("video/")) {
             return VideoBlock.builder().source(source).build();
         }
-        return DataBlock.builder()
-                .source(source)
-                .id(stringValue(values.get("asset_id")))
-                .name(stringValue(values.get("filename")))
-                .build();
+        throw new MessageConversionException(
+                "AgentScope 1.x supports URL asset conversion only for image, audio, and video MIME types");
     }
 
     private static String stringValue(Object value) {
         return value instanceof String ? (String) value : null;
     }
 
-    private static ToolResultState readState(String meta) {
-        if (meta == null || meta.isBlank()) return ToolResultState.SUCCESS;
+    private static Map<String, Object> readMetadata(String meta) {
+        if (meta == null || meta.isBlank()) return Map.of();
         try {
-            JsonNodeHolder holder = JsonUtils.MAPPER.readValue(meta, JsonNodeHolder.class);
-            if (holder.agentscopeToolResultState == null) return ToolResultState.SUCCESS;
-            for (ToolResultState state : ToolResultState.values()) {
-                if (state.getValue().equals(holder.agentscopeToolResultState)) return state;
-            }
-            throw new IllegalArgumentException("Unknown AgentScope tool result state");
-        } catch (MessageConversionException e) {
-            throw e;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> metadata = JsonUtils.MAPPER.readValue(meta, Map.class);
+            return Map.copyOf(metadata);
         } catch (Exception e) {
-            throw new MessageConversionException("Failed to read tool result metadata", e);
+            throw new MessageConversionException("Failed to read AgentScope tool result metadata", e);
         }
-    }
-
-    private static final class JsonNodeHolder {
-        @com.fasterxml.jackson.annotation.JsonProperty(STATE_META_KEY)
-        private String agentscopeToolResultState;
     }
 }
