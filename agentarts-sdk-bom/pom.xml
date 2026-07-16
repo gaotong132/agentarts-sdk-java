@@ -17,6 +17,7 @@
         <reactor-bom.version>2025.0.2</reactor-bom.version>
         <context-propagation.version>1.2.0</context-propagation.version>
         <jackson-bom.version>2.21.1</jackson-bom.version>
+        <snakeyaml.version>2.6</snakeyaml.version>
         <slf4j.version>2.0.17</slf4j.version>
         <vertx.version>4.5.14</vertx.version>
         <huaweicloud-sdk.version>3.1.202</huaweicloud-sdk.version>
@@ -180,6 +181,11 @@
                 <groupId>com.fasterxml.jackson.dataformat</groupId>
                 <artifactId>jackson-dataformat-yaml</artifactId>
                 <version>${jackson-bom.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.yaml</groupId>
+                <artifactId>snakeyaml</artifactId>
+                <version>${snakeyaml.version}</version>
             </dependency>
 
             <!-- ==================== -->
