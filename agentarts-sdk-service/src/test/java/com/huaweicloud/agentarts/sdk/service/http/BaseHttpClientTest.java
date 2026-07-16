@@ -43,6 +43,19 @@ class BaseHttpClientTest {
             assertEquals("", config.getBaseUrl());
             assertEquals(30.0, config.getTimeoutSeconds());
             assertTrue(config.isVerifySsl());
+            assertEquals(RequestConfig.DEFAULT_MAX_RESPONSE_BODY_BYTES,
+                    config.getMaxResponseBodyBytes());
+        }
+
+        @Test
+        void validatesResponseBodyLimit() {
+            RequestConfig config = new RequestConfig();
+            assertThrows(IllegalArgumentException.class,
+                    () -> config.setMaxResponseBodyBytes(0));
+            assertThrows(IllegalArgumentException.class,
+                    () -> config.setMaxResponseBodyBytes((long) Integer.MAX_VALUE + 1));
+            config.setMaxResponseBodyBytes(1024);
+            assertEquals(1024, config.getMaxResponseBodyBytes());
         }
 
         @Test
@@ -267,6 +280,35 @@ class BaseHttpClientTest {
                 callerCopy[0] = 99;
                 assertArrayEquals(payload, result.getDataAsBytes(),
                         "binary response data must be defensively copied");
+            } finally {
+                server.stop(0);
+            }
+        }
+
+        @Test
+        void rejectsChunkedResponsesThatExceedConfiguredLimit() throws Exception {
+            byte[] payload = "oversized".getBytes(StandardCharsets.UTF_8);
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/oversized", exchange -> {
+                exchange.getResponseHeaders().set("Content-Type", "text/plain");
+                exchange.sendResponseHeaders(200, 0);
+                try (OutputStream output = exchange.getResponseBody()) {
+                    output.write(payload);
+                }
+            });
+            server.start();
+
+            RequestConfig config = RequestConfig.builder()
+                    .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
+                    .timeoutSeconds(5)
+                    .maxResponseBodyBytes(4)
+                    .build();
+            try (BaseHttpClient client = new BaseHttpClient(config)) {
+                RequestResult result = client.get("/oversized").block(Duration.ofSeconds(5));
+                assertNotNull(result);
+                assertFalse(result.isSuccess());
+                assertEquals(200, result.getStatusCode());
+                assertTrue(result.getError().contains("configured limit of 4 bytes"));
             } finally {
                 server.stop(0);
             }

@@ -471,52 +471,98 @@ public class BaseHttpClient implements AutoCloseable {
                         .closeAction(closeAction)
                         .build());
             } else {
-                response.body().onComplete(bodyAr -> {
-                    if (bodyAr.failed()) {
-                        completeRequestFailure(future, bodyAr.cause());
-                        return;
-                    }
-                    try {
-                        Buffer body = bodyAr.result();
-                        byte[] bodyBytes = body != null ? body.getBytes() : new byte[0];
-                        String bodyStr = new String(bodyBytes, StandardCharsets.UTF_8);
-                        Object data = null;
-                        String error = null;
-
-                        if (bodyBytes.length > 0) {
-                            if (isTextResponse(contentType)) {
-                                try {
-                                    data = OBJECT_MAPPER.readTree(bodyStr);
-                                } catch (Exception e) {
-                                    data = bodyStr;
-                                }
-                            } else {
-                                data = bodyBytes;
-                            }
-                            if (!success) {
-                                error = extractErrorFromBody(data);
-                                if (error == null) {
-                                    error = "HTTP " + statusCode + " returned a binary response";
-                                }
-                            }
-                        }
-
-                        future.complete(RequestResult.builder()
-                                .success(success)
-                                .statusCode(statusCode)
-                                .data(data)
-                                .error(error)
-                                .headers(responseHeaders)
-                                .streaming(false)
-                                .build());
-                    } catch (Exception e) {
-                        completeResponseFailure(future, e);
-                    }
-                });
+                aggregateResponse(response, statusCode, success, contentType,
+                        responseHeaders, future);
             }
         } catch (Exception e) {
             completeResponseFailure(future, e);
         }
+    }
+
+    private void aggregateResponse(HttpClientResponse response, int statusCode, boolean success,
+                                   String contentType, Map<String, String> responseHeaders,
+                                   CompletableFuture<RequestResult> future) {
+        long maximumBytes = config.getMaxResponseBodyBytes();
+        String contentLength = response.getHeader("Content-Length");
+        if (contentLength != null) {
+            try {
+                if (Long.parseLong(contentLength) > maximumBytes) {
+                    response.request().reset();
+                    completeOversizedResponse(future, statusCode, responseHeaders, maximumBytes);
+                    return;
+                }
+            } catch (NumberFormatException ignored) {
+                // Invalid server metadata is ignored; the streaming counter remains authoritative.
+            }
+        }
+
+        Buffer aggregate = Buffer.buffer();
+        AtomicBoolean terminated = new AtomicBoolean();
+        response.exceptionHandler(error -> {
+            if (terminated.compareAndSet(false, true)) {
+                completeRequestFailure(future, error);
+            }
+        });
+        response.handler(chunk -> {
+            if (terminated.get()) return;
+            long nextSize = (long) aggregate.length() + chunk.length();
+            if (nextSize > maximumBytes) {
+                if (terminated.compareAndSet(false, true)) {
+                    response.request().reset();
+                    completeOversizedResponse(future, statusCode, responseHeaders, maximumBytes);
+                }
+                return;
+            }
+            aggregate.appendBuffer(chunk);
+        });
+        response.endHandler(ignored -> {
+            if (!terminated.compareAndSet(false, true)) return;
+            try {
+                byte[] bodyBytes = aggregate.getBytes();
+                String bodyString = new String(bodyBytes, StandardCharsets.UTF_8);
+                Object data = null;
+                String error = null;
+                if (bodyBytes.length > 0) {
+                    if (isTextResponse(contentType)) {
+                        try {
+                            data = OBJECT_MAPPER.readTree(bodyString);
+                        } catch (Exception parseError) {
+                            data = bodyString;
+                        }
+                    } else {
+                        data = bodyBytes;
+                    }
+                    if (!success) {
+                        error = extractErrorFromBody(data);
+                        if (error == null) {
+                            error = "HTTP " + statusCode + " returned a binary response";
+                        }
+                    }
+                }
+                future.complete(RequestResult.builder()
+                        .success(success)
+                        .statusCode(statusCode)
+                        .data(data)
+                        .error(error)
+                        .headers(responseHeaders)
+                        .streaming(false)
+                        .build());
+            } catch (Exception error) {
+                completeResponseFailure(future, error);
+            }
+        });
+    }
+
+    private void completeOversizedResponse(CompletableFuture<RequestResult> future,
+                                           int statusCode,
+                                           Map<String, String> responseHeaders,
+                                           long maximumBytes) {
+        future.complete(RequestResult.builder()
+                .success(false)
+                .statusCode(statusCode)
+                .headers(responseHeaders)
+                .error("Response body exceeds configured limit of " + maximumBytes + " bytes")
+                .build());
     }
 
     private static boolean isTextResponse(String contentType) {
