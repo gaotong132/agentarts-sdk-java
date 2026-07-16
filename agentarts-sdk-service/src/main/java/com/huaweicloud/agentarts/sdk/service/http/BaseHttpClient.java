@@ -354,15 +354,19 @@ public class BaseHttpClient implements AutoCloseable {
             // Serialize body. byte[] is sent as raw bytes (for streaming uploads
             // with a caller-supplied Content-Type, e.g. application/octet-stream);
             // other objects are JSON-serialized.
-            String bodyStr = null;
             byte[] bodyBytes = null;
             if (body != null) {
                 if (body instanceof byte[]) {
                     bodyBytes = (byte[]) body;
                 } else if (body instanceof String) {
-                    bodyStr = (String) body;
+                    bodyBytes = ((String) body).getBytes(StandardCharsets.UTF_8);
                 } else {
-                    bodyStr = OBJECT_MAPPER.writeValueAsString(body);
+                    bodyBytes = OBJECT_MAPPER.writeValueAsBytes(body);
+                }
+                if (bodyBytes.length > config.getMaxRequestBodyBytes()) {
+                    throw new IllegalArgumentException(
+                            "Request body exceeds configured limit of "
+                                    + config.getMaxRequestBodyBytes() + " bytes");
                 }
             }
 
@@ -391,9 +395,7 @@ public class BaseHttpClient implements AutoCloseable {
                     .setTimeout((long) (effectiveTimeout * 1000));
             mergedHeaders.forEach(options::putHeader);
 
-            Buffer requestBody = bodyBytes != null
-                    ? Buffer.buffer(bodyBytes)
-                    : bodyStr != null ? Buffer.buffer(bodyStr) : null;
+            Buffer requestBody = bodyBytes != null ? Buffer.buffer(bodyBytes) : null;
             httpClient.request(options).onComplete(requestAr -> {
                 if (requestAr.failed()) {
                     completeRequestFailure(future, requestAr.cause());

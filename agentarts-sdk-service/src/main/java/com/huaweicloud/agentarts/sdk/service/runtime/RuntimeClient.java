@@ -415,6 +415,7 @@ public class RuntimeClient implements AutoCloseable {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try {
                 byte[] crlf = "\r\n".getBytes(StandardCharsets.UTF_8);
+                long maximumBodyBytes = getDataClient().getConfig().getMaxRequestBodyBytes();
                 int idx = 0;
                 for (Map<String, Object> file : files) {
                     byte[] content = fileContentBytes(file.get("content"));
@@ -423,16 +424,24 @@ public class RuntimeClient implements AutoCloseable {
                     }
                     String filename = (file.get("filename") != null)
                             ? String.valueOf(file.get("filename")) : "file_" + idx;
+                    filename = sanitizeMultipartFilename(filename);
                     String partHead = "--" + boundary + "\r\n"
                             + "Content-Disposition: form-data; name=\"file\"; filename=\""
                             + filename + "\"\r\n"
                             + "Content-Type: application/octet-stream\r\n\r\n";
-                    out.write(partHead.getBytes(StandardCharsets.UTF_8));
+                    byte[] partHeader = partHead.getBytes(StandardCharsets.UTF_8);
+                    ensureMultipartCapacity(out.size(), partHeader.length, content.length,
+                            crlf.length, maximumBodyBytes);
+                    out.write(partHeader);
                     out.write(content);
                     out.write(crlf);
                     idx++;
                 }
-                out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+                byte[] closingBoundary = ("--" + boundary + "--\r\n")
+                        .getBytes(StandardCharsets.UTF_8);
+                ensureMultipartCapacity(out.size(), closingBoundary.length, 0, 0,
+                        maximumBodyBytes);
+                out.write(closingBoundary);
             } catch (java.io.IOException e) {
                 throw new IllegalStateException("Failed to build multipart upload body", e);
             }
@@ -456,6 +465,36 @@ public class RuntimeClient implements AutoCloseable {
             return ((String) content).getBytes(StandardCharsets.UTF_8);
         }
         return null;
+    }
+
+    private static String sanitizeMultipartFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            throw new IllegalArgumentException("Multipart filename must not be blank");
+        }
+        for (int index = 0; index < filename.length(); index++) {
+            char value = filename.charAt(index);
+            if (value == '\r' || value == '\n' || value == '\0' || Character.isISOControl(value)) {
+                throw new IllegalArgumentException("Multipart filename contains control characters");
+            }
+        }
+        return filename.replace("\\", "%5C").replace("\"", "%22");
+    }
+
+    private static void ensureMultipartCapacity(long currentSize, long headerSize,
+                                                long contentSize, long suffixSize,
+                                                long maximumBodyBytes) {
+        long nextSize;
+        try {
+            nextSize = Math.addExact(currentSize,
+                    Math.addExact(headerSize, Math.addExact(contentSize, suffixSize)));
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("Multipart request size overflow", e);
+        }
+        if (nextSize > maximumBodyBytes) {
+            throw new IllegalArgumentException(
+                    "Multipart request exceeds configured limit of "
+                            + maximumBodyBytes + " bytes");
+        }
     }
 
     public Map<String, Object> uploadFiles(String agentName, String sessionId, List<Map<String, Object>> files) {

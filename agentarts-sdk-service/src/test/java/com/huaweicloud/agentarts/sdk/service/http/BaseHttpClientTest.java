@@ -45,6 +45,8 @@ class BaseHttpClientTest {
             assertTrue(config.isVerifySsl());
             assertEquals(RequestConfig.DEFAULT_MAX_RESPONSE_BODY_BYTES,
                     config.getMaxResponseBodyBytes());
+            assertEquals(RequestConfig.DEFAULT_MAX_REQUEST_BODY_BYTES,
+                    config.getMaxRequestBodyBytes());
         }
 
         @Test
@@ -56,6 +58,10 @@ class BaseHttpClientTest {
                     () -> config.setMaxResponseBodyBytes((long) Integer.MAX_VALUE + 1));
             config.setMaxResponseBodyBytes(1024);
             assertEquals(1024, config.getMaxResponseBodyBytes());
+            assertThrows(IllegalArgumentException.class,
+                    () -> config.setMaxRequestBodyBytes(0));
+            config.setMaxRequestBodyBytes(2048);
+            assertEquals(2048, config.getMaxRequestBodyBytes());
         }
 
         @Test
@@ -309,6 +315,33 @@ class BaseHttpClientTest {
                 assertFalse(result.isSuccess());
                 assertEquals(200, result.getStatusCode());
                 assertTrue(result.getError().contains("configured limit of 4 bytes"));
+            } finally {
+                server.stop(0);
+            }
+        }
+
+        @Test
+        void rejectsOversizedRequestBodiesBeforeNetwork() throws Exception {
+            AtomicInteger requests = new AtomicInteger();
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/upload", exchange -> {
+                requests.incrementAndGet();
+                exchange.sendResponseHeaders(204, -1);
+                exchange.close();
+            });
+            server.start();
+
+            RequestConfig config = RequestConfig.builder()
+                    .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
+                    .maxRequestBodyBytes(4)
+                    .build();
+            try (BaseHttpClient client = new BaseHttpClient(config)) {
+                RequestResult result = client.post("/upload", "12345")
+                        .block(Duration.ofSeconds(5));
+                assertNotNull(result);
+                assertFalse(result.isSuccess());
+                assertTrue(result.getError().contains("configured limit of 4 bytes"));
+                assertEquals(0, requests.get());
             } finally {
                 server.stop(0);
             }

@@ -8,11 +8,13 @@ package com.huaweicloud.agentarts.sdk.service.http;
 public class RequestConfig {
 
     public static final long DEFAULT_MAX_RESPONSE_BODY_BYTES = 64L * 1024 * 1024;
+    public static final long DEFAULT_MAX_REQUEST_BODY_BYTES = 64L * 1024 * 1024;
 
     private String baseUrl = "";
     private double timeoutSeconds = 30.0;
     private boolean verifySsl = true;
     private long maxResponseBodyBytes = DEFAULT_MAX_RESPONSE_BODY_BYTES;
+    private long maxRequestBodyBytes = DEFAULT_MAX_REQUEST_BODY_BYTES;
 
     public RequestConfig() {
     }
@@ -62,6 +64,18 @@ public class RequestConfig {
         this.maxResponseBodyBytes = maxResponseBodyBytes;
     }
 
+    public long getMaxRequestBodyBytes() {
+        return maxRequestBodyBytes;
+    }
+
+    public void setMaxRequestBodyBytes(long maxRequestBodyBytes) {
+        if (maxRequestBodyBytes < 1 || maxRequestBodyBytes > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException(
+                    "maxRequestBodyBytes must be between 1 and Integer.MAX_VALUE");
+        }
+        this.maxRequestBodyBytes = maxRequestBodyBytes;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -86,6 +100,11 @@ public class RequestConfig {
 
         public Builder maxResponseBodyBytes(long maximumBytes) {
             config.setMaxResponseBodyBytes(maximumBytes);
+            return this;
+        }
+
+        public Builder maxRequestBodyBytes(long maximumBytes) {
+            config.setMaxRequestBodyBytes(maximumBytes);
             return this;
         }
 

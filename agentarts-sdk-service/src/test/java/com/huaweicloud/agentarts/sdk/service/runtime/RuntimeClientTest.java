@@ -3,6 +3,7 @@ package com.huaweicloud.agentarts.sdk.service.runtime;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
+import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import com.huaweicloud.agentarts.sdk.service.runtime.model.CreateAgentRequest;
 import com.huaweicloud.agentarts.sdk.service.runtime.model.UpdateAgentRequest;
@@ -146,6 +147,38 @@ class RuntimeClientTest {
             assertEquals(List.of("10"), query.getValue().get("limit"));
             verify(controlClient).close();
             verify(dataClient).close();
+        }
+
+        @Test
+        void multipartUploadsRejectHeaderInjectionAndOversizedBodies() {
+            BaseHttpClient controlClient = mock(BaseHttpClient.class);
+            BaseHttpClient dataClient = mock(BaseHttpClient.class);
+            when(dataClient.getConfig()).thenReturn(RequestConfig.builder()
+                    .maxRequestBodyBytes(256)
+                    .build());
+
+            try (RuntimeClient client = new RuntimeClient(
+                    "test-region", true, SignMode.SDK_HMAC_SHA256,
+                    controlClient, dataClient)) {
+                List<Map<String, Object>> injected = List.of(
+                        Map.of("filename", "safe.txt", "content", new byte[] {1}),
+                        Map.of("filename", "bad\r\nX-Injected: yes", "content", new byte[] {2}));
+                assertThrows(IllegalArgumentException.class,
+                        () -> client.uploadFiles("agent", "session", injected,
+                                "/remote", null, null, null,
+                                "token", "https://example.test", null, 30));
+
+                List<Map<String, Object>> oversized = List.of(
+                        Map.of("filename", "one.bin", "content", new byte[200]),
+                        Map.of("filename", "two.bin", "content", new byte[200]));
+                IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                        () -> client.uploadFiles("agent", "session", oversized,
+                                "/remote", null, null, null,
+                                "token", "https://example.test", null, 30));
+                assertTrue(error.getMessage().contains("configured limit"));
+            }
+            verify(dataClient, never()).request(
+                    anyString(), anyString(), any(), any(), any(), anyDouble());
         }
     }
 
