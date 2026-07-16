@@ -239,6 +239,39 @@ class BaseHttpClientTest {
         }
 
         @Test
+        void preservesBinaryResponsesWithoutUtf8Conversion() throws Exception {
+            byte[] payload = new byte[] {0, 1, 2, (byte) 0x80, (byte) 0xff, 10, 13};
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/binary", exchange -> {
+                exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
+                exchange.sendResponseHeaders(200, payload.length);
+                try (OutputStream output = exchange.getResponseBody()) {
+                    output.write(payload);
+                }
+            });
+            server.start();
+
+            RequestConfig config = RequestConfig.builder()
+                    .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
+                    .timeoutSeconds(5)
+                    .build();
+            try (BaseHttpClient client = new BaseHttpClient(config)) {
+                RequestResult result = client.get("/binary").block(Duration.ofSeconds(5));
+                assertNotNull(result);
+                assertTrue(result.isSuccess());
+                assertArrayEquals(payload, result.getDataAsBytes());
+                assertNull(result.getDataAsString());
+
+                byte[] callerCopy = result.getDataAsBytes();
+                callerCopy[0] = 99;
+                assertArrayEquals(payload, result.getDataAsBytes(),
+                        "binary response data must be defensively copied");
+            } finally {
+                server.stop(0);
+            }
+        }
+
+        @Test
         void rejectsBlankAuthTokensAndHeaderNames() {
             RequestConfig config = RequestConfig.builder()
                     .baseUrl("https://example.com")

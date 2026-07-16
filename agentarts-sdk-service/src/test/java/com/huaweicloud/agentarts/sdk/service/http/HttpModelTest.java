@@ -183,6 +183,21 @@ class HttpModelTest {
         }
 
         @Test
+        void binaryDataAccessorReturnsDefensiveCopies() {
+            byte[] source = new byte[] {0, (byte) 0xff, 1};
+            RequestResult result = RequestResult.builder()
+                    .success(true)
+                    .statusCode(200)
+                    .data(source)
+                    .build();
+
+            source[0] = 42;
+            assertArrayEquals(new byte[] {0, (byte) 0xff, 1}, result.getDataAsBytes());
+            assertNull(result.getDataAsString());
+            assertTrue(result.getData() instanceof byte[]);
+        }
+
+        @Test
         void nonStringNonJsonDataAsString() {
             RequestResult result = RequestResult.builder()
                     .success(true)

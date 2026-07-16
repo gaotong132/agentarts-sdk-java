@@ -13,8 +13,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * <p>Result of an HTTP request, with support for streaming responses.</p>
  *
- * <p>For non-streaming responses, {@link #getData()} contains the parsed JSON
- * (as {@link JsonNode}) or the raw response body as a String.</p>
+ * <p>For non-streaming responses, {@link #getData()} contains parsed JSON,
+ * decoded text, or a {@code byte[]} for binary content.</p>
  *
  * <p>For streaming responses (Content-Type: text/event-stream or application/x-ndjson),
  * {@link #isStreaming()} returns true and the response body is available via
@@ -38,7 +38,7 @@ public class RequestResult implements AutoCloseable {
     private RequestResult(Builder builder) {
         this.success = builder.success;
         this.statusCode = builder.statusCode;
-        this.data = builder.data;
+        this.data = builder.data instanceof byte[] bytes ? bytes.clone() : builder.data;
         this.error = builder.error;
         this.headers = builder.headers != null
                 ? Collections.unmodifiableMap(new HashMap<>(builder.headers))
@@ -66,7 +66,7 @@ public class RequestResult implements AutoCloseable {
      * For streaming responses: {@code null}.
      */
     public Object getData() {
-        return data;
+        return data instanceof byte[] bytes ? bytes.clone() : data;
     }
 
     /** Get data as JsonNode, or null if not JSON. */
@@ -79,6 +79,9 @@ public class RequestResult implements AutoCloseable {
 
     /** Get data as String. */
     public String getDataAsString() {
+        if (data instanceof byte[]) {
+            return null;
+        }
         if (data instanceof String) {
             return (String) data;
         }
@@ -86,6 +89,11 @@ public class RequestResult implements AutoCloseable {
             return data.toString();
         }
         return null;
+    }
+
+    /** Get binary response data as a defensive copy, or {@code null} for non-binary data. */
+    public byte[] getDataAsBytes() {
+        return data instanceof byte[] bytes ? bytes.clone() : null;
     }
 
     /** Error message if the request failed. */

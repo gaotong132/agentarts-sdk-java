@@ -413,8 +413,8 @@ public class BaseHttpClient implements AutoCloseable {
                     responseHeaders.put(entry.getKey(), entry.getValue()));
 
             // Check for streaming content type
-            String contentType = response.getHeader("Content-Type");
-            contentType = contentType != null ? contentType.toLowerCase() : "";
+            String responseContentType = response.getHeader("Content-Type");
+            String contentType = responseContentType != null ? responseContentType.toLowerCase() : "";
             boolean isStreaming = contentType.contains(STREAM_SSE) || contentType.contains(STREAM_NDJSON);
 
             if (isStreaming) {
@@ -447,18 +447,26 @@ public class BaseHttpClient implements AutoCloseable {
                     }
                     try {
                         Buffer body = bodyAr.result();
-                        String bodyStr = body != null ? body.toString(StandardCharsets.UTF_8) : "";
+                        byte[] bodyBytes = body != null ? body.getBytes() : new byte[0];
+                        String bodyStr = new String(bodyBytes, StandardCharsets.UTF_8);
                         Object data = null;
                         String error = null;
 
-                        if (!bodyStr.isEmpty()) {
-                            try {
-                                data = OBJECT_MAPPER.readTree(bodyStr);
-                            } catch (Exception e) {
-                                data = bodyStr;
+                        if (bodyBytes.length > 0) {
+                            if (isTextResponse(contentType)) {
+                                try {
+                                    data = OBJECT_MAPPER.readTree(bodyStr);
+                                } catch (Exception e) {
+                                    data = bodyStr;
+                                }
+                            } else {
+                                data = bodyBytes;
                             }
                             if (!success) {
                                 error = extractErrorFromBody(data);
+                                if (error == null) {
+                                    error = "HTTP " + statusCode + " returned a binary response";
+                                }
                             }
                         }
 
@@ -478,6 +486,16 @@ public class BaseHttpClient implements AutoCloseable {
         } catch (Exception e) {
             completeResponseFailure(future, e);
         }
+    }
+
+    private static boolean isTextResponse(String contentType) {
+        if (contentType == null || contentType.isBlank()) return true;
+        return contentType.startsWith("text/")
+                || contentType.contains("json")
+                || contentType.contains("xml")
+                || contentType.contains("yaml")
+                || contentType.contains("javascript")
+                || contentType.contains("x-www-form-urlencoded");
     }
 
     private Flux<byte[]> createByteStream(HttpClientResponse response, Context responseContext,
