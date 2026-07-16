@@ -380,10 +380,11 @@ class RuntimeModelTest {
         }
 
         @Test
-        void toStringContainsCommand() {
+        void toStringRedactsCommand() {
             ExecCommandRequest req = new ExecCommandRequest()
-                    .withCommand(List.of("ls", "-la"));
-            assertTrue(req.toString().contains("ls"));
+                    .withCommand(List.of("command", "unit-sensitive-marker"));
+            assertFalse(req.toString().contains("unit-sensitive-marker"));
+            assertTrue(req.toString().contains("arguments=2"));
         }
     }
 
@@ -443,8 +444,12 @@ class RuntimeModelTest {
 
         @Test
         void toStringContainsPath() {
-            UploadFilesRequest req = new UploadFilesRequest().withPath("/test/path");
+            UploadFilesRequest req = new UploadFilesRequest()
+                    .withPath("/test/path")
+                    .withFiles(List.of(Map.of("content", "unit-sensitive-marker")));
             assertTrue(req.toString().contains("/test/path"));
+            assertFalse(req.toString().contains("unit-sensitive-marker"));
+            assertTrue(req.toString().contains("count=1"));
         }
     }
 

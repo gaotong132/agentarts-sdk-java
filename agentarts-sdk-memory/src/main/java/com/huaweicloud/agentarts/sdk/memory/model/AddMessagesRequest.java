@@ -51,9 +51,10 @@ public class AddMessagesRequest {
     @Override
     public String toString() {
         return "AddMessagesRequest{"
-                + "messages=" + messages
+                + "messages=" + (messages == null
+                ? "null" : "[REDACTED, count=" + messages.size() + "]")
                 + ", timestamp=" + timestamp
-                + ", idempotencyKey='" + idempotencyKey + '\''
+                + ", idempotencyKey=" + (idempotencyKey == null ? "null" : "[REDACTED]")
                 + ", isForceExtract=" + isForceExtract
                 + '}';
     }

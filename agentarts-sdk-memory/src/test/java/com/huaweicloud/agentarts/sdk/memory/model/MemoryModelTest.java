@@ -574,10 +574,13 @@ class MemoryModelTest {
         }
 
         @Test
-        void toStringContainsFields() {
+        void toStringRedactsMessageAndIdempotencyValues() {
             AddMessagesRequest req = new AddMessagesRequest()
-                    .withIdempotencyKey("key-123");
-            assertTrue(req.toString().contains("key-123"));
+                    .withMessages(List.of(Map.of("content", "unit-sensitive-marker")))
+                    .withIdempotencyKey("unit-sensitive-marker");
+            assertFalse(req.toString().contains("unit-sensitive-marker"));
+            assertTrue(req.toString().contains("count=1"));
+            assertTrue(req.toString().contains("[REDACTED]"));
         }
     }
 

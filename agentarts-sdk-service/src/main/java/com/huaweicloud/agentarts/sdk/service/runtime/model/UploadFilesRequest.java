@@ -113,7 +113,7 @@ public class UploadFilesRequest {
     @Override
     public String toString() {
         return "UploadFilesRequest{"
-                + "files=" + files
+                + "files=" + (files == null ? "null" : "[REDACTED, count=" + files.size() + "]")
                 + ", path='" + path + "'"
                 + ", fileUserId=" + fileUserId
                 + ", fileGroupId=" + fileGroupId

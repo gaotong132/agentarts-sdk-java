@@ -59,6 +59,8 @@ public class ExecCommandRequest {
 
     @Override
     public String toString() {
-        return "ExecCommandRequest{command=" + command + ", chunked=" + chunked + "}";
+        return "ExecCommandRequest{command="
+                + (command == null ? "null" : "[REDACTED, arguments=" + command.size() + "]")
+                + ", chunked=" + chunked + "}";
     }
 }
