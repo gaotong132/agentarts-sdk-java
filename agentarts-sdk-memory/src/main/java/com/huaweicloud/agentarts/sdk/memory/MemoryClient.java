@@ -164,8 +164,9 @@ public class MemoryClient implements AutoCloseable {
 
     /** List memory spaces with pagination (Control Plane). */
     public SpaceListResponse listSpaces(int limit, int offset) {
-        String url = "/spaces?limit=" + limit + "&offset=" + offset;
-        RequestResult result = getControlPlaneClient().get(url).block();
+        Map<String, List<String>> query = paginationQuery(limit, offset);
+        RequestResult result = getControlPlaneClient()
+                .request("GET", "/spaces", null, null, query).block();
         return parseResult(result, SpaceListResponse.class);
     }
 
@@ -299,11 +300,12 @@ public class MemoryClient implements AutoCloseable {
     public MessageListResponse listMessages(String spaceId, String sessionId, int limit, int offset) {
         String url;
         if (sessionId != null) {
-            url = "/spaces/" + spaceId + "/sessions/" + sessionId + "/messages?limit=" + limit + "&offset=" + offset;
+            url = "/spaces/" + spaceId + "/sessions/" + sessionId + "/messages";
         } else {
-            url = "/spaces/" + spaceId + "/messages?limit=" + limit + "&offset=" + offset;
+            url = "/spaces/" + spaceId + "/messages";
         }
-        RequestResult result = getDataPlaneClient().get(url).block();
+        RequestResult result = getDataPlaneClient()
+                .request("GET", url, null, null, paginationQuery(limit, offset)).block();
         return parseResult(result, MessageListResponse.class);
     }
 
@@ -331,14 +333,16 @@ public class MemoryClient implements AutoCloseable {
 
     /** List memories with pagination and optional filters (Data Plane). */
     public MemoryListResponse listMemories(String spaceId, int limit, int offset, MemoryListFilter filters) {
-        StringBuilder url = new StringBuilder("/spaces/" + spaceId + "/memories?limit=" + limit + "&offset=" + offset);
+        Map<String, List<String>> query = paginationQuery(limit, offset);
         if (filters != null) {
             Map<String, Object> f = filters.toDict();
             for (Map.Entry<String, Object> e : f.entrySet()) {
-                url.append("&").append(e.getKey()).append("=").append(e.getValue());
+                query.put(e.getKey(), List.of(String.valueOf(e.getValue())));
             }
         }
-        RequestResult result = getDataPlaneClient().get(url.toString()).block();
+        String url = "/spaces/" + spaceId + "/memories";
+        RequestResult result = getDataPlaneClient()
+                .request("GET", url, null, null, query).block();
         return parseResult(result, MemoryListResponse.class);
     }
 
@@ -363,6 +367,13 @@ public class MemoryClient implements AutoCloseable {
     // ========================
     // Helpers
     // ========================
+
+    private static Map<String, List<String>> paginationQuery(int limit, int offset) {
+        Map<String, List<String>> query = new LinkedHashMap<>();
+        query.put("limit", List.of(String.valueOf(limit)));
+        query.put("offset", List.of(String.valueOf(offset)));
+        return query;
+    }
 
     private <T> T parseResult(RequestResult result, Class<T> type) {
         if (result == null || !result.isSuccess()) {

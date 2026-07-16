@@ -7,7 +7,11 @@ import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -28,7 +32,7 @@ class MemoryClientTest {
 
     @Test
     void executesControlPlaneOperationsAndParsesResponses() throws Exception {
-        when(controlPlane.get("/spaces?limit=20&offset=0"))
+        when(controlPlane.request(eq("GET"), eq("/spaces"), isNull(), isNull(), anyMap()))
                 .thenReturn(Mono.just(success("{\"spaces\":[],\"total\":0,\"size\":20,\"offset\":0}")));
         when(controlPlane.post(eq("/space-keys"), isNull(), any()))
                 .thenReturn(Mono.just(success("{\"id\":\"key-id\",\"api_key\":\"key\"}")));
@@ -47,15 +51,24 @@ class MemoryClientTest {
     void executesDataPlaneOperationsAndEncodesFilters() throws Exception {
         when(dataPlane.post(eq("/spaces/space/sessions"), isNull(), any()))
                 .thenReturn(Mono.just(success("{\"id\":\"session\"}")));
-        when(dataPlane.get("/spaces/space/memories?limit=5&offset=2&actor_id=actor"))
+        when(dataPlane.request(eq("GET"), eq("/spaces/space/memories"),
+                isNull(), isNull(), anyMap()))
                 .thenReturn(Mono.just(success("{\"memories\":[],\"total\":0}")));
 
         assertEquals("session",
                 client.createMemorySession("space", "session", "actor", "assistant").getId());
 
         MemoryListFilter filter = new MemoryListFilter();
-        filter.setActorId("actor");
+        filter.setActorId("actor&limit=999");
         assertNotNull(client.listMemories("space", 5, 2, filter));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, List<String>>> query = ArgumentCaptor.forClass(Map.class);
+        verify(dataPlane).request(eq("GET"), eq("/spaces/space/memories"),
+                isNull(), isNull(), query.capture());
+        assertEquals(List.of("actor&limit=999"), query.getValue().get("actor_id"));
+        assertEquals(List.of("5"), query.getValue().get("limit"));
+        assertEquals(List.of("2"), query.getValue().get("offset"));
     }
 
     @Test
