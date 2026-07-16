@@ -127,18 +127,63 @@ public class MemoryClient implements AutoCloseable {
      * @return created space info
      */
     public SpaceInfo createSpace(String name, int messageTtlHours, String description) {
+        return createSpace(
+                name,
+                messageTtlHours,
+                description,
+                null,
+                null,
+                null,
+                null,
+                true,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    /** Create a memory space with every configuration option exposed by the Python SDK. */
+    public SpaceInfo createSpace(
+            String name,
+            int messageTtlHours,
+            String description,
+            List<Map<String, String>> tags,
+            Integer memoryExtractIdleSeconds,
+            Integer memoryExtractMaxTokens,
+            Integer memoryExtractMaxMessages,
+            boolean publicAccessEnable,
+            String privateVpcId,
+            String privateSubnetId,
+            List<String> memoryStrategiesBuiltin,
+            List<Map<String, Object>> memoryStrategiesCustomized) {
         // Create API key first — space creation requires api_key_id
         ApiKeyInfo keyResult = createApiKey();
         String apiKeyId = keyResult != null ? keyResult.getId() : null;
         String apiKeyValue = keyResult != null ? keyResult.getApiKey() : null;
+
+        Map<String, Object> networkAccess = new LinkedHashMap<>();
+        networkAccess.put("public_access_enable", publicAccessEnable);
+        if (privateVpcId != null && privateSubnetId != null) {
+            networkAccess.put(
+                    "private_access_config",
+                    Map.of(
+                            "enable", true,
+                            "vpc_id", privateVpcId,
+                            "subnet_id", privateSubnetId));
+        }
 
         CreateSpaceRequest req = new CreateSpaceRequest()
                 .withName(name)
                 .withMessageTtlHours(messageTtlHours)
                 .withDescription(description)
                 .withApiKeyId(apiKeyId)
-                .withNetworkAccess(Map.of("public_access_enable", true))
-                .withMemoryStrategiesBuiltin(List.of("semantic", "user_preference", "episodic"));
+                .withTags(tags)
+                .withNetworkAccess(networkAccess)
+                .withMemoryExtractIdleSeconds(memoryExtractIdleSeconds)
+                .withMemoryExtractMaxTokens(memoryExtractMaxTokens)
+                .withMemoryExtractMaxMessages(memoryExtractMaxMessages)
+                .withMemoryStrategiesBuiltin(memoryStrategiesBuiltin)
+                .withMemoryStrategiesCustomized(memoryStrategiesCustomized);
 
         RequestResult result = getControlPlaneClient()
                 .post("/spaces", null, req).block();
@@ -146,6 +191,9 @@ public class MemoryClient implements AutoCloseable {
         // Inject the api_key into the response (server doesn't return it)
         if (space != null && apiKeyValue != null) {
             space.setApiKey(apiKeyValue);
+        }
+        if (space != null && apiKeyId != null) {
+            space.setApiKeyId(apiKeyId);
         }
         return space;
     }
@@ -177,10 +225,41 @@ public class MemoryClient implements AutoCloseable {
 
     /** Update a memory space (Control Plane). Null fields are not updated. */
     public SpaceInfo updateSpace(String spaceId, String name, String description, Integer messageTtlHours) {
+        return updateSpace(
+                spaceId,
+                name,
+                description,
+                messageTtlHours,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    /** Update every mutable space field supported by the Python SDK. */
+    public SpaceInfo updateSpace(
+            String spaceId,
+            String name,
+            String description,
+            Integer messageTtlHours,
+            Boolean memoryExtractEnabled,
+            Integer memoryExtractIdleSeconds,
+            Integer memoryExtractMaxTokens,
+            Integer memoryExtractMaxMessages,
+            List<Map<String, String>> tags,
+            List<String> memoryStrategiesBuiltin) {
         UpdateSpaceRequest req = new UpdateSpaceRequest()
                 .withName(name)
                 .withDescription(description)
-                .withMessageTtlHours(messageTtlHours);
+                .withMessageTtlHours(messageTtlHours)
+                .withMemoryExtractEnabled(memoryExtractEnabled)
+                .withMemoryExtractIdleSeconds(memoryExtractIdleSeconds)
+                .withMemoryExtractMaxTokens(memoryExtractMaxTokens)
+                .withMemoryExtractMaxMessages(memoryExtractMaxMessages)
+                .withTags(tags)
+                .withMemoryStrategiesBuiltin(memoryStrategiesBuiltin);
 
         RequestResult result = getControlPlaneClient()
                 .put("/spaces/" + spaceId, null, req).block();
@@ -213,10 +292,21 @@ public class MemoryClient implements AutoCloseable {
      * @return created session info
      */
     public SessionInfo createMemorySession(String spaceId, String id, String actorId, String assistantId) {
+        return createMemorySession(spaceId, id, actorId, assistantId, null);
+    }
+
+    /** Create a memory session with optional metadata (Data Plane, API Key auth). */
+    public SessionInfo createMemorySession(
+            String spaceId,
+            String id,
+            String actorId,
+            String assistantId,
+            Map<String, Object> meta) {
         CreateMemorySessionRequest req = new CreateMemorySessionRequest()
                 .withId(id)
                 .withActorId(actorId)
-                .withAssistantId(assistantId);
+                .withAssistantId(assistantId)
+                .withMeta(meta);
 
         RequestResult result = getDataPlaneClient()
                 .post("/spaces/" + spaceId + "/sessions", null, req).block();
@@ -428,10 +518,20 @@ public class MemoryClient implements AutoCloseable {
         return Mono.fromCallable(callable).subscribeOn(Schedulers.boundedElastic());
     }
 
-    /** Async variant of {@link #createMemorySession(String, String, String, String)}. */
+    /** Async variant of {@link #createMemorySession(String, String, String, String, Map)}. */
+    public Mono<SessionInfo> createMemorySessionAsync(
+            String spaceId,
+            String id,
+            String actorId,
+            String assistantId,
+            Map<String, Object> meta) {
+        return async(() -> createMemorySession(spaceId, id, actorId, assistantId, meta));
+    }
+
+    /** Async variant without session metadata. */
     public Mono<SessionInfo> createMemorySessionAsync(String spaceId, String id,
                                                        String actorId, String assistantId) {
-        return async(() -> createMemorySession(spaceId, id, actorId, assistantId));
+        return createMemorySessionAsync(spaceId, id, actorId, assistantId, null);
     }
 
     /** Async variant of {@link #addMessages(String, String, List, Long, String, boolean)}. */
