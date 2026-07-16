@@ -1,0 +1,69 @@
+name: Cloud read-only E2E
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 20 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-readonly-e2e
+  cancel-in-progress: false
+
+jobs:
+  verify-authentication:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HUAWEICLOUD_SDK_AK: ${{ secrets.HUAWEICLOUD_SDK_AK }}
+      HUAWEICLOUD_SDK_SK: ${{ secrets.HUAWEICLOUD_SDK_SK }}
+      HUAWEICLOUD_SDK_REGION: ${{ vars.HUAWEICLOUD_SDK_REGION || 'cn-southwest-2' }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Require cloud credentials
+        shell: bash
+        run: |
+          test -n "$HUAWEICLOUD_SDK_AK" || { echo 'Missing HUAWEICLOUD_SDK_AK secret'; exit 1; }
+          test -n "$HUAWEICLOUD_SDK_SK" || { echo 'Missing HUAWEICLOUD_SDK_SK secret'; exit 1; }
+
+      - name: Run read-only authentication probes
+        run: >-
+          mvn -B -ntp -pl agentarts-sdk-tests -am
+          -Dtest=IdentityReadonlyTest,ReadonlyListsTest
+          -Dsurefire.failIfNoSpecifiedTests=false test
+
+      - name: Reject skipped or empty authentication runs
+        shell: python
+        run: |
+          import pathlib
+          import xml.etree.ElementTree as ET
+
+          reports = pathlib.Path('agentarts-sdk-tests/target/surefire-reports')
+          classes = ('IdentityReadonlyTest', 'ReadonlyListsTest')
+          suites = [
+              ET.parse(reports / f'TEST-com.huaweicloud.agentarts.sdk.tests.e2e.{name}.xml').getroot()
+              for name in classes
+          ]
+          total = sum(int(suite.attrib['tests']) for suite in suites)
+          skipped = sum(int(suite.attrib['skipped']) for suite in suites)
+          failures = sum(int(suite.attrib['failures']) for suite in suites)
+          errors = sum(int(suite.attrib['errors']) for suite in suites)
+          executed = total - skipped
+
+          print(f'Authentication probes: {executed} executed, {skipped} skipped')
+          if failures or errors or executed < 8:
+              raise SystemExit('Authentication verification did not execute all required read-only probes')
