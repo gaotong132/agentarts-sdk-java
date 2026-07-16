@@ -74,6 +74,8 @@
         <!-- Testing -->
         <junit-bom.version>6.0.2</junit-bom.version>
         <mockito-bom.version>5.23.0</mockito-bom.version>
+        <test.timeout.default>30 s</test.timeout.default>
+        <test.fork.timeout.seconds>180</test.fork.timeout.seconds>
 
         <!-- Plugin versions -->
         <maven-compiler-plugin.version>3.14.0</maven-compiler-plugin.version>
@@ -337,6 +339,13 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
+                    <configuration>
+                        <forkedProcessTimeoutInSeconds>${test.fork.timeout.seconds}</forkedProcessTimeoutInSeconds>
+                        <systemPropertyVariables>
+                            <junit.jupiter.execution.timeout.default>${test.timeout.default}</junit.jupiter.execution.timeout.default>
+                            <junit.jupiter.execution.timeout.threaddump.enabled>true</junit.jupiter.execution.timeout.threaddump.enabled>
+                        </systemPropertyVariables>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>

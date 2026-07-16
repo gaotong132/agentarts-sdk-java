@@ -15,7 +15,7 @@ concurrency:
 jobs:
   verify-authentication:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       HUAWEICLOUD_SDK_AK: ${{ secrets.HUAWEICLOUD_SDK_AK }}
       HUAWEICLOUD_SDK_SK: ${{ secrets.HUAWEICLOUD_SDK_SK }}
@@ -45,6 +45,8 @@ jobs:
           mvn -B -ntp -pl agentarts-sdk-tests -am
           -Dtest=IdentityReadonlyTest,ReadonlyListsTest
           -Dsurefire.failIfNoSpecifiedTests=false test
+          -Dtest.timeout.default=120s
+          -Dtest.fork.timeout.seconds=600
 
       - name: Reject skipped or empty authentication runs
         shell: python

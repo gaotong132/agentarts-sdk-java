@@ -41,7 +41,7 @@ jobs:
   verify:
     name: ${{ matrix.os }} / Java ${{ matrix.java }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
