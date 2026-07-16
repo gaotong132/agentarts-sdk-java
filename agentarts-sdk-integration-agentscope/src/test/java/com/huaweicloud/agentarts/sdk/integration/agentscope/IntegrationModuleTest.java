@@ -16,12 +16,14 @@ import io.agentscope.core.state.State;
 import io.agentscope.core.tool.AgentTool;
 import io.agentscope.core.tool.ToolCallParam;
 import com.huaweicloud.agentarts.sdk.runtime.context.RequestContext;
+import com.huaweicloud.agentarts.sdk.tools.CodeInterpreterClient;
 import org.junit.jupiter.api.*;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 /**
  * Tests for agentscope integration: interface contracts, message conversion, runtime bridge.
@@ -185,20 +187,20 @@ class IntegrationModuleTest {
 
         @Test
         void hasCorrectName() {
-            MCPGatewayTool tool = new MCPGatewayTool(null);
+            MCPGatewayTool tool = new MCPGatewayTool(mock(com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient.class));
             assertEquals("mcp_gateway_call", tool.getName());
         }
 
         @Test
         void hasDescription() {
-            MCPGatewayTool tool = new MCPGatewayTool(null);
+            MCPGatewayTool tool = new MCPGatewayTool(mock(com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient.class));
             assertNotNull(tool.getDescription());
             assertFalse(tool.getDescription().isEmpty());
         }
 
         @Test
         void parametersSchemaIsValid() {
-            MCPGatewayTool tool = new MCPGatewayTool(null);
+            MCPGatewayTool tool = new MCPGatewayTool(mock(com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient.class));
             Map<String, Object> params = tool.getParameters();
             assertEquals("object", params.get("type"));
             assertNotNull(params.get("properties"));
@@ -213,13 +215,13 @@ class IntegrationModuleTest {
 
         @Test
         void getStrictReturnsNull() {
-            MCPGatewayTool tool = new MCPGatewayTool(null);
+            MCPGatewayTool tool = new MCPGatewayTool(mock(com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient.class));
             assertNull(tool.getStrict());
         }
 
         @Test
         void getOutputSchemaReturnsNull() {
-            MCPGatewayTool tool = new MCPGatewayTool(null);
+            MCPGatewayTool tool = new MCPGatewayTool(mock(com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient.class));
             assertNull(tool.getOutputSchema());
         }
     }
@@ -239,26 +241,62 @@ class IntegrationModuleTest {
 
         @Test
         void hasCorrectName() {
-            CodeInterpreterTool tool = new CodeInterpreterTool(null);
+            CodeInterpreterTool tool = new CodeInterpreterTool(mock(CodeInterpreterClient.class));
             assertEquals("code_interpreter", tool.getName());
         }
 
         @Test
         void hasDescription() {
-            CodeInterpreterTool tool = new CodeInterpreterTool(null);
+            CodeInterpreterTool tool = new CodeInterpreterTool(mock(CodeInterpreterClient.class));
             assertNotNull(tool.getDescription());
             assertTrue(tool.getDescription().contains("code"));
         }
 
         @Test
         void parametersSchemaRequiresCode() {
-            CodeInterpreterTool tool = new CodeInterpreterTool(null);
+            CodeInterpreterTool tool = new CodeInterpreterTool(mock(CodeInterpreterClient.class));
             Map<String, Object> params = tool.getParameters();
             assertEquals("object", params.get("type"));
 
             @SuppressWarnings("unchecked")
             List<String> required = (List<String>) params.get("required");
             assertTrue(required.contains("code"));
+        }
+
+        @Test
+        void rejectsInvalidInputWithoutCallingService() {
+            CodeInterpreterClient interpreter = mock(CodeInterpreterClient.class);
+            CodeInterpreterTool tool = new CodeInterpreterTool(interpreter);
+
+            ToolResultBlock result = tool.callAsync(ToolCallParam.builder()
+                    .input(Map.of("code", 42))
+                    .build()).block();
+
+            assertNotNull(result);
+            assertEquals(io.agentscope.core.message.ToolResultState.ERROR, result.getState());
+            verifyNoInteractions(interpreter);
+        }
+
+        @Test
+        void executesCodeAndSerializesResultAsJson() {
+            CodeInterpreterClient interpreter = mock(CodeInterpreterClient.class);
+            when(interpreter.executeCode("print('ok')", "python", false))
+                    .thenReturn(Map.of("stdout", "ok"));
+            CodeInterpreterTool tool = new CodeInterpreterTool(interpreter);
+
+            ToolResultBlock result = tool.callAsync(ToolCallParam.builder()
+                    .input(Map.of("code", "print('ok')"))
+                    .build()).block();
+
+            assertNotNull(result);
+            assertEquals(io.agentscope.core.message.ToolResultState.SUCCESS, result.getState());
+            assertEquals("{\"stdout\":\"ok\"}",
+                    ((TextBlock) result.getOutput().get(0)).getText());
+        }
+
+        @Test
+        void rejectsNullClient() {
+            assertThrows(NullPointerException.class, () -> new CodeInterpreterTool(null));
         }
     }
 

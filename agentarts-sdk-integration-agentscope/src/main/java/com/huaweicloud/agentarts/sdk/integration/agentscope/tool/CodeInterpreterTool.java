@@ -1,14 +1,18 @@
 package com.huaweicloud.agentarts.sdk.integration.agentscope.tool;
 
+import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.tools.CodeInterpreterClient;
 import io.agentscope.core.message.ToolResultBlock;
+import io.agentscope.core.message.ToolResultState;
 import io.agentscope.core.tool.AgentTool;
 import io.agentscope.core.tool.ToolCallParam;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * AgentTool implementation wrapping Code Interpreter operations.
@@ -29,7 +33,7 @@ public class CodeInterpreterTool implements AgentTool {
     private final CodeInterpreterClient interpreterClient;
 
     public CodeInterpreterTool(CodeInterpreterClient interpreterClient) {
-        this.interpreterClient = interpreterClient;
+        this.interpreterClient = Objects.requireNonNull(interpreterClient, "interpreterClient");
     }
 
     @Override
@@ -69,21 +73,32 @@ public class CodeInterpreterTool implements AgentTool {
     @Override
     public Mono<ToolResultBlock> callAsync(ToolCallParam param) {
         return Mono.fromCallable(() -> {
+            if (param == null || param.getInput() == null) {
+                return error("Tool input is required");
+            }
             Map<String, Object> input = param.getInput();
-            String code = (String) input.get("code");
-            String language = (String) input.getOrDefault("language", "python");
+            Object codeValue = input.get("code");
+            Object languageValue = input.getOrDefault("language", "python");
 
-            if (code == null || code.isEmpty()) {
-                return ToolResultBlock.error("Code is required");
+            if (!(codeValue instanceof String) || ((String) codeValue).isBlank()) {
+                return error("Code is required");
+            }
+            if (!(languageValue instanceof String) || ((String) languageValue).isBlank()) {
+                return error("Language must be a non-blank string");
             }
 
             try {
-                Map<String, Object> result = interpreterClient.executeCode(code, language, false);
-                String output = result != null ? result.toString() : "No output";
-                return ToolResultBlock.text(output);
+                Map<String, Object> result = interpreterClient.executeCode(
+                        (String) codeValue, (String) languageValue, false);
+                String output = result != null ? JsonUtils.toJson(result) : "No output";
+                return ToolResultBlock.text(output).withState(ToolResultState.SUCCESS);
             } catch (Exception e) {
-                return ToolResultBlock.error("Code execution failed: " + e.getMessage());
+                return error("Code execution failed");
             }
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private static ToolResultBlock error(String message) {
+        return ToolResultBlock.error(message).withState(ToolResultState.ERROR);
     }
 }
