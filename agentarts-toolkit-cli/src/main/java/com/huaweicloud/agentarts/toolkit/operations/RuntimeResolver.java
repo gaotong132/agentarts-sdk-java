@@ -23,6 +23,13 @@ public final class RuntimeResolver {
      */
     public static RuntimeClient resolve(String agentName, String regionHint,
                                          boolean verifySsl, String bearerToken) {
+        return resolve(agentName, regionHint, verifySsl, bearerToken, null);
+    }
+
+    /** Resolve a runtime client, preferring an explicitly supplied data endpoint. */
+    public static RuntimeClient resolve(String agentName, String regionHint,
+                                         boolean verifySsl, String bearerToken,
+                                         String dataEndpointHint) {
         AgentArtsConfigList config = loadConfigIfExists();
         String key = JsonUtils.isNotBlank(agentName) ? agentName : config.getDefaultAgent();
         AgentArtsConfig agentConfig = key != null ? config.getAgent(key) : null;
@@ -42,7 +49,8 @@ public final class RuntimeResolver {
                     "Bearer token is required for non-IAM or unknown authentication");
         }
 
-        String dataEndpoint = Constants.getRuntimeDataPlaneEndpoint();
+        String dataEndpoint = JsonUtils.isNotBlank(dataEndpointHint)
+                ? dataEndpointHint : Constants.getRuntimeDataPlaneEndpoint();
         if (!JsonUtils.isNotBlank(dataEndpoint)) {
             dataEndpoint = discoverAccessEndpoint(agentName, key, agentId, region, verifySsl);
         }

@@ -11,6 +11,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -87,6 +89,61 @@ public final class CliSupport {
         }
         String environmentToken = System.getenv("BEARER_TOKEN");
         return environmentToken == null || environmentToken.isBlank() ? null : environmentToken;
+    }
+
+    /** Split a command string while preserving quoted arguments and safe backslash escapes. */
+    public static List<String> parseCommandArguments(String command) {
+        if (command == null || command.isBlank()) {
+            fail("Command cannot be empty");
+        }
+        List<String> arguments = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean singleQuoted = false;
+        boolean doubleQuoted = false;
+        boolean tokenStarted = false;
+        for (int index = 0; index < command.length(); index++) {
+            char character = command.charAt(index);
+            if (character == '\'' && !doubleQuoted) {
+                singleQuoted = !singleQuoted;
+                tokenStarted = true;
+            } else if (character == '"' && !singleQuoted) {
+                doubleQuoted = !doubleQuoted;
+                tokenStarted = true;
+            } else if (character == '\\' && !singleQuoted) {
+                if (index + 1 < command.length()) {
+                    char next = command.charAt(index + 1);
+                    if (Character.isWhitespace(next) || next == '\\' || next == '\'' || next == '"') {
+                        current.append(next);
+                        tokenStarted = true;
+                        index++;
+                    } else {
+                        current.append(character);
+                        tokenStarted = true;
+                    }
+                } else {
+                    fail("Command cannot end with an escape character");
+                }
+            } else if (Character.isWhitespace(character) && !singleQuoted && !doubleQuoted) {
+                if (tokenStarted) {
+                    arguments.add(current.toString());
+                    current.setLength(0);
+                    tokenStarted = false;
+                }
+            } else {
+                current.append(character);
+                tokenStarted = true;
+            }
+        }
+        if (singleQuoted || doubleQuoted) {
+            fail("Command contains an unclosed quote");
+        }
+        if (tokenStarted) {
+            arguments.add(current.toString());
+        }
+        if (arguments.isEmpty()) {
+            fail("Command cannot be empty");
+        }
+        return arguments;
     }
 
     /**

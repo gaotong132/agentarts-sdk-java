@@ -11,7 +11,6 @@ import picocli.CommandLine.Parameters;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,14 +80,12 @@ public class RuntimeCommand implements Runnable {
         @Override
         public void run() {
             String resolvedBearerToken = CliSupport.resolveBearerToken(bearerToken);
-            // Split the command string into a argv list. The reference CLI uses shlex.split;
-            // a whitespace split is a sufficient approximation for the common cases.
-            List<String> commandArray = new ArrayList<>(Arrays.asList(command.trim().split("\\s+")));
-            commandArray.removeIf(String::isEmpty);
-            if (commandArray.isEmpty()) {
-                CliSupport.fail("Command cannot be empty");
+            List<String> commandArray = CliSupport.parseCommandArguments(command);
+            if (timeout < 1 || timeout > 300) {
+                CliSupport.fail("timeout must be between 1 and 300 seconds");
             }
-            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, resolvedBearerToken)) {
+            try (RuntimeClient client = RuntimeResolver.resolve(
+                    agentName, region, !skipSsl, resolvedBearerToken, endpoint)) {
                 if (JsonUtils.isNotBlank(resolvedBearerToken)) {
                     client.setAuthToken(resolvedBearerToken);
                 }
@@ -152,7 +149,8 @@ public class RuntimeCommand implements Runnable {
                     CliSupport.fail("Failed to read file " + f + ": " + e.getMessage());
                 }
             }
-            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, resolvedBearerToken)) {
+            try (RuntimeClient client = RuntimeResolver.resolve(
+                    agentName, region, !skipSsl, resolvedBearerToken, endpoint)) {
                 if (JsonUtils.isNotBlank(resolvedBearerToken)) {
                     client.setAuthToken(resolvedBearerToken);
                 }
@@ -208,7 +206,8 @@ public class RuntimeCommand implements Runnable {
             if (remotePath == null || remotePath.isEmpty()) {
                 CliSupport.fail("Path is required (--path)");
             }
-            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, resolvedBearerToken)) {
+            try (RuntimeClient client = RuntimeResolver.resolve(
+                    agentName, region, !skipSsl, resolvedBearerToken, endpoint)) {
                 if (JsonUtils.isNotBlank(resolvedBearerToken)) {
                     client.setAuthToken(resolvedBearerToken);
                 }
@@ -282,7 +281,8 @@ public class RuntimeCommand implements Runnable {
         @Override
         public void run() {
             String resolvedBearerToken = CliSupport.resolveBearerToken(bearerToken);
-            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, resolvedBearerToken)) {
+            try (RuntimeClient client = RuntimeResolver.resolve(
+                    agentName, region, !skipSsl, resolvedBearerToken, endpoint)) {
                 if (JsonUtils.isNotBlank(resolvedBearerToken)) {
                     client.setAuthToken(resolvedBearerToken);
                 }
@@ -323,7 +323,8 @@ public class RuntimeCommand implements Runnable {
         @Override
         public void run() {
             String resolvedBearerToken = CliSupport.resolveBearerToken(bearerToken);
-            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, resolvedBearerToken)) {
+            try (RuntimeClient client = RuntimeResolver.resolve(
+                    agentName, region, !skipSsl, resolvedBearerToken, endpoint)) {
                 if (JsonUtils.isNotBlank(resolvedBearerToken)) {
                     client.setAuthToken(resolvedBearerToken);
                 }

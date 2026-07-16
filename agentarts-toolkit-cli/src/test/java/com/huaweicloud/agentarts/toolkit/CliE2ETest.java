@@ -1,5 +1,6 @@
 package com.huaweicloud.agentarts.toolkit;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.huaweicloud.agentarts.toolkit.commands.CliSupport;
 import com.huaweicloud.agentarts.toolkit.operations.ConfigOperation;
 import com.huaweicloud.agentarts.toolkit.operations.InitOperation;
@@ -127,6 +128,36 @@ class CliE2ETest {
                     "invoke", "{}", "--mode", "local", "--timeout", "0"));
             assertNotEquals(0, cli.execute(
                     "invoke", "{}", "--mode", "local", "--port", "65536"));
+        }
+
+        @Test
+        void runtimeExecPreservesQuotedArguments() throws Exception {
+            AtomicReference<String> requestBody = new AtomicReference<>();
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/runtimes/unit-agent/commands", exchange -> {
+                requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+                byte[] response = "{}".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, response.length);
+                exchange.getResponseBody().write(response);
+                exchange.close();
+            });
+            server.start();
+
+            try {
+                String endpoint = "http://127.0.0.1:" + server.getAddress().getPort();
+                int exit = CliSupport.withCleanExit(new CommandLine(new AgentArtsCli())).execute(
+                        "runtime", "exec-command", "printf 'hello world'",
+                        "--agent", "unit-agent", "--endpoint", endpoint,
+                        "--bearer-token", "unit-token");
+                assertEquals(0, exit);
+                JsonNode body = new com.fasterxml.jackson.databind.ObjectMapper()
+                        .readTree(requestBody.get());
+                assertEquals("printf", body.path("command").get(0).asText());
+                assertEquals("hello world", body.path("command").get(1).asText());
+            } finally {
+                server.stop(0);
+            }
         }
     }
 

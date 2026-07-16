@@ -360,6 +360,16 @@ class CliModuleTest {
                     CliSupport.resolveBearerToken("unit-explicit-token"),
                     "an explicit token must take precedence over the environment");
         }
+
+        @Test
+        void commandArgumentParserHandlesQuotesEscapesAndWindowsPaths() {
+            assertEquals(java.util.List.of(
+                            "printf", "hello world", "", "C:\\work\\file.txt", "plain value"),
+                    CliSupport.parseCommandArguments(
+                            "printf 'hello world' \"\" C:\\work\\file.txt plain\\ value"));
+            assertThrows(RuntimeException.class,
+                    () -> CliSupport.parseCommandArguments("echo 'unterminated"));
+        }
     }
 
     // ========================
