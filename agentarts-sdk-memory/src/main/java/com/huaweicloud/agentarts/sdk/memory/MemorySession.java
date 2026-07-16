@@ -22,13 +22,20 @@ public class MemorySession implements AutoCloseable {
     private final MemoryClient client;
     private final String spaceId;
     private final String actorId;
+    private final boolean ownsClient;
     private String sessionId;
 
     public MemorySession(MemoryClient client, String spaceId, String actorId, String sessionId) {
+        this(client, spaceId, actorId, sessionId, false);
+    }
+
+    private MemorySession(MemoryClient client, String spaceId, String actorId,
+                          String sessionId, boolean ownsClient) {
         this.client = client;
         this.spaceId = spaceId;
         this.actorId = actorId;
         this.sessionId = sessionId;
+        this.ownsClient = ownsClient;
     }
 
     /**
@@ -38,12 +45,17 @@ public class MemorySession implements AutoCloseable {
     public static MemorySession of(String spaceId, String actorId, String sessionId,
                                     String regionName, String apiKey) {
         MemoryClient client = new MemoryClient(regionName, apiKey);
-        MemorySession session = new MemorySession(client, spaceId, actorId, sessionId);
-        if (sessionId == null) {
-            SessionInfo info = client.createMemorySession(spaceId, null, actorId, null);
-            session.sessionId = info.getId();
+        try {
+            MemorySession session = new MemorySession(client, spaceId, actorId, sessionId, true);
+            if (sessionId == null) {
+                SessionInfo info = client.createMemorySession(spaceId, null, actorId, null);
+                session.sessionId = info.getId();
+            }
+            return session;
+        } catch (RuntimeException e) {
+            client.close();
+            throw e;
         }
-        return session;
     }
 
     public static MemorySession of(String spaceId, String actorId) {
@@ -113,6 +125,8 @@ public class MemorySession implements AutoCloseable {
 
     @Override
     public void close() {
-        client.close();
+        if (ownsClient) {
+            client.close();
+        }
     }
 }

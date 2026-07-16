@@ -97,6 +97,11 @@ public class MemoryClient implements AutoCloseable {
             }
             if (com.huaweicloud.agentarts.sdk.core.util.JsonUtils.isNotBlank(key)) {
                 dataPlaneClient.setAuthToken("Bearer", key);
+            } else {
+                dataPlaneClient.close();
+                dataPlaneClient = null;
+                throw new IllegalStateException(
+                        "Memory data-plane API key is required; pass apiKey or set HUAWEICLOUD_SDK_MEMORY_API_KEY");
             }
         }
         return dataPlaneClient;
@@ -176,7 +181,7 @@ public class MemoryClient implements AutoCloseable {
 
     /** Delete a memory space (Control Plane). */
     public void deleteSpace(String spaceId) {
-        getControlPlaneClient().delete("/spaces/" + spaceId).block();
+        ensureSuccess(getControlPlaneClient().delete("/spaces/" + spaceId).block());
     }
 
     /** Create an API key for data plane access (Control Plane). */
@@ -345,7 +350,7 @@ public class MemoryClient implements AutoCloseable {
     /** Delete a memory by ID (Data Plane). */
     public void deleteMemory(String spaceId, String memoryId) {
         String url = "/spaces/" + spaceId + "/memories/" + memoryId;
-        getDataPlaneClient().delete(url).block();
+        ensureSuccess(getDataPlaneClient().delete(url).block());
     }
 
     // ========================
@@ -367,6 +372,14 @@ public class MemoryClient implements AutoCloseable {
         } catch (Exception e) {
             throw new APIException(result.getStatusCode(), "memory_api",
                     "Failed to parse response: " + e.getMessage(), e);
+        }
+    }
+
+    private void ensureSuccess(RequestResult result) {
+        if (result == null || !result.isSuccess()) {
+            int status = result != null ? result.getStatusCode() : 0;
+            String err = result != null ? result.getError() : "null response";
+            throw new APIException(status, "memory_api", err);
         }
     }
 
@@ -430,9 +443,10 @@ public class MemoryClient implements AutoCloseable {
     // Async (Reactor) variants
     // ========================
     //
-    // Each async method returns a cold Mono that, when subscribed, runs the
-    // corresponding synchronous call on a bounded-elastic scheduler. Subscribing
-    // (or .block() in tests) triggers execution; the production API never blocks.
+    // Each method returns a cold Mono that runs the corresponding synchronous
+    // call on a bounded-elastic worker. This keeps the subscriber thread free,
+    // but it is an asynchronous wrapper around blocking code rather than an
+    // end-to-end non-blocking transport.
 
     private <T> Mono<T> async(java.util.concurrent.Callable<T> callable) {
         return Mono.fromCallable(callable).subscribeOn(Schedulers.boundedElastic());
