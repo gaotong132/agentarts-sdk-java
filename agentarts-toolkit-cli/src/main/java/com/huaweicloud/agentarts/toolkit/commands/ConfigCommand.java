@@ -104,7 +104,8 @@ public class ConfigCommand implements Runnable {
         @Parameters(index = "0", description = "Config key (dot notation)")
         String key;
 
-        @Parameters(index = "1", description = "Config value")
+        @Parameters(index = "1", arity = "0..1",
+                description = "Config value (omit to read securely from stdin)")
         String value;
 
         @Option(names = {"-a", "--agent"}, description = "Agent name")
@@ -112,6 +113,9 @@ public class ConfigCommand implements Runnable {
 
         @Override
         public void run() {
+            if (value == null) {
+                value = CliSupport.readSecretValue("Configuration value: ");
+            }
             if ("base.name".equals(key)) {
                 value = value.toLowerCase();
             }
@@ -135,7 +139,8 @@ public class ConfigCommand implements Runnable {
         @Parameters(index = "0", description = "Environment variable name")
         String key;
 
-        @Parameters(index = "1", description = "Environment variable value")
+        @Parameters(index = "1", arity = "0..1",
+                description = "Environment variable value (omit to read securely from stdin)")
         String value;
 
         @Option(names = {"-a", "--agent"}, description = "Agent name")
@@ -143,6 +148,9 @@ public class ConfigCommand implements Runnable {
 
         @Override
         public void run() {
+            if (value == null) {
+                value = CliSupport.readSecretValue("Environment variable value: ");
+            }
             ConfigOperation.setEnv(key, value, agent);
         }
     }

@@ -146,6 +146,35 @@ public final class CliSupport {
         return arguments;
     }
 
+    /** Read a sensitive value without echo when a console is available, or from piped stdin. */
+    public static String readSecretValue(String prompt) {
+        java.io.Console console = System.console();
+        if (console != null) {
+            char[] characters = console.readPassword("%s", prompt);
+            if (characters == null) {
+                fail("Sensitive value is required");
+            }
+            try {
+                return new String(characters);
+            } finally {
+                java.util.Arrays.fill(characters, '\0');
+            }
+        }
+        System.out.print(prompt);
+        System.out.flush();
+        try {
+            String value = new BufferedReader(new InputStreamReader(
+                    System.in, StandardCharsets.UTF_8)).readLine();
+            if (value == null) {
+                fail("Sensitive value is required; pipe it on stdin or provide the positional value");
+            }
+            return value;
+        } catch (IOException e) {
+            fail("Unable to read sensitive value from stdin");
+            return null; // unreachable
+        }
+    }
+
     /**
      * Require explicit confirmation before a destructive operation. An EOF or
      * unreadable stdin is treated as a failure, so non-interactive callers must

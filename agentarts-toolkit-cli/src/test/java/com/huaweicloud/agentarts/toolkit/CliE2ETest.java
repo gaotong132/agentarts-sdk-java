@@ -408,6 +408,26 @@ class CliE2ETest {
             assertFalse(stdout().contains(credentialMarker));
         }
 
+        @Test
+        void sensitiveConfigValuesCanBeReadFromStdin() {
+            String marker = "unit-piped-sensitive-value";
+            assertEquals(0, cli.execute("config", "-n", "myagent"));
+            outBuf.reset();
+            InputStream originalInput = System.in;
+            try {
+                System.setIn(new ByteArrayInputStream(
+                        (marker + "\n").getBytes(StandardCharsets.UTF_8)));
+                assertEquals(0, cli.execute(
+                        "config", "set-env", "SERVICE_TOKEN", "--agent", "myagent"));
+            } finally {
+                System.setIn(originalInput);
+            }
+
+            assertFalse(stdout().contains(marker));
+            assertTrue(stdout().contains("[REDACTED]"));
+            assertTrue(readConfig().contains(marker), "the piped value must be persisted exactly");
+        }
+
         /** Mirrors {@code test_config_set_default_and_remove}: adding two agents,
          *  setting the default, and removing one leaves the survivor in the YAML. */
         @Test
