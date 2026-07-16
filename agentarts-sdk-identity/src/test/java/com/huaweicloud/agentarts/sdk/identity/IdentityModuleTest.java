@@ -6,6 +6,8 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -49,6 +51,34 @@ class IdentityModuleTest {
             LocalIdentityConfig loaded = LocalIdentityConfig.load(path);
             assertEquals("test-workload", loaded.getWorkloadIdentityName());
             assertEquals("user-123", loaded.getUserId());
+            assertFalse(assertDoesNotThrow(() -> Files.readString(Path.of(path)))
+                    .contains("\"path\""), "the local filesystem path is runtime metadata");
+        }
+
+        @Test
+        void malformedConfigFailsClosedAndIsNotOverwritten() throws Exception {
+            Path path = tempDir.resolve("malformed.json");
+            String malformed = "{not-json";
+            Files.writeString(path, malformed, StandardCharsets.UTF_8);
+
+            assertThrows(IllegalStateException.class,
+                    () -> LocalIdentityConfig.load(path.toString()));
+            assertEquals(malformed, Files.readString(path, StandardCharsets.UTF_8));
+        }
+
+        @Test
+        void atomicSaveLeavesNoTemporaryFiles() throws Exception {
+            Path path = tempDir.resolve("nested/identity.json");
+            LocalIdentityConfig config = new LocalIdentityConfig();
+            config.setPath(path.toString());
+            config.setUserId("user");
+
+            config.save();
+
+            assertTrue(Files.isRegularFile(path));
+            try (var leftovers = Files.newDirectoryStream(path.getParent(), ".agent-identity-*.tmp")) {
+                assertFalse(leftovers.iterator().hasNext());
+            }
         }
 
         @Test
