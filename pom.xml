@@ -67,7 +67,6 @@
         <!-- CLI -->
         <picocli.version>4.7.6</picocli.version>
         <freemarker.version>2.3.34</freemarker.version>
-        <docker-java.version>3.4.1</docker-java.version>
 
         <!-- Spring Boot (optional, for starter) -->
         <spring-boot.version>3.3.5</spring-boot.version>
@@ -262,17 +261,6 @@
                 <artifactId>freemarker</artifactId>
                 <version>${freemarker.version}</version>
             </dependency>
-            <dependency>
-                <groupId>com.github.docker-java</groupId>
-                <artifactId>docker-java</artifactId>
-                <version>${docker-java.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.github.docker-java</groupId>
-                <artifactId>docker-java-transport-httpclient5</artifactId>
-                <version>${docker-java.version}</version>
-            </dependency>
-
             <!-- ==================== -->
             <!-- Spring Boot (optional, for starter) -->
             <!-- ==================== -->
