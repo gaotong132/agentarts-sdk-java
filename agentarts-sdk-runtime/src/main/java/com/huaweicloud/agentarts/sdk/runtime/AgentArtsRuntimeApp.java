@@ -62,6 +62,7 @@ import java.util.function.Supplier;
 public class AgentArtsRuntimeApp {
 
     private static final Logger LOG = LoggerFactory.getLogger(AgentArtsRuntimeApp.class);
+    public static final long DEFAULT_MAX_REQUEST_BODY_BYTES = 10L * 1024 * 1024;
     private static final Object EMPTY_MONO_RESPONSE = new Object();
     private static final ObjectMapper OBJECT_MAPPER = com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER;
 
@@ -69,6 +70,7 @@ public class AgentArtsRuntimeApp {
     private final Semaphore invocationSemaphore;
     private final Vertx vertx;
     private final boolean ownVertx;
+    private volatile long maxRequestBodyBytes = DEFAULT_MAX_REQUEST_BODY_BYTES;
 
     // Handlers (volatile: set on user thread, read on Vert.x event-loop thread)
     private volatile BiFunction<Map<String, Object>, RequestContext, Object> entrypointHandler;
@@ -112,6 +114,22 @@ public class AgentArtsRuntimeApp {
 
     public AgentArtsRuntimeApp() {
         this(Constants.DEFAULT_MAX_CONCURRENCY, null);
+    }
+
+    /** Configure the maximum aggregated HTTP invocation body before the server is started. */
+    public void setMaxRequestBodyBytes(long maximumBytes) {
+        if (maximumBytes < 1) {
+            throw new IllegalArgumentException("maximumBytes must be greater than zero");
+        }
+        if (httpServer != null) {
+            throw new IllegalStateException(
+                    "Maximum request body size cannot be changed after the server is started");
+        }
+        this.maxRequestBodyBytes = maximumBytes;
+    }
+
+    public long getMaxRequestBodyBytes() {
+        return maxRequestBodyBytes;
     }
 
     // ========================
@@ -205,7 +223,7 @@ public class AgentArtsRuntimeApp {
      */
     public void run(int port) {
         Router router = Router.router(vertx);
-        router.route().handler(BodyHandler.create());
+        router.route().handler(BodyHandler.create().setBodyLimit(maxRequestBodyBytes));
 
         // Routes
         router.post("/invocations").handler(this::handleInvocation);

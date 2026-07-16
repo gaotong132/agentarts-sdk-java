@@ -123,6 +123,44 @@ class AgentArtsRuntimeAppTest {
     }
 
     @Test
+    @DisplayName("POST /invocations rejects request bodies above the configured limit")
+    void invocationRejectsOversizedBodyBeforeCallingHandler() throws Exception {
+        app.stop();
+        app = new AgentArtsRuntimeApp(15, vertx);
+        app.setMaxRequestBodyBytes(4);
+        AtomicReference<Boolean> invoked = new AtomicReference<>(false);
+        app.setEntrypoint((payload, ctx) -> {
+            invoked.set(true);
+            return Map.of("ok", true);
+        });
+        app.run(0);
+        port = app.getPort();
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Integer> statusCode = new AtomicReference<>();
+        webClient.post(port, "localhost", "/invocations")
+                .putHeader("Content-Type", "application/json")
+                .sendBuffer(Buffer.buffer("{\"message\":\"too large\"}"))
+                .onComplete(ar -> {
+                    assertTrue(ar.succeeded());
+                    statusCode.set(ar.result().statusCode());
+                    latch.countDown();
+                });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertEquals(413, statusCode.get());
+        assertFalse(invoked.get());
+        assertThrows(IllegalStateException.class, () -> app.setMaxRequestBodyBytes(8));
+    }
+
+    @Test
+    void requestBodyLimitMustBePositive() {
+        assertEquals(AgentArtsRuntimeApp.DEFAULT_MAX_REQUEST_BODY_BYTES,
+                app.getMaxRequestBodyBytes());
+        assertThrows(IllegalArgumentException.class, () -> app.setMaxRequestBodyBytes(0));
+    }
+
+    @Test
     @DisplayName("POST /invocations extracts session ID from header")
     void invocationExtractsSessionId() throws Exception {
         AtomicReference<String> capturedSessionId = new AtomicReference<>();
