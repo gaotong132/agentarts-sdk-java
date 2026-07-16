@@ -51,6 +51,16 @@ class MemoryClientTest {
     }
 
     @Test
+    void encodesUntrustedIdentifiersAsPathSegments() throws Exception {
+        when(dataPlane.get("/spaces/..%2Fspace/memories/memory%3Fx%3D1"))
+                .thenReturn(Mono.just(success("{\"id\":\"memory\"}")));
+
+        assertEquals("memory", client.getMemory("../space", "memory?x=1").getId());
+        verify(dataPlane).get("/spaces/..%2Fspace/memories/memory%3Fx%3D1");
+        assertThrows(IllegalArgumentException.class, () -> client.getSpace(" "));
+    }
+
+    @Test
     void sendsCompleteCreateSpaceConfiguration() throws Exception {
         when(controlPlane.post(eq("/space-keys"), isNull(), any()))
                 .thenReturn(Mono.just(success("{\"id\":\"generated-id\",\"api_key\":\"generated-value\"}")));

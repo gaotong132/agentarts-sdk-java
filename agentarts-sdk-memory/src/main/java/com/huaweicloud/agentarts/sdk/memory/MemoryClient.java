@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
+import com.huaweicloud.agentarts.sdk.core.util.UrlUtils;
 import com.huaweicloud.agentarts.sdk.memory.model.*;
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
@@ -206,7 +207,7 @@ public class MemoryClient implements AutoCloseable {
     /** Get a memory space by ID (Control Plane). */
     public SpaceInfo getSpace(String spaceId) {
         RequestResult result = getControlPlaneClient()
-                .get("/spaces/" + spaceId).block();
+                .get("/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")).block();
         return parseResult(result, SpaceInfo.class);
     }
 
@@ -262,13 +263,14 @@ public class MemoryClient implements AutoCloseable {
                 .withMemoryStrategiesBuiltin(memoryStrategiesBuiltin);
 
         RequestResult result = getControlPlaneClient()
-                .put("/spaces/" + spaceId, null, req).block();
+                .put("/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId"), null, req).block();
         return parseResult(result, SpaceInfo.class);
     }
 
     /** Delete a memory space (Control Plane). */
     public void deleteSpace(String spaceId) {
-        ensureSuccess(getControlPlaneClient().delete("/spaces/" + spaceId).block());
+        ensureSuccess(getControlPlaneClient().delete(
+                "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")).block());
     }
 
     /** Create an API key for data plane access (Control Plane). */
@@ -309,7 +311,8 @@ public class MemoryClient implements AutoCloseable {
                 .withMeta(meta);
 
         RequestResult result = getDataPlaneClient()
-                .post("/spaces/" + spaceId + "/sessions", null, req).block();
+                .post("/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                        + "/sessions", null, req).block();
         return parseResult(result, SessionInfo.class);
     }
 
@@ -363,7 +366,8 @@ public class MemoryClient implements AutoCloseable {
                 .withIdempotencyKey(idempotencyKey)
                 .withIsForceExtract(isForceExtract);
 
-        String url = "/spaces/" + spaceId + "/sessions/" + sessionId + "/messages";
+        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                + "/sessions/" + UrlUtils.encodePathSegment(sessionId, "sessionId") + "/messages";
         RequestResult result = getDataPlaneClient().post(url, null, req).block();
         return parseResult(result, MessageBatchResponse.class);
     }
@@ -386,7 +390,9 @@ public class MemoryClient implements AutoCloseable {
 
     /** Get a single message by ID (Data Plane). */
     public MessageInfo getMessage(String messageId, String spaceId, String sessionId) {
-        String url = "/spaces/" + spaceId + "/sessions/" + sessionId + "/messages/" + messageId;
+        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                + "/sessions/" + UrlUtils.encodePathSegment(sessionId, "sessionId")
+                + "/messages/" + UrlUtils.encodePathSegment(messageId, "messageId");
         RequestResult result = getDataPlaneClient().get(url).block();
         return parseResult(result, MessageInfo.class);
     }
@@ -395,9 +401,10 @@ public class MemoryClient implements AutoCloseable {
     public MessageListResponse listMessages(String spaceId, String sessionId, int limit, int offset) {
         String url;
         if (sessionId != null) {
-            url = "/spaces/" + spaceId + "/sessions/" + sessionId + "/messages";
+            url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                    + "/sessions/" + UrlUtils.encodePathSegment(sessionId, "sessionId") + "/messages";
         } else {
-            url = "/spaces/" + spaceId + "/messages";
+            url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId") + "/messages";
         }
         RequestResult result = getDataPlaneClient()
                 .request("GET", url, null, null, paginationQuery(limit, offset)).block();
@@ -416,7 +423,8 @@ public class MemoryClient implements AutoCloseable {
     /** Search memories with optional filters (Data Plane). */
     public MemorySearchResponse searchMemories(String spaceId, MemorySearchFilter filters) {
         Map<String, Object> body = filters != null ? filters.toDict() : Map.of();
-        String url = "/spaces/" + spaceId + "/memories/search";
+        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                + "/memories/search";
         RequestResult result = getDataPlaneClient().post(url, null, body).block();
         return parseResult(result, MemorySearchResponse.class);
     }
@@ -435,7 +443,7 @@ public class MemoryClient implements AutoCloseable {
                 query.put(e.getKey(), List.of(String.valueOf(e.getValue())));
             }
         }
-        String url = "/spaces/" + spaceId + "/memories";
+        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId") + "/memories";
         RequestResult result = getDataPlaneClient()
                 .request("GET", url, null, null, query).block();
         return parseResult(result, MemoryListResponse.class);
@@ -448,14 +456,16 @@ public class MemoryClient implements AutoCloseable {
 
     /** Get a memory by ID (Data Plane). */
     public MemoryInfo getMemory(String spaceId, String memoryId) {
-        String url = "/spaces/" + spaceId + "/memories/" + memoryId;
+        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                + "/memories/" + UrlUtils.encodePathSegment(memoryId, "memoryId");
         RequestResult result = getDataPlaneClient().get(url).block();
         return parseResult(result, MemoryInfo.class);
     }
 
     /** Delete a memory by ID (Data Plane). */
     public void deleteMemory(String spaceId, String memoryId) {
-        String url = "/spaces/" + spaceId + "/memories/" + memoryId;
+        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                + "/memories/" + UrlUtils.encodePathSegment(memoryId, "memoryId");
         ensureSuccess(getDataPlaneClient().delete(url).block());
     }
 
