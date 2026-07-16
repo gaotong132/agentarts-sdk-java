@@ -226,9 +226,9 @@ mvn test -pl agentarts-sdk-tests -am "-Dtest=MemoryLifecycleTest" "-Dsurefire.fa
 | SDK 云 E2E | 69 | 69（58 ✅ + 11 🟡） |
 | CLI 云 E2E | 21 | 21（17 ✅ + 4 🟡） |
 | Java 独有 | — | 60 脚手架 |
-| Python 有 Java 缺失 | — | 0 |
+| Python 有 Java 缺失 | — | 存在：真异步 Memory/Session、3 类 Python 模板及部分 CLI 参数 |
 
-> **真实 AK/SK 验证**：L1 + L2 + CLI 云 E2E + L3 Docker deploy 全绿。e2e 包 90 用例：启用 AK/SK + ALLOW_CREATE（不含 L3）时 86 计入（**78 通过 + 8 软跳过**）；另设 `RUN_BILLABLE=1` + Docker 后 `CliDeployedRuntimeE2ETest` 4 用例计入（**3 通过 + 1 软跳过**，file-transfer 401 软跳——IAM-only agent 上传需 bearer token，与 Python 套件同态）。**0 失败 0 错误**。8 跳过：OAuth2/STS 4、`delete_memory` 2（后端未产出 memory）、CI/Runtime 计费 2（无 RUN_BILLABLE）。
+> 历史云端运行结果只能说明当时环境中的用例状态，不能替代持续门禁。缺少凭据时，部分类会在 `@BeforeAll` assumption 后显示 `Tests run: 0`；绿色 `mvn test` 本身不证明云鉴权有效。
 
 
 ---

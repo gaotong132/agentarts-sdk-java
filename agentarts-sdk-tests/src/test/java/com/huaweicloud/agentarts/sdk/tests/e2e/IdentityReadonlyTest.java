@@ -62,32 +62,20 @@ class IdentityReadonlyTest {
 
     // 5. test_get_and_token_for_workload_identity
     @Test
-    @DisplayName("get + token for workload identity (creates temp if no pre-provisioned)")
+    @DisplayName("get + token for a pre-provisioned workload identity")
     void testGetAndTokenForWorkloadIdentity() {
         String name = E2EConfig.getPreWorkloadIdentity();
-        boolean isTemporary = false;
+        assumeTrue(name != null && !name.isEmpty(),
+                "Set AGENTARTS_TEST_WORKLOAD_IDENTITY_NAME; read-only tier never creates resources");
 
-        if (name == null || name.isEmpty()) {
-            // No pre-provisioned identity — create a temporary one
-            name = "aa-it-readonly-" + E2EConfig.getRunId();
-            identityClient.createWorkloadIdentity(name);
-            isTemporary = true;
-        }
+        var wi = identityClient.getWorkloadIdentity(name);
+        assertNotNull(wi);
+        assertNotNull(wi.getWorkloadIdentity(), "workload identity body should be present");
+        assertEquals(name, wi.getWorkloadIdentity().getName(),
+                "get_workload_identity should return the identity whose name matches the request");
 
-        try {
-            var wi = identityClient.getWorkloadIdentity(name);
-            assertNotNull(wi);
-            assertNotNull(wi.getWorkloadIdentity(), "workload identity body should be present");
-            assertEquals(name, wi.getWorkloadIdentity().getName(),
-                    "get_workload_identity should return the identity whose name matches the request");
-
-            String token = identityClient.createWorkloadAccessToken(name);
-            assertNotNull(token);
-            assertFalse(token.isEmpty());
-        } finally {
-            if (isTemporary) {
-                try { identityClient.deleteWorkloadIdentity(name); } catch (Exception ignored) {}
-            }
-        }
+        String token = identityClient.createWorkloadAccessToken(name);
+        assertNotNull(token);
+        assertFalse(token.isEmpty());
     }
 }

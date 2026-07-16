@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Java](https://img.shields.io/badge/Java-17%2B-brightgreen.svg)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-orange.svg)](https://maven.apache.org/)
-[![Tests](https://img.shields.io/badge/Tests-689-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-mvn%20verify-blue.svg)]()
 
 Build, deploy and manage AI agents with Huawei Cloud capabilities.
 
@@ -24,7 +24,7 @@ AgentArts Java SDK is a comprehensive toolkit for developing, deploying, and man
 - **CLI Toolkit** — Picocli-based CLI with 9 top-level commands and 24 subcommands: `init`, `config` (8 subcommands), `dev`, `deploy`, `invoke`, `destroy`, `runtime` (6 subcommands), `mcp-gateway` (10 subcommands), `memory` (6 subcommands)
 - **Spring Boot Starter** — AutoConfiguration for `AgentArtsRuntimeApp`, `@ConfigurationProperties` binding (`agentarts.*`), Actuator HealthIndicator (UP/busy/DOWN)
 - **E2E Test Suite** — 69 end-to-end tests with three-tier safety model (read-only / lifecycle / billable): Identity (14), Memory (20), MCP Gateway (6), Code Interpreter (4), Runtime (18), Auth (3), Read-only lists (4)
-- **Reactive Architecture** — Project Reactor (`Mono`/`Flux`) for async HTTP and SSE streaming, aligned with agentscope-java's reactive model; Reactor `Schedulers.boundedElastic()` for async memory operations
+- **Reactor API Integration** — the HTTP transport streams SSE/NDJSON with demand control and cancellation; some higher-level async operations still wrap blocking calls on `boundedElastic`
 
 ## Module Structure
 
@@ -368,15 +368,15 @@ mvn test -pl agentarts-sdk-tests -Dtest=CliDeployedRuntimeE2ETest
 
 ## Testing
 
-The test suite includes **689 tests** across three layers:
+The test suite spans three layers. Counts are intentionally not used as a production-readiness claim because conditional E2E classes may execute zero tests when their prerequisites are absent.
 
-| Layer | Count | Description |
-|---|---|---|
-| Unit + integration | 542 | V11 signing, HTTP client, Runtime server/client, Identity, Memory, Tools, MCP Gateway, agentscope, Spring Boot, cross-module — no cloud credentials needed |
-| Cloud E2E | 90 | `agentarts-sdk-tests` e2e package: 69 SDK cloud + 21 CLI cloud (with AK/SK + `ALLOW_CREATE` 86 run = 78 pass + 8 skip; 4 `CliDeployedRuntime` run with Docker + `RUN_BILLABLE`: 3 pass + 1 soft-skip) |
-| CLI scaffolding | 57 | `agentarts-toolkit-cli` template rendering, picocli command-tree/option parsing, init/config structure (no Docker/cloud) |
+| Layer | Description |
+|---|---|
+| Unit + local integration | V11 signing, HTTP client, Runtime server/client, Identity, Memory, Tools, MCP Gateway, agentscope, Spring Boot, cross-module — no cloud credentials needed |
+| Cloud E2E | Read-only probes plus opt-in lifecycle and billable suites; actual executed counts must be taken from the current Surefire reports |
+| CLI scaffolding | Template rendering, picocli command-tree/option parsing, init/config structure (no Docker/cloud) |
 
-Cloud E2E by area: Identity (14), Memory (20), Gateway (6, IAM agency fix synced — xfail removed), Code Interpreter (4), Runtime (18), Auth decorators (3), read-only probes (4), CLI cloud (21: `CliLocal` 13 1:1 with Python + gateway/memory lifecycle + dev server + Docker deploy 4). Cross-validated against the Python SDK `tests/integration/` (`feature/test` branch, commit `d130e21`, 90 cases). `mvn test` without cloud credentials executes 625 tests (0 failures, 2 skipped — e2e cloud classes skip via `assumeTrue`). Full per-case mapping, code-bug fixes driven by the audit (RuntimeClient endpoint UUID, MemoryClient async API, DevOperation, InitCommand exit code), and remaining gaps (langgraph/langchain/google-adk templates) are documented in the [E2E 测试指南](docs/cn/e2e_testing_guide.md).
+Cloud E2E covers Identity, Memory, MCP Gateway, Code Interpreter, Runtime, auth decorators, read-only probes, and CLI workflows. A successful default `mvn test` does not prove cloud behavior: classes guarded by `@BeforeAll` assumptions can be reported with `Tests run: 0`. Execution requirements and result interpretation are documented in the [E2E 测试指南](docs/cn/e2e_testing_guide.md).
 
 ### E2E Three-Tier Safety Model
 
@@ -386,7 +386,7 @@ Cloud E2E by area: Identity (14), Memory (20), Gateway (6, IAM agency fix synced
 | **Lifecycle** | `AGENTARTS_TEST_ALLOW_CREATE=1` | create→get→update→delete | yes, LIFO teardown-guaranteed |
 | **Billable** | `AGENTARTS_TEST_RUN_BILLABLE=1` | code-interpreter sandbox, runtime invoke | real money |
 
-Tests whose prerequisites aren't met are silently skipped via `assumeTrue()` at `@BeforeAll` — they never report as failures.
+Tests whose prerequisites are not met use assumptions. Always inspect Surefire's executed and skipped counts; a green build alone is not an E2E attestation.
 
 ## Dependency Versions
 
@@ -398,13 +398,13 @@ Key dependencies aligned with [agentscope-java](https://github.com/agentscope-ai
 | Jackson | `2.21.1` | Aligned with agentscope |
 | Vert.x | `4.5.14` | Self-managed (not in agentscope BOM) |
 | Huawei Cloud SDK v3 | `3.1.202` | agentidentity, iam, swr |
-| agentscope-core | `2.0.0-SNAPSHOT` | provided/optional |
+| agentscope-core | `2.0.0-RC4` | provided/optional |
 | Spring Boot | `3.3.5` | Optional (for starter) |
 | JUnit | `6.0.2` | Testing |
 
 ## API Compatibility
 
-The Java SDK provides the same API surface as the [Python SDK](https://github.com/huaweicloud/agentarts-sdk-python):
+The Java SDK targets behavioral parity with the [Python SDK](https://github.com/huaweicloud/agentarts-sdk-python), but it does **not yet provide the same API surface or runtime semantics**. True client-side streaming and standard Huawei Cloud credential-provider chains are supported; fully non-blocking higher-level async APIs, framework integrations, and some CLI templates still differ.
 
 | Aspect | Coverage |
 |---|---|
@@ -424,7 +424,7 @@ The Java SDK provides the same API surface as the [Python SDK](https://github.co
 
 ## Python SDK Reference
 
-This Java SDK maintains API compatibility with the [Python AgentArts SDK](https://github.com/huaweicloud/agentarts-sdk-python). When the Python SDK updates, the Java SDK should be synchronized accordingly.
+Compatibility is tracked against the [Python AgentArts SDK](https://github.com/huaweicloud/agentarts-sdk-python). Claims of parity must be backed by behavioral tests; method-count or test-count parity alone is not sufficient.
 
 | Item | Value |
 |---|---|
