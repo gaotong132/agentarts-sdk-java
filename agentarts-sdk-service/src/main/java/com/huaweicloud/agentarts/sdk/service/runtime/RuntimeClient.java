@@ -469,7 +469,7 @@ public class RuntimeClient implements AutoCloseable {
         Map<String, List<String>> params = new LinkedHashMap<>();
         params.put("path", List.of(path));
         if (recursive) params.put("recursive", List.of("true"));
-        return getDataClient().request(
+        return getDataClient().requestBinaryStream(
                 "GET", dataUrl("/runtimes/" + UrlUtils.encodePathSegment(agentName, "agentName")
                         + "/download-files", endpoint),
                 headers, null, params, (double) timeout).block();

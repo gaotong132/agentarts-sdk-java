@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>For non-streaming responses, {@link #getData()} contains parsed JSON,
  * decoded text, or a {@code byte[]} for binary content.</p>
  *
- * <p>For streaming responses (Content-Type: text/event-stream or application/x-ndjson),
+ * <p>For streaming responses (SSE/NDJSON, or explicitly requested binary downloads),
  * {@link #isStreaming()} returns true and the response body is available via
  * {@link #iterLines()} or {@link #iterBytes()}. The network body is single-use:
  * callers must choose one representation and subscribe once. Cancelling that

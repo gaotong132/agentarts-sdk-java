@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 
+import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -296,6 +297,49 @@ class BaseHttpClientTest {
     @Nested
     @DisplayName("Streaming transport")
     class StreamingTransportTests {
+
+        @Test
+        void explicitlyStreamsBinaryResponsesWithoutBuffering() throws Exception {
+            CountDownLatch releaseBody = new CountDownLatch(1);
+            byte[] payload = new byte[] {0, 1, (byte) 0x80, (byte) 0xff};
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/binary-stream", exchange -> {
+                exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
+                exchange.sendResponseHeaders(200, 0);
+                try (OutputStream output = exchange.getResponseBody()) {
+                    if (!releaseBody.await(15, TimeUnit.SECONDS)) return;
+                    output.write(payload);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            server.start();
+
+            RequestConfig config = RequestConfig.builder()
+                    .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
+                    .timeoutSeconds(10)
+                    .build();
+            try (BaseHttpClient client = new BaseHttpClient(config)) {
+                RequestResult result = client.requestBinaryStream(
+                        "GET", "/binary-stream", null, null, null, 10.0)
+                        .block(Duration.ofSeconds(5));
+                assertNotNull(result);
+                assertTrue(result.isStreaming(), "binary response must return at headers");
+
+                releaseBody.countDown();
+                byte[] downloaded = result.iterBytes()
+                        .reduce(new ByteArrayOutputStream(), (output, chunk) -> {
+                            output.writeBytes(chunk);
+                            return output;
+                        })
+                        .map(ByteArrayOutputStream::toByteArray)
+                        .block(Duration.ofSeconds(5));
+                assertArrayEquals(payload, downloaded);
+            } finally {
+                releaseBody.countDown();
+                server.stop(0);
+            }
+        }
 
         @Test
         void returnsAtHeadersAndDecodesUtf8LinesAcrossChunks() throws Exception {

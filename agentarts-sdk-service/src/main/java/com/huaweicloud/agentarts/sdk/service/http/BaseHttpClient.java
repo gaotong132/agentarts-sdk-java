@@ -58,6 +58,8 @@ public class BaseHttpClient implements AutoCloseable {
     private static final ObjectMapper OBJECT_MAPPER = com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER;
     private static final String STREAM_SSE = "text/event-stream";
     private static final String STREAM_NDJSON = "application/x-ndjson";
+    private static final String STREAM_OCTET = "application/octet-stream";
+    private static final String STREAM_TAR = "application/x-tar";
 
     private final RequestConfig config;
     private final boolean openAkSk;
@@ -260,12 +262,34 @@ public class BaseHttpClient implements AutoCloseable {
                                         Object body,
                                         Map<String, List<String>> queryParams,
                                         Double timeoutSeconds) {
+        return requestInternal(method, url, headers, body, queryParams, timeoutSeconds, false);
+    }
+
+    /**
+     * Execute a request that leaves successful octet-stream or tar responses unbuffered.
+     * JSON/text error responses remain aggregated so callers can inspect service errors.
+     */
+    public Mono<RequestResult> requestBinaryStream(String method, String url,
+                                                    Map<String, String> headers,
+                                                    Object body,
+                                                    Map<String, List<String>> queryParams,
+                                                    Double timeoutSeconds) {
+        return requestInternal(method, url, headers, body, queryParams, timeoutSeconds, true);
+    }
+
+    private Mono<RequestResult> requestInternal(String method, String url,
+                                                 Map<String, String> headers,
+                                                 Object body,
+                                                 Map<String, List<String>> queryParams,
+                                                 Double timeoutSeconds,
+                                                 boolean streamBinaryResponse) {
         if (timeoutSeconds != null && (!Double.isFinite(timeoutSeconds) || timeoutSeconds <= 0)) {
             return Mono.error(new IllegalArgumentException(
                     "timeoutSeconds must be a finite value greater than zero"));
         }
         return Mono.fromFuture(() -> executeRequest(
-                        method, url, headers, body, queryParams, timeoutSeconds))
+                        method, url, headers, body, queryParams, timeoutSeconds,
+                        streamBinaryResponse))
                 .subscribeOn(Schedulers.boundedElastic())
                 // Retry on transient DNS resolution failures — the Netty async
                 // resolver can time out on networks where the system resolver
@@ -296,7 +320,8 @@ public class BaseHttpClient implements AutoCloseable {
                                                              Map<String, String> headers,
                                                              Object body,
                                                              Map<String, List<String>> queryParams,
-                                                             Double timeoutSeconds) {
+                                                             Double timeoutSeconds,
+                                                             boolean streamBinaryResponse) {
         try {
             // Build full URL
             String fullUrl = joinUrl(config.getBaseUrl(), url);
@@ -376,9 +401,11 @@ public class BaseHttpClient implements AutoCloseable {
                 }
                 HttpClientRequest request = requestAr.result();
                 if (requestBody != null) {
-                    request.send(requestBody).onComplete(ar -> handleResponse(ar, future));
+                    request.send(requestBody).onComplete(
+                            ar -> handleResponse(ar, future, streamBinaryResponse));
                 } else {
-                    request.send().onComplete(ar -> handleResponse(ar, future));
+                    request.send().onComplete(
+                            ar -> handleResponse(ar, future, streamBinaryResponse));
                 }
             });
 
@@ -396,7 +423,8 @@ public class BaseHttpClient implements AutoCloseable {
     }
 
     private void handleResponse(io.vertx.core.AsyncResult<HttpClientResponse> ar,
-                                 CompletableFuture<RequestResult> future) {
+                                 CompletableFuture<RequestResult> future,
+                                 boolean streamBinaryResponse) {
         if (ar.failed()) {
             completeRequestFailure(future, ar.cause());
             return;
@@ -415,7 +443,10 @@ public class BaseHttpClient implements AutoCloseable {
             // Check for streaming content type
             String responseContentType = response.getHeader("Content-Type");
             String contentType = responseContentType != null ? responseContentType.toLowerCase() : "";
-            boolean isStreaming = contentType.contains(STREAM_SSE) || contentType.contains(STREAM_NDJSON);
+            boolean isStreaming = contentType.contains(STREAM_SSE)
+                    || contentType.contains(STREAM_NDJSON)
+                    || (streamBinaryResponse && success
+                    && (contentType.contains(STREAM_OCTET) || contentType.contains(STREAM_TAR)));
 
             if (isStreaming) {
                 // Stop the Vert.x stream before exposing the result. Demand from
