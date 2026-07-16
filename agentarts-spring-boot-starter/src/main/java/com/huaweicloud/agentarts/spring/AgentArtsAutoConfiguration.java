@@ -27,7 +27,7 @@ import org.springframework.context.annotation.Bean;
  * <p>The runtime server auto-starts when {@code agentarts.runtime.auto-start=true}.
  * Health indicator is provided when Spring Boot Actuator is on the classpath.</p>
  *
- * <h3>Usage:</h3>
+ * <h2>Usage:</h2>
  * <pre>
  * # application.yml
  * agentarts:

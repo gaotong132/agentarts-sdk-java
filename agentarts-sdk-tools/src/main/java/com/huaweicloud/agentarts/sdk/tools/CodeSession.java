@@ -6,7 +6,7 @@ package com.huaweicloud.agentarts.sdk.tools;
  * <p>AutoCloseable session context that manages Code Interpreter lifecycle.
  * Creates a CodeInterpreterClient, starts a session, and stops it on close.</p>
  *
- * <h3>Usage:</h3>
+ * <h2>Usage:</h2>
  * <pre>{@code
  * try (CodeSession session = CodeSession.start("cn-southwest-2", "my-interpreter", "my-session")) {
  *     session.getClient().executeCode("print('hello')");

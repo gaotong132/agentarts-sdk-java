@@ -25,7 +25,7 @@ import java.util.TreeSet;
  * Used for signing HTTP requests to AgentArts control plane, data plane,
  * runtime invoke, code interpreter, and MCP gateway endpoints.</p>
  *
- * <h3>Algorithm overview:</h3>
+ * <h2>Algorithm overview:</h2>
  * <ol>
  *   <li>Generate timestamp, set {@code x-sdk-date} header</li>
  *   <li>Build Canonical Request from method, URI, query, headers</li>
@@ -34,7 +34,7 @@ import java.util.TreeSet;
  *   <li>Build Authorization header</li>
  * </ol>
  *
- * <h3>Algorithm notes:</h3>
+ * <h2>Algorithm notes:</h2>
  * <ul>
  *   <li>HKDF uses AK as salt and SK as IKM (reversed from typical HKDF conventions)</li>
  *   <li>Canonical URI always ends with trailing {@code /}</li>

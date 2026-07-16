@@ -15,7 +15,7 @@ import java.lang.annotation.Target;
  *
  * <p>Marks a method as the main invocation handler for the runtime.</p>
  *
- * <h3>Usage:</h3>
+ * <h2>Usage:</h2>
  * <pre>{@code
  * @Entrypoint
  * public Object handle(Map<String, Object> payload, RequestContext context) {

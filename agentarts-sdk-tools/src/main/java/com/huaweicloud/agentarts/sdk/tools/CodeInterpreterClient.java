@@ -19,10 +19,10 @@ import java.util.*;
  *
  * <p>Control plane uses AK/SK signing. Data plane uses API Key or IAM.</p>
  *
- * <h3>Control Plane (AK/SK):</h3>
+ * <h2>Control Plane (AK/SK):</h2>
  * create/list/update/get/delete_code_interpreter
  *
- * <h3>Data Plane (API Key or IAM):</h3>
+ * <h2>Data Plane (API Key or IAM):</h2>
  * start_session/stop_session/get_session/invoke/execute_code/execute_command/
  * upload_file/upload_files/download_file/download_files/install_packages/clear_context
  */

@@ -26,7 +26,7 @@ import java.util.Objects;
  * <p>Dynamic proxy interceptor for @Require* annotation enforcement.
  * Uses {@link Proxy} (not Spring AOP) to keep the SDK lightweight.</p>
  *
- * <h3>Usage:</h3>
+ * <h2>Usage:</h2>
  * <pre>{@code
  * interface MyService {
  *     @RequireApiKey(providerName = "myProvider")

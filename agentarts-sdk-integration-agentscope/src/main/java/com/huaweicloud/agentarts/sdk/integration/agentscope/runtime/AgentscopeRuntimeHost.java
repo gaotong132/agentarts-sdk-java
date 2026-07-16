@@ -16,7 +16,7 @@ import java.util.function.BiFunction;
  * <p>Registers entrypoint and ping handlers on the AgentArts Runtime
  * that translate between AgentArts RequestContext and agentscope RuntimeContext.</p>
  *
- * <h3>Context mapping:</h3>
+ * <h2>Context mapping:</h2>
  * <ul>
  *   <li>RequestContext.sessionId → RuntimeContext.sessionId</li>
  *   <li>RequestContext.userId → RuntimeContext.userId</li>
@@ -24,7 +24,7 @@ import java.util.function.BiFunction;
  *   <li>RequestContext.workloadAccessToken → RuntimeContext.put("workloadAccessToken", ...)</li>
  * </ul>
  *
- * <h3>Usage:</h3>
+ * <h2>Usage:</h2>
  * <pre>{@code
  * AgentArtsRuntimeApp app = new AgentArtsRuntimeApp();
  * ReActAgent agent = buildAgent();

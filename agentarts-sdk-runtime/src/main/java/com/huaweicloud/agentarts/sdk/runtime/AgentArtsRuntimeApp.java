@@ -42,11 +42,11 @@ import java.util.function.Supplier;
  *   <li>{@code WS /ws} — WebSocket endpoint for bidirectional streaming</li>
  * </ul>
  *
- * <h3>Concurrency control:</h3>
+ * <h2>Concurrency control:</h2>
  * <p>A {@link Semaphore} limits concurrent invocations. When all permits are taken,
  * new requests receive HTTP 503 with {@code {"error": "Service busy - maximum concurrency reached"}}.</p>
  *
- * <h3>Usage:</h3>
+ * <h2>Usage:</h2>
  * <pre>{@code
  * AgentArtsRuntimeApp app = new AgentArtsRuntimeApp();
  *

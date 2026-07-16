@@ -11,7 +11,7 @@ import picocli.CommandLine.Option;
  * <p>Provides commands for initializing, developing, deploying, invoking,
  * and managing AI agents on Huawei Cloud AgentArts.</p>
  *
- * <h3>Command tree:</h3>
+ * <h2>Command tree:</h2>
  * <pre>
  * agentarts
  *   init          — Initialize a new project

@@ -19,13 +19,13 @@ import reactor.core.scheduler.Schedulers;
  * Control plane operations use AK/SK signing.
  * Data plane operations use API Key (Bearer token) authentication.
  *
- * <h3>Control Plane (AK/SK signed):</h3>
+ * <h2>Control Plane (AK/SK signed):</h2>
  * <ul>
  *   <li>{@link #createSpace} / {@link #getSpace} / {@link #listSpaces}</li>
  *   <li>{@link #updateSpace} / {@link #deleteSpace} / {@link #createApiKey}</li>
  * </ul>
  *
- * <h3>Data Plane (API Key auth):</h3>
+ * <h2>Data Plane (API Key auth):</h2>
  * <ul>
  *   <li>{@link #createMemorySession} / {@link #addMessages} / {@link #getLastKMessages}</li>
  *   <li>{@link #getMessage} / {@link #listMessages} / {@link #searchMemories}</li>

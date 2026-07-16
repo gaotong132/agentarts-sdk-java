@@ -19,13 +19,13 @@ import java.util.Map;
  *   <li>Starting the server on port 8080</li>
  * </ul>
  *
- * <h3>Run:</h3>
+ * <h2>Run:</h2>
  * <pre>
  * mvn compile exec:java -pl agentarts-sdk-examples \
  *   -Dexec.mainClass="com.huaweicloud.agentarts.examples.BasicRuntimeExample"
  * </pre>
  *
- * <h3>Test:</h3>
+ * <h2>Test:</h2>
  * <pre>
  * # Health check
  * curl http://localhost:8080/ping

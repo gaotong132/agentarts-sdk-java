@@ -27,7 +27,7 @@ import java.util.Map;
  *   <li>{@code AGENTARTS_MEMORY_SPACE_ID} — Memory Space ID</li>
  * </ul>
  *
- * <h3>运行：</h3>
+ * <h2>运行：</h2>
  * <pre>
  * export HUAWEICLOUD_SDK_MEMORY_API_KEY=your-api-key
  * export AGENTARTS_MEMORY_SPACE_ID=your-space-id
@@ -35,7 +35,7 @@ import java.util.Map;
  *   -Dexec.mainClass="com.huaweicloud.agentarts.examples.memory.MemoryUsageExample"
  * </pre>
  *
- * <h3>测试：</h3>
+ * <h2>测试：</h2>
  * <pre>
  * # 发送消息（自动创建 session）
  * curl -X POST http://localhost:8080/invocations \

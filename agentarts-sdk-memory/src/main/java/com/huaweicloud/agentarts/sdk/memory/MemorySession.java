@@ -10,7 +10,7 @@ import java.util.List;
  * <p>Convenience wrapper that binds space_id and session_id.
  * Pre-binds spaceId and sessionId so callers don't need to pass them repeatedly.</p>
  *
- * <h3>Usage:</h3>
+ * <h2>Usage:</h2>
  * <pre>{@code
  * MemorySession session = MemorySession.of("space-123", "user-456");
  * session.addMessages(List.of(new TextMessage("user", "Hello!")));

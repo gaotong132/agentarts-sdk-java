@@ -23,7 +23,7 @@ import java.util.concurrent.CompletableFuture;
  * <p>Service client wrapping Huawei Cloud IAM v5 for agency management.
  * Uses IAM v5 (not v3) for agency creation, matching the Python SDK.</p>
  *
- * <h3>APIs:</h3>
+ * <h2>APIs:</h2>
  * <ul>
  *   <li>{@link #createAgency} — creates an IAM agency (v5 API)</li>
  * </ul>

@@ -43,10 +43,10 @@ import java.util.Map;
  * {@code agencyName}, an IAM agency named {@value #DEFAULT_AGENCY_NAME} is
  * automatically created (or reused if it already exists).</p>
  *
- * <h3>Gateway management:</h3>
+ * <h2>Gateway management:</h2>
  * create/update/delete/get/list_mcp_gateway
  *
- * <h3>Target management:</h3>
+ * <h2>Target management:</h2>
  * create/update/delete/get/list_mcp_gateway_target
  */
 public class MCPGatewayClient implements AutoCloseable {

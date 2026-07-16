@@ -14,7 +14,7 @@ import java.lang.annotation.Target;
  *
  * <p>Injects an OAuth2 access token into the annotated method parameter.</p>
  *
- * <h3>Usage:</h3>
+ * <h2>Usage:</h2>
  * <pre>{@code
  * @RequireAccessToken(providerName = "github", authFlow = AuthFlow.M2M)
  * public void doSomething(String accessToken) { ... }

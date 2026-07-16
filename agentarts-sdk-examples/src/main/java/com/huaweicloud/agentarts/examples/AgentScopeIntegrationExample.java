@@ -34,7 +34,7 @@ import reactor.core.publisher.Flux;
  *   <li><b>Runtime 服务</b> — 可选通过 AgentscopeRuntimeHost 暴露 HTTP 服务</li>
  * </ol>
  *
- * <h3>环境变量：</h3>
+ * <h2>环境变量：</h2>
  * <ul>
  *   <li>{@code OPENAI_API_KEY} — <b>必需</b>，模型 API Key</li>
  *   <li>{@code OPENAI_BASE_URL} — 可选，自定义 API 端点（对接华为云 MaaS 等 OpenAI 兼容服务）</li>
@@ -44,7 +44,7 @@ import reactor.core.publisher.Flux;
  *   <li>{@code RUNTIME_MODE} — 可选，设为 "server" 启用 HTTP Runtime 模式</li>
  * </ul>
  *
- * <h3>运行方式：</h3>
+ * <h2>运行方式：</h2>
  * <pre>
  * # 使用 OpenAI
  * export OPENAI_API_KEY=sk-xxx
