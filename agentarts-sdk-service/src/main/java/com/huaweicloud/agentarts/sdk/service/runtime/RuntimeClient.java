@@ -54,9 +54,16 @@ public class RuntimeClient implements AutoCloseable {
     }
 
     public RuntimeClient(String region, boolean verifySsl, SignMode signMode) {
+        this(region, verifySsl, signMode, null, null);
+    }
+
+    RuntimeClient(String region, boolean verifySsl, SignMode signMode,
+                  BaseHttpClient controlClient, BaseHttpClient dataClient) {
         this.region = region != null ? region : Constants.getRegion();
         this.verifySsl = verifySsl;
         this.signMode = signMode != null ? signMode : SignMode.SDK_HMAC_SHA256;
+        this.controlClient = controlClient;
+        this.dataClient = dataClient;
     }
 
     public RuntimeClient(String region, boolean verifySsl) {
