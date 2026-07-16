@@ -7,12 +7,14 @@ package com.huaweicloud.agentarts.sdk.service.http;
  */
 public class RequestConfig {
 
+    public static final double MAX_TIMEOUT_SECONDS = 86_400.0;
     public static final long DEFAULT_MAX_RESPONSE_BODY_BYTES = 64L * 1024 * 1024;
     public static final long DEFAULT_MAX_REQUEST_BODY_BYTES = 64L * 1024 * 1024;
 
     private String baseUrl = "";
     private double timeoutSeconds = 30.0;
     private boolean verifySsl = true;
+    private boolean followRedirects;
     private long maxResponseBodyBytes = DEFAULT_MAX_RESPONSE_BODY_BYTES;
     private long maxRequestBodyBytes = DEFAULT_MAX_REQUEST_BODY_BYTES;
 
@@ -38,8 +40,11 @@ public class RequestConfig {
     }
 
     public void setTimeoutSeconds(double timeoutSeconds) {
-        if (!Double.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
-            throw new IllegalArgumentException("timeoutSeconds must be a finite value greater than zero");
+        if (!Double.isFinite(timeoutSeconds) || timeoutSeconds <= 0
+                || timeoutSeconds > MAX_TIMEOUT_SECONDS) {
+            throw new IllegalArgumentException(
+                    "timeoutSeconds must be greater than zero and at most "
+                            + (long) MAX_TIMEOUT_SECONDS);
         }
         this.timeoutSeconds = timeoutSeconds;
     }
@@ -50,6 +55,14 @@ public class RequestConfig {
 
     public void setVerifySsl(boolean verifySsl) {
         this.verifySsl = verifySsl;
+    }
+
+    public boolean isFollowRedirects() {
+        return followRedirects;
+    }
+
+    public void setFollowRedirects(boolean followRedirects) {
+        this.followRedirects = followRedirects;
     }
 
     public long getMaxResponseBodyBytes() {
@@ -95,6 +108,11 @@ public class RequestConfig {
 
         public Builder verifySsl(boolean verifySsl) {
             config.setVerifySsl(verifySsl);
+            return this;
+        }
+
+        public Builder followRedirects(boolean followRedirects) {
+            config.setFollowRedirects(followRedirects);
             return this;
         }
 

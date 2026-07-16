@@ -43,6 +43,8 @@ class BaseHttpClientTest {
             assertEquals("", config.getBaseUrl());
             assertEquals(30.0, config.getTimeoutSeconds());
             assertTrue(config.isVerifySsl());
+            assertFalse(config.isFollowRedirects(),
+                    "signed requests must not follow redirects by default");
             assertEquals(RequestConfig.DEFAULT_MAX_RESPONSE_BODY_BYTES,
                     config.getMaxResponseBodyBytes());
             assertEquals(RequestConfig.DEFAULT_MAX_REQUEST_BODY_BYTES,
@@ -62,6 +64,10 @@ class BaseHttpClientTest {
                     () -> config.setMaxRequestBodyBytes(0));
             config.setMaxRequestBodyBytes(2048);
             assertEquals(2048, config.getMaxRequestBodyBytes());
+            assertThrows(IllegalArgumentException.class,
+                    () -> config.setTimeoutSeconds(RequestConfig.MAX_TIMEOUT_SECONDS + 1));
+            config.setFollowRedirects(true);
+            assertTrue(config.isFollowRedirects());
         }
 
         @Test
@@ -342,6 +348,36 @@ class BaseHttpClientTest {
                 assertFalse(result.isSuccess());
                 assertTrue(result.getError().contains("configured limit of 4 bytes"));
                 assertEquals(0, requests.get());
+            } finally {
+                server.stop(0);
+            }
+        }
+
+        @Test
+        void doesNotFollowRedirectsByDefault() throws Exception {
+            AtomicInteger redirectedRequests = new AtomicInteger();
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/redirect", exchange -> {
+                exchange.getResponseHeaders().set("Location", "/target");
+                exchange.sendResponseHeaders(302, -1);
+                exchange.close();
+            });
+            server.createContext("/target", exchange -> {
+                redirectedRequests.incrementAndGet();
+                exchange.sendResponseHeaders(204, -1);
+                exchange.close();
+            });
+            server.start();
+
+            RequestConfig config = RequestConfig.builder()
+                    .baseUrl("http://127.0.0.1:" + server.getAddress().getPort())
+                    .build();
+            try (BaseHttpClient client = new BaseHttpClient(config)) {
+                RequestResult result = client.get("/redirect").block(Duration.ofSeconds(5));
+                assertNotNull(result);
+                assertEquals(302, result.getStatusCode());
+                assertFalse(result.isSuccess());
+                assertEquals(0, redirectedRequests.get());
             } finally {
                 server.stop(0);
             }

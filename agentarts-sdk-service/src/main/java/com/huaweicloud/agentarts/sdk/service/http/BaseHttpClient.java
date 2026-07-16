@@ -283,9 +283,11 @@ public class BaseHttpClient implements AutoCloseable {
                                                  Map<String, List<String>> queryParams,
                                                  Double timeoutSeconds,
                                                  boolean streamBinaryResponse) {
-        if (timeoutSeconds != null && (!Double.isFinite(timeoutSeconds) || timeoutSeconds <= 0)) {
+        if (timeoutSeconds != null && (!Double.isFinite(timeoutSeconds) || timeoutSeconds <= 0
+                || timeoutSeconds > RequestConfig.MAX_TIMEOUT_SECONDS)) {
             return Mono.error(new IllegalArgumentException(
-                    "timeoutSeconds must be a finite value greater than zero"));
+                    "timeoutSeconds must be greater than zero and at most "
+                            + (long) RequestConfig.MAX_TIMEOUT_SECONDS));
         }
         return Mono.fromFuture(() -> executeRequest(
                         method, url, headers, body, queryParams, timeoutSeconds,
@@ -391,7 +393,7 @@ public class BaseHttpClient implements AutoCloseable {
                     .setPort(port)
                     .setSsl("https".equals(uri.getScheme()))
                     .setURI(path)
-                    .setFollowRedirects(true)
+                    .setFollowRedirects(config.isFollowRedirects())
                     .setTimeout((long) (effectiveTimeout * 1000));
             mergedHeaders.forEach(options::putHeader);
 
