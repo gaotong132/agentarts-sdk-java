@@ -36,6 +36,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * MCP Gateway client for managing gateways and targets via AK/SK signed requests.
@@ -85,6 +86,7 @@ public class MCPGatewayClient implements AutoCloseable {
     private final BaseHttpClient httpClient;
     private final boolean verifySsl;
     private final ICredentialProvider credentialProvider;
+    private final Supplier<IamClient> iamClientFactory;
 
     public MCPGatewayClient(boolean verifySsl) {
         this(verifySsl, CredentialProviders.defaultBasicProvider());
@@ -99,9 +101,15 @@ public class MCPGatewayClient implements AutoCloseable {
 
     MCPGatewayClient(boolean verifySsl, ICredentialProvider credentialProvider,
                      BaseHttpClient httpClient) {
+        this(verifySsl, credentialProvider, httpClient, null);
+    }
+
+    MCPGatewayClient(boolean verifySsl, ICredentialProvider credentialProvider,
+                     BaseHttpClient httpClient, Supplier<IamClient> iamClientFactory) {
         this.verifySsl = verifySsl;
         this.credentialProvider = java.util.Objects.requireNonNull(
                 credentialProvider, "credentialProvider must not be null");
+        this.iamClientFactory = iamClientFactory != null ? iamClientFactory : this::buildIamClient;
         if (httpClient != null) {
             this.httpClient = httpClient;
         } else {
@@ -333,12 +341,11 @@ public class MCPGatewayClient implements AutoCloseable {
      */
     private String ensureIamAgency() {
         try {
-            IamClient iamClient = buildIamClient();
+            IamClient iamClient = iamClientFactory.get();
             String agencyId = resolveAgencyId(iamClient);
             if (agencyId == null) {
-                LOG.warn("Could not resolve agency_id for {}; skipping policy attachment",
-                        DEFAULT_AGENCY_NAME);
-                return DEFAULT_AGENCY_NAME;
+                throw new IllegalStateException(
+                        "IAM agency was not returned and could not be resolved: " + DEFAULT_AGENCY_NAME);
             }
             attachIdentityPolicy(iamClient, agencyId);
         } catch (Exception e) {
@@ -346,7 +353,8 @@ public class MCPGatewayClient implements AutoCloseable {
                 LOG.debug("IAM agency {} already exists or policy already attached",
                         DEFAULT_AGENCY_NAME);
             } else {
-                LOG.warn("Failed to ensure IAM agency {}: {}", DEFAULT_AGENCY_NAME, e.getMessage());
+                throw new IllegalStateException(
+                        "Failed to ensure IAM agency " + DEFAULT_AGENCY_NAME, e);
             }
         }
         return DEFAULT_AGENCY_NAME;
@@ -430,9 +438,8 @@ public class MCPGatewayClient implements AutoCloseable {
     private void attachIdentityPolicy(IamClient iamClient, String agencyId) {
         String policyId = findSystemPolicyId(iamClient, IDENTITY_AGENCY_POLICY_NAME);
         if (policyId == null) {
-            LOG.warn("System policy {} not found; skipping attachment",
-                    IDENTITY_AGENCY_POLICY_NAME);
-            return;
+            throw new IllegalStateException(
+                    "Required IAM system policy was not found: " + IDENTITY_AGENCY_POLICY_NAME);
         }
         try {
             AttachAgencyPolicyV5Request attachReq = new AttachAgencyPolicyV5Request()

@@ -7,6 +7,7 @@ import com.huaweicloud.agentarts.sdk.mcpgateway.model.UpdateMcpGatewayTargetRequ
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import com.huaweicloud.sdk.core.auth.ICredentialProvider;
+import com.huaweicloud.sdk.iam.v5.IamClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -179,6 +180,20 @@ class MCPGatewayClientTest {
         assertThrows(IllegalArgumentException.class,
                 () -> client.updateMcpGatewayTarget("gateway", "target", null, null, null, null));
         verify(httpClient, never()).put(anyString(), any(), any());
+    }
+
+    @Test
+    void failsClosedWhenAutomaticAgencyProvisioningFails() {
+        IamClient iamClient = mock(IamClient.class);
+        when(iamClient.createAgencyV5(any())).thenThrow(new IllegalStateException("IAM unavailable"));
+        client = new MCPGatewayClient(
+                true, mock(ICredentialProvider.class), httpClient, () -> iamClient);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> client.createMcpGateway("name", "description", "mcp", "iam", null));
+
+        assertTrue(error.getMessage().contains("Failed to ensure IAM agency"));
+        verify(httpClient, never()).post(anyString(), any(), any());
     }
 
     @Test
