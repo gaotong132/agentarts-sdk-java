@@ -7,7 +7,11 @@ import com.huaweicloud.agentarts.sdk.mcpgateway.model.UpdateMcpGatewayTargetRequ
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import com.huaweicloud.sdk.core.auth.ICredentialProvider;
+import com.huaweicloud.sdk.core.exception.ServiceResponseException;
 import com.huaweicloud.sdk.iam.v5.IamClient;
+import com.huaweicloud.sdk.iam.v5.model.Agency;
+import com.huaweicloud.sdk.iam.v5.model.ListAgenciesV5Response;
+import com.huaweicloud.sdk.iam.v5.model.PageInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -203,6 +207,27 @@ class MCPGatewayClientTest {
                 () -> client.createMcpGateway("name", "description", "mcp", "iam", null));
 
         assertTrue(error.getMessage().contains("Failed to ensure IAM agency"));
+        verify(httpClient, never()).post(anyString(), any(), any());
+    }
+
+    @Test
+    void automaticAgencyProvisioningFailsFastOnRepeatedPaginationMarker() {
+        IamClient iamClient = mock(IamClient.class);
+        when(iamClient.createAgencyV5(any()))
+                .thenThrow(new ServiceResponseException(409, "conflict", "", ""));
+        when(iamClient.listAgenciesV5(any())).thenReturn(new ListAgenciesV5Response()
+                .withAgencies(List.of(new Agency().withAgencyName("other")))
+                .withPageInfo(new PageInfo().withNextMarker("same")));
+        client = new MCPGatewayClient(
+                true, mock(ICredentialProvider.class), httpClient, () -> iamClient);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> client.createMcpGateway("name", "description", "mcp", "iam", null));
+
+        assertTrue(error.getMessage().contains("Failed to ensure IAM agency"));
+        assertNotNull(error.getCause());
+        assertEquals("IAM pagination returned a repeated marker", error.getCause().getMessage());
+        verify(iamClient, times(2)).listAgenciesV5(any());
         verify(httpClient, never()).post(anyString(), any(), any());
     }
 

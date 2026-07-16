@@ -33,9 +33,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -421,6 +423,7 @@ public class MCPGatewayClient implements AutoCloseable {
             // Agency already exists — find its id via list_agencies.
             LOG.debug("IAM agency {} already exists; resolving id", DEFAULT_AGENCY_NAME);
             String marker = null;
+            Set<String> visitedMarkers = new HashSet<>();
             while (true) {
                 ListAgenciesV5Request listReq = new ListAgenciesV5Request().withLimit(200);
                 if (marker != null) {
@@ -435,11 +438,10 @@ public class MCPGatewayClient implements AutoCloseable {
                         return agency.getAgencyId();
                     }
                 }
-                PageInfo page = listResp.getPageInfo();
-                if (page == null || page.getNextMarker() == null) {
+                marker = nextMarker(listResp.getPageInfo(), visitedMarkers);
+                if (marker == null) {
                     return null;
                 }
-                marker = page.getNextMarker();
             }
         }
     }
@@ -472,6 +474,7 @@ public class MCPGatewayClient implements AutoCloseable {
 
     private String findSystemPolicyId(IamClient iamClient, String policyName) {
         String marker = null;
+        Set<String> visitedMarkers = new HashSet<>();
         while (true) {
             ListPoliciesV5Request req = new ListPoliciesV5Request()
                     .withPolicyType(ListPoliciesV5Request.PolicyTypeEnum.SYSTEM)
@@ -488,11 +491,21 @@ public class MCPGatewayClient implements AutoCloseable {
                     return policy.getPolicyId();
                 }
             }
-            PageInfo page = resp.getPageInfo();
-            if (page == null || page.getNextMarker() == null) {
+            marker = nextMarker(resp.getPageInfo(), visitedMarkers);
+            if (marker == null) {
                 return null;
             }
-            marker = page.getNextMarker();
         }
+    }
+
+    private static String nextMarker(PageInfo pageInfo, Set<String> visitedMarkers) {
+        if (pageInfo == null || !JsonUtils.isNotBlank(pageInfo.getNextMarker())) {
+            return null;
+        }
+        String marker = pageInfo.getNextMarker();
+        if (!visitedMarkers.add(marker)) {
+            throw new IllegalStateException("IAM pagination returned a repeated marker");
+        }
+        return marker;
     }
 }
