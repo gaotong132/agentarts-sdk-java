@@ -16,6 +16,70 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class MemoryModelTest {
 
+    @Nested
+    class PythonExportParityTests {
+
+        @Test
+        void assetAndDataModelsMatchWireShape() {
+            AssetRef asset = new AssetRef()
+                    .withAssetId("asset-id")
+                    .withUri("https://example.invalid/object")
+                    .withMime("application/octet-stream")
+                    .withSize(12)
+                    .withFilename("object.bin")
+                    .withMeta(Map.of("source", "test"));
+            assertEquals("asset-id", asset.toDict().get("asset_id"));
+            assertEquals(12L, asset.toDict().get("size"));
+
+            DataMessage data = new DataMessage()
+                    .withKind("summary")
+                    .withCovers(List.of("message-id"))
+                    .withContent(Map.of("summary", "example"));
+            assertEquals("data", data.toDict().get("type"));
+            assertEquals("summary", data.toDict().get("kind"));
+        }
+
+        @Test
+        void messageRequestValidatesPartCountAndSerializesMetadata() {
+            MessageRequest request = new MessageRequest(
+                            "user",
+                            List.of(Map.of("type", "text", "text", "hello")))
+                    .withActorId("actor-id")
+                    .withMeta(Map.of("tenant", "example"));
+
+            assertEquals("actor-id", request.toDict().get("actor_id"));
+            assertEquals(Map.of("tenant", "example"), request.toDict().get("meta"));
+            assertThrows(IllegalArgumentException.class, () -> request.withParts(List.of()));
+            assertThrows(
+                    IllegalArgumentException.class,
+                    () -> request.withParts(List.of(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of())));
+        }
+
+        @Test
+        void exportedResponseModelsDeserialize() throws Exception {
+            SessionListResponse sessions = JsonUtils.MAPPER.readValue(
+                    "{\"items\":[{\"id\":\"session-id\"}],\"total\":1}",
+                    SessionListResponse.class);
+            assertEquals(1, sessions.getTotal());
+            assertEquals(20, sessions.getLimit());
+
+            ContextChainResponse chain = JsonUtils.MAPPER.readValue(
+                    "{\"messages\":[{\"id\":\"message-id\"}],\"total_token_count\":42,\"compressed\":true}",
+                    ContextChainResponse.class);
+            assertEquals(42, chain.getTotalTokenCount());
+            assertTrue(chain.isCompressed());
+
+            ContextCompressionResponse compression = JsonUtils.MAPPER.readValue(
+                    "{\"compression_id\":\"compression-id\",\"compressed_messages\":[],"
+                            + "\"compression_ratio\":0.5,\"original_token_count\":100,"
+                            + "\"compressed_token_count\":50}",
+                    ContextCompressionResponse.class);
+            assertEquals("compression-id", compression.getCompressionId());
+            assertEquals(0.5, compression.getCompressionRatio());
+            assertEquals(50, compression.getCompressedTokenCount());
+        }
+    }
+
     // ============================================================
     // TextMessage
     // ============================================================
