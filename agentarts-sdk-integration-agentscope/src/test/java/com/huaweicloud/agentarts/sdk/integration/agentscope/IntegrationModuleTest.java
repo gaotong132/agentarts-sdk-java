@@ -3,6 +3,7 @@ package com.huaweicloud.agentarts.sdk.integration.agentscope;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.message.MessageConverter;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.runtime.AgentscopeRuntimeHost;
+import com.huaweicloud.agentarts.sdk.integration.agentscope.state.AgentStateStoreException;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.state.MemoryAgentStateStore;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.tool.CodeInterpreterTool;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.tool.MCPGatewayTool;
@@ -174,6 +175,39 @@ class IntegrationModuleTest {
         void closeClosesMemoryClient() {
             store.close();
             assertTrue(fakeClient.closed, "close() should have been called on MemoryClient");
+        }
+
+        @Test
+        void writeFailuresArePropagated() {
+            fakeClient.failWrites = true;
+
+            assertThrows(AgentStateStoreException.class,
+                    () -> store.save("user1", "session1", "key1", new TestState("value")));
+        }
+
+        @Test
+        void readFailuresArePropagated() {
+            store.save("user1", "session1", "key1", new TestState("value"));
+            fakeClient.failReads = true;
+
+            assertThrows(AgentStateStoreException.class,
+                    () -> store.get("user1", "session1", "key1", TestState.class));
+        }
+
+        @Test
+        void sessionCreationFailuresArePropagated() {
+            fakeClient.failSessionCreation = true;
+
+            assertThrows(AgentStateStoreException.class,
+                    () -> store.save("user1", "session1", "key1", new TestState("value")));
+        }
+
+        @Test
+        void rejectsInvalidStateKeys() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> store.save("user1", " ", "key1", new TestState("value")));
+            assertThrows(IllegalArgumentException.class,
+                    () -> store.save("user1", "session1", "", new TestState("value")));
         }
     }
 
@@ -525,6 +559,9 @@ class IntegrationModuleTest {
         boolean sessionCreated = false;
         boolean messagesAdded = false;
         boolean closed = false;
+        boolean failSessionCreation = false;
+        boolean failWrites = false;
+        boolean failReads = false;
 
         /** In-memory message storage: memSessionId → list of MessageInfo */
         final Map<String, List<MessageInfo>> messageStore = new ConcurrentHashMap<>();
@@ -535,6 +572,9 @@ class IntegrationModuleTest {
 
         @Override
         public SessionInfo createMemorySession(String spaceId, String id, String actorId, String assistantId) {
+            if (failSessionCreation) {
+                throw new IllegalStateException("simulated session creation failure");
+            }
             sessionCreated = true;
             // If id is null, generate a UUID (matching real Memory API behavior)
             String sessionId = (id != null) ? id : java.util.UUID.randomUUID().toString();
@@ -549,6 +589,9 @@ class IntegrationModuleTest {
         @Override
         public MessageBatchResponse addMessages(String spaceId, String sessionId, List<?> messages,
                                                   Long timestamp, String idempotencyKey, boolean isForceExtract) {
+            if (failWrites) {
+                throw new IllegalStateException("simulated write failure");
+            }
             messagesAdded = true;
             List<MessageInfo> stored = messageStore.computeIfAbsent(sessionId, k -> new ArrayList<>());
             int seq = stored.size();
@@ -576,6 +619,9 @@ class IntegrationModuleTest {
 
         @Override
         public List<MessageInfo> getLastKMessages(String sessionId, int k, String spaceId) {
+            if (failReads) {
+                throw new IllegalStateException("simulated read failure");
+            }
             List<MessageInfo> all = messageStore.getOrDefault(sessionId, List.of());
             int start = Math.max(0, all.size() - k);
             return new ArrayList<>(all.subList(start, all.size()));

@@ -6,8 +6,6 @@ import com.huaweicloud.agentarts.sdk.memory.MemoryClient;
 import com.huaweicloud.agentarts.sdk.memory.model.*;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.state.State;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,8 +26,6 @@ import java.util.stream.Collectors;
  */
 public class MemoryAgentStateStore implements AgentStateStore {
 
-    private static final Logger LOG = LoggerFactory.getLogger(MemoryAgentStateStore.class);
-
     private static final String SINGLE_PREFIX = "__S__:";
     private static final String LIST_PREFIX = "__L__:";
     private static final String LIST_BATCH = "__LB__:";
@@ -45,11 +41,12 @@ public class MemoryAgentStateStore implements AgentStateStore {
     private final Map<String, String> sessionCache = new ConcurrentHashMap<>();
 
     /** 本地缓存: logicalKey → 已知的 session 存在状态（用于 exists/listSessionIds）。 */
-    private final Set<String> knownSessions = ConcurrentHashMap.newKeySet();
-
     public MemoryAgentStateStore(MemoryClient memoryClient, String spaceId) {
         this.memoryClient = Objects.requireNonNull(memoryClient, "memoryClient");
-        this.spaceId = Objects.requireNonNull(spaceId, "spaceId");
+        if (spaceId == null || spaceId.isBlank()) {
+            throw new IllegalArgumentException("spaceId must not be blank");
+        }
+        this.spaceId = spaceId;
         this.mapper = new ObjectMapper()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
@@ -67,8 +64,8 @@ public class MemoryAgentStateStore implements AgentStateStore {
 
     @Override
     public void save(String userId, String sessionId, String key, State value) {
+        Objects.requireNonNull(value, "value");
         String memSessionId = getOrCreateMemorySession(userId, sessionId, key);
-        if (memSessionId == null) return;
 
         try {
             String json = mapper.writeValueAsString(value);
@@ -77,14 +74,17 @@ public class MemoryAgentStateStore implements AgentStateStore {
             TextMessage msg = new TextMessage("system", content);
             memoryClient.addMessages(spaceId, memSessionId, List.of(msg), null, null, false);
         } catch (Exception e) {
-            LOG.warn("MemoryAgentStateStore.save({},{},{}) failed: {}", userId, sessionId, key, e.getMessage());
+            throw new AgentStateStoreException("Failed to save AgentScope state", e);
         }
     }
 
     @Override
     public void save(String userId, String sessionId, String key, List<? extends State> values) {
+        Objects.requireNonNull(values, "values");
+        if (values.stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException("values must not contain null elements");
+        }
         String memSessionId = getOrCreateMemorySession(userId, sessionId, key);
-        if (memSessionId == null) return;
 
         try {
             List<TextMessage> messages = new ArrayList<>();
@@ -97,12 +97,13 @@ public class MemoryAgentStateStore implements AgentStateStore {
             }
             memoryClient.addMessages(spaceId, memSessionId, messages, null, null, false);
         } catch (Exception e) {
-            LOG.warn("MemoryAgentStateStore.save list({},{},{}) failed: {}", userId, sessionId, key, e.getMessage());
+            throw new AgentStateStoreException("Failed to save AgentScope state list", e);
         }
     }
 
     @Override
     public <T extends State> Optional<T> get(String userId, String sessionId, String key, Class<T> type) {
+        Objects.requireNonNull(type, "type");
         String logicalKey = buildLogicalKey(userId, sessionId, key);
         String memSessionId = sessionCache.get(logicalKey);
         if (memSessionId == null) return Optional.empty();
@@ -125,13 +126,14 @@ public class MemoryAgentStateStore implements AgentStateStore {
                 }
             }
         } catch (Exception e) {
-            LOG.warn("MemoryAgentStateStore.get({},{},{}) failed: {}", userId, sessionId, key, e.getMessage());
+            throw new AgentStateStoreException("Failed to load AgentScope state", e);
         }
         return Optional.empty();
     }
 
     @Override
     public <T extends State> List<T> getList(String userId, String sessionId, String key, Class<T> itemType) {
+        Objects.requireNonNull(itemType, "itemType");
         String logicalKey = buildLogicalKey(userId, sessionId, key);
         String memSessionId = sessionCache.get(logicalKey);
         if (memSessionId == null) return List.of();
@@ -153,11 +155,7 @@ public class MemoryAgentStateStore implements AgentStateStore {
                 String text = extractText(allMsgs.get(i));
                 if (text != null && text.startsWith(LIST_BATCH)) {
                     batchStart = i;
-                    try {
-                        batchCount = Integer.parseInt(text.substring(LIST_BATCH.length()));
-                    } catch (NumberFormatException e) {
-                        batchCount = 0;
-                    }
+                    batchCount = Integer.parseInt(text.substring(LIST_BATCH.length()));
                     break;
                 }
             }
@@ -178,9 +176,8 @@ public class MemoryAgentStateStore implements AgentStateStore {
             }
             return result;
         } catch (Exception e) {
-            LOG.warn("MemoryAgentStateStore.getList({},{},{}) failed: {}", userId, sessionId, key, e.getMessage());
+            throw new AgentStateStoreException("Failed to load AgentScope state list", e);
         }
-        return List.of();
     }
 
     @Override
@@ -244,9 +241,10 @@ public class MemoryAgentStateStore implements AgentStateStore {
                     return session.getId();
                 }
             } catch (Exception e) {
-                LOG.warn("MemoryAgentStateStore: createMemorySession failed for {}: {}", logicalKey, e.getMessage());
+                throw new AgentStateStoreException("Failed to create AgentArts Memory session", e);
             }
-            return null;
+            throw new AgentStateStoreException(
+                    "AgentArts Memory did not return a session identifier");
         });
     }
 
@@ -254,6 +252,12 @@ public class MemoryAgentStateStore implements AgentStateStore {
      * 构建逻辑键: {normalizedUserId}|{sessionId}|{key}
      */
     private String buildLogicalKey(String userId, String sessionId, String key) {
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new IllegalArgumentException("sessionId must not be blank");
+        }
+        if (key == null || key.isBlank()) {
+            throw new IllegalArgumentException("key must not be blank");
+        }
         return normalizeUserId(userId) + "|" + sessionId + "|" + key;
     }
 
