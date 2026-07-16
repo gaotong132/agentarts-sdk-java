@@ -183,14 +183,15 @@ public class UpdateAgentRequest {
     public String toString() {
         return "UpdateAgentRequest{"
                 + "description='" + description + "'"
-                + ", artifactSource=" + artifactSource
-                + ", invokeConfig=" + invokeConfig
-                + ", networkConfig=" + networkConfig
-                + ", observability=" + observability
                 + ", executionAgencyName='" + executionAgencyName + "'"
                 + ", agentGatewayId='" + agentGatewayId + "'"
-                + ", environmentVariables=" + environmentVariables
+                + ", invokeConfig=" + redacted(invokeConfig)
+                + ", environmentVariables=" + redacted(environmentVariables)
                 + ", tags=" + tags
                 + "}";
+    }
+
+    private static String redacted(Object value) {
+        return value == null ? "null" : "[REDACTED]";
     }
 }

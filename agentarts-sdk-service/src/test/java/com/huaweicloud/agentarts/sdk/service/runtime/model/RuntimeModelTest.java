@@ -173,6 +173,19 @@ class RuntimeModelTest {
         }
 
         @Test
+        void toStringRedactsCredentialBearingConfiguration() {
+            String marker = "unit-sensitive-marker";
+            CreateAgentRequest req = new CreateAgentRequest()
+                    .withName("agent")
+                    .withIdentityConfiguration(Map.of("token", marker))
+                    .withInvokeConfig(Map.of("authorization", marker))
+                    .withEnvironmentVariables(List.of(Map.of("key", "API_KEY", "value", marker)));
+
+            assertFalse(req.toString().contains(marker));
+            assertTrue(req.toString().contains("[REDACTED]"));
+        }
+
+        @Test
         void tagsField() {
             List<Map<String, String>> tags = List.of(Map.of("key", "env", "value", "prod"));
             CreateAgentRequest req = new CreateAgentRequest().withTags(tags);
@@ -210,6 +223,17 @@ class RuntimeModelTest {
         void toStringContainsDescription() {
             UpdateAgentRequest req = new UpdateAgentRequest().withDescription("test desc");
             assertTrue(req.toString().contains("test desc"));
+        }
+
+        @Test
+        void toStringRedactsEnvironmentAndInvokeConfiguration() {
+            String marker = "unit-sensitive-marker";
+            UpdateAgentRequest req = new UpdateAgentRequest()
+                    .withInvokeConfig(Map.of("token", marker))
+                    .withEnvironmentVariables(List.of(Map.of("key", "SECRET", "value", marker)));
+
+            assertFalse(req.toString().contains(marker));
+            assertTrue(req.toString().contains("[REDACTED]"));
         }
     }
 

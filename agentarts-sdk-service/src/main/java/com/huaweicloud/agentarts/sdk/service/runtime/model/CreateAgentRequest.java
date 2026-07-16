@@ -236,16 +236,17 @@ public class CreateAgentRequest {
         return "CreateAgentRequest{"
                 + "name='" + name + "'"
                 + ", description='" + description + "'"
-                + ", artifactSource=" + artifactSource
-                + ", identityConfiguration=" + identityConfiguration
-                + ", invokeConfig=" + invokeConfig
-                + ", networkConfig=" + networkConfig
-                + ", observability=" + observability
                 + ", executionAgencyName='" + executionAgencyName + "'"
                 + ", agentGatewayId='" + agentGatewayId + "'"
-                + ", environmentVariables=" + environmentVariables
+                + ", identityConfiguration=" + redacted(identityConfiguration)
+                + ", invokeConfig=" + redacted(invokeConfig)
+                + ", environmentVariables=" + redacted(environmentVariables)
                 + ", tags=" + tags
                 + ", arch='" + arch + "'"
                 + "}";
+    }
+
+    private static String redacted(Object value) {
+        return value == null ? "null" : "[REDACTED]";
     }
 }

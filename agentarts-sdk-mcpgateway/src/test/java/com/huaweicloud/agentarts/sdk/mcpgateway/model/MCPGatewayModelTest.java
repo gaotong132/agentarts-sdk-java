@@ -261,6 +261,17 @@ class MCPGatewayModelTest {
             assertEquals(a, b);
             assertEquals(a.hashCode(), b.hashCode());
         }
+
+        @Test
+        void toStringRedactsTargetAndCredentialConfiguration() {
+            String marker = "unit-sensitive-marker";
+            CreateMcpGatewayTargetRequest req = new CreateMcpGatewayTargetRequest()
+                    .withTargetConfiguration(Map.of("authorization", marker))
+                    .withCredentialProviderConfiguration(Map.of("api_key", marker));
+
+            assertFalse(req.toString().contains(marker));
+            assertTrue(req.toString().contains("[REDACTED]"));
+        }
     }
 
     // ============================================================
@@ -312,6 +323,17 @@ class MCPGatewayModelTest {
                     .withName("t").withDescription("d");
             assertEquals(a, b);
             assertEquals(a.hashCode(), b.hashCode());
+        }
+
+        @Test
+        void toStringRedactsTargetAndCredentialConfiguration() {
+            String marker = "unit-sensitive-marker";
+            UpdateMcpGatewayTargetRequest req = new UpdateMcpGatewayTargetRequest()
+                    .withTargetConfiguration(Map.of("authorization", marker))
+                    .withCredentialProviderConfiguration(Map.of("api_key", marker));
+
+            assertFalse(req.toString().contains(marker));
+            assertTrue(req.toString().contains("[REDACTED]"));
         }
     }
 }

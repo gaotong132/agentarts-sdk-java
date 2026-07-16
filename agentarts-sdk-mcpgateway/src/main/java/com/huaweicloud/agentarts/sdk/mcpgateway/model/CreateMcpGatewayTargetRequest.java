@@ -100,8 +100,12 @@ public class CreateMcpGatewayTargetRequest {
         return "CreateMcpGatewayTargetRequest{"
                 + "name='" + name + '\''
                 + ", description='" + description + '\''
-                + ", targetConfiguration=" + targetConfiguration
-                + ", credentialProviderConfiguration=" + credentialProviderConfiguration
+                + ", targetConfiguration=" + redacted(targetConfiguration)
+                + ", credentialProviderConfiguration=" + redacted(credentialProviderConfiguration)
                 + '}';
+    }
+
+    private static String redacted(Object value) {
+        return value == null ? "null" : "[REDACTED]";
     }
 }
