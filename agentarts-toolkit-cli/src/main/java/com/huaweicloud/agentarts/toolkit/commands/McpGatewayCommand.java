@@ -144,10 +144,9 @@ public class McpGatewayCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            // TODO: --status and --gateway-id filters are not exposed by
-            // MCPGatewayClient.listMcpGateways (only name/limit/offset are wired).
             try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
-                RequestResult result = client.listMcpGateways(name, limit, offset);
+                RequestResult result = client.listMcpGateways(
+                        name, status, gatewayId, null, null, null, null, limit, offset);
                 if (!result.isSuccess()) {
                     CliSupport.fail("Error listing MCP gateways (HTTP "
                             + result.getStatusCode() + "): " + result.getError());

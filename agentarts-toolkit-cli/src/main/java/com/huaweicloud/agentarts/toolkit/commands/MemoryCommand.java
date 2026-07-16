@@ -7,6 +7,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -40,6 +41,46 @@ public class MemoryCommand implements Runnable {
         return output != null && "json".equalsIgnoreCase(output.trim());
     }
 
+    private static java.util.List<String> parseStrategies(String raw) {
+        if (raw == null) return null;
+        java.util.List<String> parsed = new ArrayList<>();
+        for (String value : raw.split(",", -1)) {
+            String strategy = value.trim();
+            if (strategy.isEmpty()) {
+                CliSupport.fail("Invalid memory strategies: values must be non-empty");
+            }
+            parsed.add(strategy);
+        }
+        return parsed;
+    }
+
+    private static java.util.List<Map<String, String>> parseTags(String raw) {
+        if (raw == null) return null;
+        java.util.List<Map<String, String>> parsed = new ArrayList<>();
+        for (String pair : raw.split(",", -1)) {
+            int separator = pair.indexOf('=');
+            if (separator < 1) {
+                CliSupport.fail("Invalid tags: use key=value pairs separated by commas");
+            }
+            String key = pair.substring(0, separator).trim();
+            String value = pair.substring(separator + 1).trim();
+            if (key.isEmpty()) {
+                CliSupport.fail("Invalid tags: tag keys must be non-empty");
+            }
+            Map<String, String> tag = new LinkedHashMap<>();
+            tag.put("key", key);
+            tag.put("value", value);
+            parsed.add(tag);
+        }
+        return parsed;
+    }
+
+    private static void validateTtl(Integer ttl) {
+        if (ttl != null && (ttl < 1 || ttl > 8760)) {
+            CliSupport.fail("Message TTL must be between 1 and 8760 hours");
+        }
+    }
+
     @Command(name = "create", description = "Create a Memory Space")
     static class Create implements Runnable {
         @Parameters(index = "0", description = "Space name (1-128 chars)") String name;
@@ -58,13 +99,30 @@ public class MemoryCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            // TODO: --extract-idle/--extract-tokens/--extract-messages/--strategies/--tags/
-            // --vpc-id/--subnet-id are accepted for CLI parity but not yet wired through
-            // MemoryClient.createSpace (it applies fixed defaults: public access + the
-            // semantic/user_preference/episodic strategies). Wire them once the client
-            // exposes the full create-space parameter set.
+            if (name == null || name.isBlank() || name.trim().length() > 128) {
+                CliSupport.fail("Space name must contain between 1 and 128 characters");
+            }
+            validateTtl(ttl);
+            if ((vpcId == null) != (subnetId == null)
+                    || (vpcId != null && (vpcId.isBlank() || subnetId.isBlank()))) {
+                CliSupport.fail("Both non-empty VPC ID and subnet ID are required for private access");
+            }
+            java.util.List<String> parsedStrategies = parseStrategies(strategies);
+            java.util.List<Map<String, String>> parsedTags = parseTags(tags);
             try (MemoryClient client = new MemoryClient(region, null, !skipSsl)) {
-                SpaceInfo space = client.createSpace(name, ttl, description);
+                SpaceInfo space = client.createSpace(
+                        name.trim(),
+                        ttl,
+                        description,
+                        parsedTags,
+                        extractIdle,
+                        extractTokens,
+                        extractMessages,
+                        publicAccess,
+                        vpcId == null ? null : vpcId.trim(),
+                        subnetId == null ? null : subnetId.trim(),
+                        parsedStrategies,
+                        null);
                 if (isJson(output)) {
                     CliSupport.printJson(space);
                 } else {
@@ -150,10 +208,21 @@ public class MemoryCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
-            // TODO: --extract-*/--strategies/--tags are accepted for CLI parity but
-            // MemoryClient.updateSpace only supports name/description/ttl.
+            validateTtl(ttl);
+            java.util.List<String> parsedStrategies = parseStrategies(strategies);
+            java.util.List<Map<String, String>> parsedTags = parseTags(tags);
             try (MemoryClient client = new MemoryClient(region, null, !skipSsl)) {
-                SpaceInfo space = client.updateSpace(spaceId, null, description, ttl);
+                SpaceInfo space = client.updateSpace(
+                        spaceId,
+                        null,
+                        description,
+                        ttl,
+                        null,
+                        extractIdle,
+                        extractTokens,
+                        extractMessages,
+                        parsedTags,
+                        parsedStrategies);
                 if (isJson(output)) {
                     Map<String, Object> wrapper = new LinkedHashMap<>();
                     wrapper.put("space_id", spaceId);

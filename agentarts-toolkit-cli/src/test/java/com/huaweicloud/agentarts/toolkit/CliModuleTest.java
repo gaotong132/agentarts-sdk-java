@@ -177,6 +177,29 @@ class CliModuleTest {
         }
     }
 
+    @Nested
+    @DisplayName("Production safety: memory input validation")
+    class MemoryInputValidationTests {
+
+        @Test
+        void invalidAdvancedOptionsFailBeforeClientCreation() {
+            String[][] commands = {
+                    {"memory", "create", "unit-space", "--ttl", "0"},
+                    {"memory", "create", "unit-space", "--tags", "missing-separator"},
+                    {"memory", "create", "unit-space", "--vpc-id", "unit-vpc"},
+                    {"memory", "create", "unit-space", "--strategies", "semantic,"},
+                    {"memory", "update", "unit-space", "--ttl", "8761"},
+                    {"memory", "update", "unit-space", "--tags", "=missing-key"}
+            };
+
+            for (String[] command : commands) {
+                int exit = CliSupport.withCleanExit(
+                        new CommandLine(new AgentArtsCli())).execute(command);
+                assertNotEquals(0, exit, "invalid input must fail before any network request");
+            }
+        }
+    }
+
     // ========================
     // API verification: Init command options
     // ========================
