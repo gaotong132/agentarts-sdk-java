@@ -49,6 +49,37 @@ class AgentArtsRuntimeAppTest {
         app.stop();
     }
 
+    @Test
+    @DisplayName("runtime binds the requested host and validates lifecycle inputs")
+    void bindsRequestedHostAndValidatesLifecycle() throws Exception {
+        assertThrows(IllegalStateException.class, () -> app.run(0, "127.0.0.1"));
+
+        app.stop();
+        AgentArtsRuntimeApp loopbackApp = new AgentArtsRuntimeApp(15, vertx);
+        app = loopbackApp;
+        assertThrows(IllegalArgumentException.class, () -> loopbackApp.run(-1, "localhost"));
+        assertThrows(IllegalArgumentException.class, () -> loopbackApp.run(65_536, "localhost"));
+        assertThrows(IllegalArgumentException.class, () -> loopbackApp.run(0, " "));
+
+        loopbackApp.run(0, "127.0.0.1");
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Integer> statusCode = new AtomicReference<>();
+        webClient.get(loopbackApp.getPort(), "127.0.0.1", "/ping")
+                .send()
+                .onComplete(result -> {
+                    if (result.succeeded()) {
+                        statusCode.set(result.result().statusCode());
+                    }
+                    latch.countDown();
+                });
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertEquals(200, statusCode.get());
+
+        loopbackApp.stop();
+        loopbackApp.stop();
+        assertThrows(IllegalStateException.class, () -> loopbackApp.run(0, "localhost"));
+    }
+
     // ========================
     // GET /ping
     // ========================

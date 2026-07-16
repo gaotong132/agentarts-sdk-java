@@ -32,7 +32,7 @@ public class DevOperation {
      * Start a local development server for the agent.
      *
      * @param port        server port (0 picks an ephemeral port)
-     * @param host        bind host (currently advisory; the app binds to all interfaces)
+     * @param host        bind host
      * @param reload      whether to enable hot-reload (currently advisory)
      * @param configPath  path to {@code .agentarts_config.yaml} (nullable)
      * @param projectPath project directory containing the config (nullable, defaults to cwd)
@@ -71,7 +71,7 @@ public class DevOperation {
         Runtime.getRuntime().addShutdownHook(shutdownHook);
 
         try {
-            app.run(port);
+            app.run(port, host);
             System.out.println("DEV_SERVER_LISTENING on port " + app.getPort());
             stopLatch.await();
         } catch (InterruptedException e) {

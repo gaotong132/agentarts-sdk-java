@@ -87,7 +87,9 @@ public class AgentArtsRuntimeApp {
     private final java.util.concurrent.atomic.AtomicLong taskCounter = new java.util.concurrent.atomic.AtomicLong();
     private final java.util.concurrent.atomic.AtomicInteger activeTaskCount =
             new java.util.concurrent.atomic.AtomicInteger();
+    private final Object lifecycleLock = new Object();
     private volatile HttpServer httpServer;
+    private volatile boolean closed;
 
     /**
      * Create an AgentArtsRuntimeApp.
@@ -222,6 +224,32 @@ public class AgentArtsRuntimeApp {
      * @param port the port to listen on (default 8080)
      */
     public void run(int port) {
+        run(port, "0.0.0.0");
+    }
+
+    /**
+     * Start the HTTP server on a specific interface and block until it is listening.
+     *
+     * @param port the port to listen on; {@code 0} selects an ephemeral port
+     * @param host bind address or host name
+     */
+    public void run(int port, String host) {
+        if (port < 0 || port > 65_535) {
+            throw new IllegalArgumentException("port must be between 0 and 65535");
+        }
+        if (host == null || host.isBlank()) {
+            throw new IllegalArgumentException("host must not be blank");
+        }
+
+        synchronized (lifecycleLock) {
+            if (closed) {
+                throw new IllegalStateException("AgentArts Runtime is closed");
+            }
+            if (httpServer != null) {
+                throw new IllegalStateException("AgentArts Runtime is already started");
+            }
+        }
+
         Router router = Router.router(vertx);
         router.route().handler(BodyHandler.create().setBodyLimit(maxRequestBodyBytes));
 
@@ -230,17 +258,31 @@ public class AgentArtsRuntimeApp {
         router.get("/ping").handler(this::handlePing);
 
         // WebSocket
-        HttpServerOptions options = new HttpServerOptions().setPort(port);
-        httpServer = vertx.createHttpServer(options);
-        httpServer.webSocketHandshakeHandler(this::handleWebSocketHandshake);
-        httpServer.webSocketHandler(this::handleWebSocket);
-        httpServer.requestHandler(router);
+        HttpServer server = vertx.createHttpServer(new HttpServerOptions());
+        server.webSocketHandshakeHandler(this::handleWebSocketHandshake);
+        server.webSocketHandler(this::handleWebSocket);
+        server.requestHandler(router);
 
-        httpServer.listen(port).onSuccess(server -> {
-            LOG.info("AgentArts Runtime started on port {}", server.actualPort());
-        }).onFailure(err -> {
-            LOG.error("Failed to start AgentArts Runtime: {}", err.getMessage(), err);
-        }).toCompletionStage().toCompletableFuture().join();
+        synchronized (lifecycleLock) {
+            httpServer = server;
+        }
+        try {
+            server.listen(port, host).onSuccess(listening ->
+                    LOG.info("AgentArts Runtime started on {}:{}", host, listening.actualPort()))
+                    .toCompletionStage().toCompletableFuture().join();
+        } catch (RuntimeException e) {
+            synchronized (lifecycleLock) {
+                if (httpServer == server) {
+                    httpServer = null;
+                }
+            }
+            try {
+                server.close().toCompletionStage().toCompletableFuture().join();
+            } catch (RuntimeException closeError) {
+                e.addSuppressed(closeError);
+            }
+            throw e;
+        }
     }
 
     public void run() {
@@ -251,10 +293,18 @@ public class AgentArtsRuntimeApp {
      * Stop the HTTP server.
      */
     public void stop() {
-        if (httpServer != null) {
-            httpServer.close().toCompletionStage().toCompletableFuture().join();
+        HttpServer server;
+        boolean closeVertx;
+        synchronized (lifecycleLock) {
+            server = httpServer;
+            httpServer = null;
+            closeVertx = !closed && ownVertx;
+            closed = true;
         }
-        if (ownVertx) {
+        if (server != null) {
+            server.close().toCompletionStage().toCompletableFuture().join();
+        }
+        if (closeVertx) {
             vertx.close().toCompletionStage().toCompletableFuture().join();
         }
     }
