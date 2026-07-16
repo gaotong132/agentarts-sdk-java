@@ -51,9 +51,16 @@ public class MemoryClient implements AutoCloseable {
      * @param verifySsl  whether to verify SSL certificates
      */
     public MemoryClient(String regionName, String apiKey, boolean verifySsl) {
+        this(regionName, apiKey, verifySsl, null, null);
+    }
+
+    MemoryClient(String regionName, String apiKey, boolean verifySsl,
+                 BaseHttpClient controlPlaneClient, BaseHttpClient dataPlaneClient) {
         this.regionName = regionName != null ? regionName : Constants.getRegion();
         this.apiKey = apiKey;
         this.verifySsl = verifySsl;
+        this.controlPlaneClient = controlPlaneClient;
+        this.dataPlaneClient = dataPlaneClient;
     }
 
     /** Create a MemoryClient with SSL verification enabled. */
