@@ -215,6 +215,7 @@ public class AgentArtsRuntimeApp {
         HttpServerOptions options = new HttpServerOptions().setPort(port);
         httpServer = vertx.createHttpServer(options);
         httpServer.webSocketHandshakeHandler(this::handleWebSocketHandshake);
+        httpServer.webSocketHandler(this::handleWebSocket);
         httpServer.requestHandler(router);
 
         httpServer.listen(port).onSuccess(server -> {
@@ -390,18 +391,16 @@ public class AgentArtsRuntimeApp {
                     LOG.debug("Failed to reject WebSocket handshake: {}", error.getMessage()));
             return;
         }
-        if (wsHandler == null) {
-            handshake.reject(503).onFailure(error ->
-                    LOG.debug("Failed to reject WebSocket handshake: {}", error.getMessage()));
-            return;
-        }
-
-        handshake.accept()
-                .onSuccess(this::handleWebSocket)
-                .onFailure(error -> LOG.debug("WebSocket handshake failed: {}", error.getMessage()));
+        handshake.accept().onFailure(error ->
+                LOG.debug("WebSocket handshake failed: {}", error.getMessage()));
     }
 
     private void handleWebSocket(ServerWebSocket ws) {
+        if (wsHandler == null) {
+            ws.close((short) 1011, "No WebSocket handler registered");
+            return;
+        }
+
         RequestContext ctx = RequestContext.fromHeaders(name ->
                 ws.headers().get(name));
         AgentArtsRuntimeContext.fromRequestContext(ctx);
