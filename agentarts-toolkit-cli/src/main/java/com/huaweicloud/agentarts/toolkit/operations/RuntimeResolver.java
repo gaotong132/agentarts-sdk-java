@@ -111,8 +111,6 @@ public final class RuntimeResolver {
             if (detail == null || detail.getInvokeConfig() == null) return null;
             Object endpoint = detail.getInvokeConfig().get("access_endpoint");
             return endpoint != null ? String.valueOf(endpoint) : null;
-        } catch (Exception ignored) {
-            return null;
         }
     }
 }
