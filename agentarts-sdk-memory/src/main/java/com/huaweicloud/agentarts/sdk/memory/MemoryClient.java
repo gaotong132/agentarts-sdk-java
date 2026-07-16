@@ -13,7 +13,6 @@ import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 
 import java.util.*;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 /**
  * Memory client with dual-plane architecture (AK/SK control + API Key data).
@@ -304,16 +303,7 @@ public class MemoryClient implements AutoCloseable {
             String actorId,
             String assistantId,
             Map<String, Object> meta) {
-        CreateMemorySessionRequest req = new CreateMemorySessionRequest()
-                .withId(id)
-                .withActorId(actorId)
-                .withAssistantId(assistantId)
-                .withMeta(meta);
-
-        RequestResult result = getDataPlaneClient()
-                .post("/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
-                        + "/sessions", null, req).block();
-        return parseResult(result, SessionInfo.class);
+        return createMemorySessionAsync(spaceId, id, actorId, assistantId, meta).block();
     }
 
     /** Create a memory session with auto-generated ID (Data Plane). */
@@ -337,9 +327,15 @@ public class MemoryClient implements AutoCloseable {
      * @return batch response with added messages
      */
     public MessageBatchResponse addMessages(String spaceId, String sessionId,
-                                             List<?> messages,
-                                             Long timestamp, String idempotencyKey,
-                                             boolean isForceExtract) {
+                                              List<?> messages,
+                                              Long timestamp, String idempotencyKey,
+                                              boolean isForceExtract) {
+        return addMessagesAsync(spaceId, sessionId, messages, timestamp,
+                idempotencyKey, isForceExtract).block();
+    }
+
+    private static AddMessagesRequest buildAddMessagesRequest(
+            List<?> messages, Long timestamp, String idempotencyKey, boolean isForceExtract) {
         if (messages == null || messages.isEmpty()) {
             throw new IllegalArgumentException("messages must not be null or empty");
         }
@@ -360,16 +356,11 @@ public class MemoryClient implements AutoCloseable {
             }
         }
 
-        AddMessagesRequest req = new AddMessagesRequest()
+        return new AddMessagesRequest()
                 .withMessages(msgDicts)
                 .withTimestamp(timestamp)
                 .withIdempotencyKey(idempotencyKey)
                 .withIsForceExtract(isForceExtract);
-
-        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
-                + "/sessions/" + UrlUtils.encodePathSegment(sessionId, "sessionId") + "/messages";
-        RequestResult result = getDataPlaneClient().post(url, null, req).block();
-        return parseResult(result, MessageBatchResponse.class);
     }
 
     /** Add messages with default options (Data Plane). */
@@ -379,36 +370,17 @@ public class MemoryClient implements AutoCloseable {
 
     /** Get the last K messages from a session (Data Plane). */
     public List<MessageInfo> getLastKMessages(String sessionId, int k, String spaceId) {
-        // First call to get total count
-        MessageListResponse first = listMessages(spaceId, sessionId, 1, 0);
-        int total = first.getTotal();
-        int offset = Math.max(0, total - k);
-        // Second call to get last K messages
-        MessageListResponse result = listMessages(spaceId, sessionId, k, offset);
-        return result.getItems() != null ? result.getItems() : List.of();
+        return getLastKMessagesAsync(sessionId, k, spaceId).block();
     }
 
     /** Get a single message by ID (Data Plane). */
     public MessageInfo getMessage(String messageId, String spaceId, String sessionId) {
-        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
-                + "/sessions/" + UrlUtils.encodePathSegment(sessionId, "sessionId")
-                + "/messages/" + UrlUtils.encodePathSegment(messageId, "messageId");
-        RequestResult result = getDataPlaneClient().get(url).block();
-        return parseResult(result, MessageInfo.class);
+        return getMessageAsync(messageId, spaceId, sessionId).block();
     }
 
     /** List messages with pagination (Data Plane). */
     public MessageListResponse listMessages(String spaceId, String sessionId, int limit, int offset) {
-        String url;
-        if (sessionId != null) {
-            url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
-                    + "/sessions/" + UrlUtils.encodePathSegment(sessionId, "sessionId") + "/messages";
-        } else {
-            url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId") + "/messages";
-        }
-        RequestResult result = getDataPlaneClient()
-                .request("GET", url, null, null, paginationQuery(limit, offset)).block();
-        return parseResult(result, MessageListResponse.class);
+        return listMessagesAsync(spaceId, sessionId, limit, offset).block();
     }
 
     /** List messages with default pagination (Data Plane). */
@@ -422,11 +394,7 @@ public class MemoryClient implements AutoCloseable {
 
     /** Search memories with optional filters (Data Plane). */
     public MemorySearchResponse searchMemories(String spaceId, MemorySearchFilter filters) {
-        Map<String, Object> body = filters != null ? filters.toDict() : Map.of();
-        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
-                + "/memories/search";
-        RequestResult result = getDataPlaneClient().post(url, null, body).block();
-        return parseResult(result, MemorySearchResponse.class);
+        return searchMemoriesAsync(spaceId, filters).block();
     }
 
     /** Search memories without filters (Data Plane). */
@@ -436,17 +404,7 @@ public class MemoryClient implements AutoCloseable {
 
     /** List memories with pagination and optional filters (Data Plane). */
     public MemoryListResponse listMemories(String spaceId, int limit, int offset, MemoryListFilter filters) {
-        Map<String, List<String>> query = paginationQuery(limit, offset);
-        if (filters != null) {
-            Map<String, Object> f = filters.toDict();
-            for (Map.Entry<String, Object> e : f.entrySet()) {
-                query.put(e.getKey(), List.of(String.valueOf(e.getValue())));
-            }
-        }
-        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId") + "/memories";
-        RequestResult result = getDataPlaneClient()
-                .request("GET", url, null, null, query).block();
-        return parseResult(result, MemoryListResponse.class);
+        return listMemoriesAsync(spaceId, limit, offset, filters).block();
     }
 
     /** List memories with default pagination (Data Plane). */
@@ -456,17 +414,12 @@ public class MemoryClient implements AutoCloseable {
 
     /** Get a memory by ID (Data Plane). */
     public MemoryInfo getMemory(String spaceId, String memoryId) {
-        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
-                + "/memories/" + UrlUtils.encodePathSegment(memoryId, "memoryId");
-        RequestResult result = getDataPlaneClient().get(url).block();
-        return parseResult(result, MemoryInfo.class);
+        return getMemoryAsync(spaceId, memoryId).block();
     }
 
     /** Delete a memory by ID (Data Plane). */
     public void deleteMemory(String spaceId, String memoryId) {
-        String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
-                + "/memories/" + UrlUtils.encodePathSegment(memoryId, "memoryId");
-        ensureSuccess(getDataPlaneClient().delete(url).block());
+        deleteMemoryAsync(spaceId, memoryId).block();
     }
 
     // ========================
@@ -524,14 +477,8 @@ public class MemoryClient implements AutoCloseable {
     // Async (Reactor) variants
     // ========================
     //
-    // Each method returns a cold Mono that runs the corresponding synchronous
-    // call on a bounded-elastic worker. This keeps the subscriber thread free,
-    // but it is an asynchronous wrapper around blocking code rather than an
-    // end-to-end non-blocking transport.
-
-    private <T> Mono<T> async(java.util.concurrent.Callable<T> callable) {
-        return Mono.fromCallable(callable).subscribeOn(Schedulers.boundedElastic());
-    }
+    // Each method is cold and composes BaseHttpClient's non-blocking transport.
+    // Synchronous methods above are compatibility wrappers around this core.
 
     /** Async variant of {@link #createMemorySession(String, String, String, String, Map)}. */
     public Mono<SessionInfo> createMemorySessionAsync(
@@ -540,7 +487,17 @@ public class MemoryClient implements AutoCloseable {
             String actorId,
             String assistantId,
             Map<String, Object> meta) {
-        return async(() -> createMemorySession(spaceId, id, actorId, assistantId, meta));
+        return Mono.defer(() -> {
+            CreateMemorySessionRequest request = new CreateMemorySessionRequest()
+                    .withId(id)
+                    .withActorId(actorId)
+                    .withAssistantId(assistantId)
+                    .withMeta(meta);
+            String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                    + "/sessions";
+            return getDataPlaneClient().post(url, null, request)
+                    .map(result -> parseResult(result, SessionInfo.class));
+        });
     }
 
     /** Async variant without session metadata. */
@@ -551,61 +508,115 @@ public class MemoryClient implements AutoCloseable {
 
     /** Async variant of {@link #addMessages(String, String, List, Long, String, boolean)}. */
     public Mono<MessageBatchResponse> addMessagesAsync(String spaceId, String sessionId,
-                                                        List<?> messages, Long timestamp,
-                                                        String idempotencyKey, boolean isForceExtract) {
-        return async(() -> addMessages(spaceId, sessionId, messages, timestamp, idempotencyKey, isForceExtract));
+                                                         List<?> messages, Long timestamp,
+                                                         String idempotencyKey, boolean isForceExtract) {
+        return Mono.defer(() -> {
+            AddMessagesRequest request = buildAddMessagesRequest(
+                    messages, timestamp, idempotencyKey, isForceExtract);
+            String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                    + "/sessions/" + UrlUtils.encodePathSegment(sessionId, "sessionId")
+                    + "/messages";
+            return getDataPlaneClient().post(url, null, request)
+                    .map(result -> parseResult(result, MessageBatchResponse.class));
+        });
     }
 
     /** Async variant of {@link #addMessages(String, String, List)}. */
     public Mono<MessageBatchResponse> addMessagesAsync(String spaceId, String sessionId,
-                                                        List<?> messages) {
-        return async(() -> addMessages(spaceId, sessionId, messages));
+                                                         List<?> messages) {
+        return addMessagesAsync(spaceId, sessionId, messages, null, null, false);
     }
 
     /** Async variant of {@link #getLastKMessages(String, int, String)}. */
     public Mono<List<MessageInfo>> getLastKMessagesAsync(String sessionId, int k, String spaceId) {
-        return async(() -> getLastKMessages(sessionId, k, spaceId));
+        return listMessagesAsync(spaceId, sessionId, 1, 0)
+                .flatMap(first -> {
+                    int offset = Math.max(0, first.getTotal() - k);
+                    return listMessagesAsync(spaceId, sessionId, k, offset);
+                })
+                .map(response -> response.getItems() != null ? response.getItems() : List.of());
     }
 
     /** Async variant of {@link #getMessage(String, String, String)}. */
     public Mono<MessageInfo> getMessageAsync(String messageId, String spaceId, String sessionId) {
-        return async(() -> getMessage(messageId, spaceId, sessionId));
+        return Mono.defer(() -> {
+            String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                    + "/sessions/" + UrlUtils.encodePathSegment(sessionId, "sessionId")
+                    + "/messages/" + UrlUtils.encodePathSegment(messageId, "messageId");
+            return getDataPlaneClient().get(url)
+                    .map(result -> parseResult(result, MessageInfo.class));
+        });
     }
 
     /** Async variant of {@link #listMessages(String, String, int, int)}. */
     public Mono<MessageListResponse> listMessagesAsync(String spaceId, String sessionId,
-                                                        int limit, int offset) {
-        return async(() -> listMessages(spaceId, sessionId, limit, offset));
+                                                         int limit, int offset) {
+        return Mono.defer(() -> {
+            String url = sessionId != null
+                    ? "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                            + "/sessions/" + UrlUtils.encodePathSegment(sessionId, "sessionId")
+                            + "/messages"
+                    : "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId") + "/messages";
+            return getDataPlaneClient()
+                    .request("GET", url, null, null, paginationQuery(limit, offset))
+                    .map(result -> parseResult(result, MessageListResponse.class));
+        });
     }
 
     /** Async variant of {@link #searchMemories(String, MemorySearchFilter)}. */
     public Mono<MemorySearchResponse> searchMemoriesAsync(String spaceId, MemorySearchFilter filters) {
-        return async(() -> searchMemories(spaceId, filters));
+        return Mono.defer(() -> {
+            Map<String, Object> body = filters != null ? filters.toDict() : Map.of();
+            String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                    + "/memories/search";
+            return getDataPlaneClient().post(url, null, body)
+                    .map(result -> parseResult(result, MemorySearchResponse.class));
+        });
     }
 
     /** Async variant of {@link #searchMemories(String)}. */
     public Mono<MemorySearchResponse> searchMemoriesAsync(String spaceId) {
-        return async(() -> searchMemories(spaceId));
+        return searchMemoriesAsync(spaceId, null);
     }
 
     /** Async variant of {@link #listMemories(String, int, int, MemoryListFilter)}. */
     public Mono<MemoryListResponse> listMemoriesAsync(String spaceId, int limit, int offset,
-                                                       MemoryListFilter filters) {
-        return async(() -> listMemories(spaceId, limit, offset, filters));
+                                                        MemoryListFilter filters) {
+        return Mono.defer(() -> {
+            Map<String, List<String>> query = paginationQuery(limit, offset);
+            if (filters != null) {
+                filters.toDict().forEach(
+                        (key, value) -> query.put(key, List.of(String.valueOf(value))));
+            }
+            String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId") + "/memories";
+            return getDataPlaneClient().request("GET", url, null, null, query)
+                    .map(result -> parseResult(result, MemoryListResponse.class));
+        });
     }
 
     /** Async variant of {@link #listMemories(String)}. */
     public Mono<MemoryListResponse> listMemoriesAsync(String spaceId) {
-        return async(() -> listMemories(spaceId));
+        return listMemoriesAsync(spaceId, 10, 0, null);
     }
 
     /** Async variant of {@link #getMemory(String, String)}. */
     public Mono<MemoryInfo> getMemoryAsync(String spaceId, String memoryId) {
-        return async(() -> getMemory(spaceId, memoryId));
+        return Mono.defer(() -> {
+            String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                    + "/memories/" + UrlUtils.encodePathSegment(memoryId, "memoryId");
+            return getDataPlaneClient().get(url)
+                    .map(result -> parseResult(result, MemoryInfo.class));
+        });
     }
 
     /** Async variant of {@link #deleteMemory(String, String)}. */
     public Mono<Void> deleteMemoryAsync(String spaceId, String memoryId) {
-        return async(() -> { deleteMemory(spaceId, memoryId); return null; }).then();
+        return Mono.defer(() -> {
+            String url = "/spaces/" + UrlUtils.encodePathSegment(spaceId, "spaceId")
+                    + "/memories/" + UrlUtils.encodePathSegment(memoryId, "memoryId");
+            return getDataPlaneClient().delete(url)
+                    .doOnNext(this::ensureSuccess)
+                    .then();
+        });
     }
 }

@@ -5,6 +5,7 @@ import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.memory.model.CreateMemorySessionRequest;
 import com.huaweicloud.agentarts.sdk.memory.model.CreateSpaceRequest;
 import com.huaweicloud.agentarts.sdk.memory.model.MemoryListFilter;
+import com.huaweicloud.agentarts.sdk.memory.model.SessionInfo;
 import com.huaweicloud.agentarts.sdk.memory.model.UpdateSpaceRequest;
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
@@ -15,6 +16,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -179,6 +181,25 @@ class MemoryClientTest {
         verify(dataPlane, times(2)).post(eq("/spaces/space/sessions"), isNull(), request.capture());
         assertEquals(metadata, request.getAllValues().get(0).getMeta());
         assertEquals(metadata, request.getAllValues().get(1).getMeta());
+    }
+
+    @Test
+    void asyncDataPlaneIsColdAndUsesTheSubscriberThread() throws Exception {
+        AtomicReference<String> transportThread = new AtomicReference<>();
+        RequestResult response = success("{\"id\":\"session\"}");
+        when(dataPlane.post(eq("/spaces/space/sessions"), isNull(), any()))
+                .thenReturn(Mono.defer(() -> {
+                    transportThread.set(Thread.currentThread().getName());
+                    return Mono.just(response);
+                }));
+
+        Mono<SessionInfo> operation = client.createMemorySessionAsync(
+                "space", "session", "actor", "assistant");
+        verifyNoInteractions(dataPlane);
+        String subscriberThread = Thread.currentThread().getName();
+        assertEquals("session", operation.block().getId());
+        assertEquals(subscriberThread, transportThread.get(),
+                "async transport must not be shifted to a blocking worker pool");
     }
 
     @Test
