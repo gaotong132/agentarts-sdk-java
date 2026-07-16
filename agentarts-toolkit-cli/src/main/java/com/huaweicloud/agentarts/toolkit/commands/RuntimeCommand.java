@@ -59,7 +59,8 @@ public class RuntimeCommand implements Runnable {
         @Option(names = "--chunked", description = "Enable chunked streaming (ndjson)")
         boolean chunked;
 
-        @Option(names = {"-bt", "--bearer-token"}, description = "Bearer token")
+        @Option(names = {"-bt", "--bearer-token"}, arity = "0..1", interactive = true,
+                description = "Bearer token (omit value for hidden prompt; defaults to BEARER_TOKEN)")
         String bearerToken;
 
         @Option(names = {"-r", "--region"}, description = "Region name")
@@ -79,6 +80,7 @@ public class RuntimeCommand implements Runnable {
 
         @Override
         public void run() {
+            String resolvedBearerToken = CliSupport.resolveBearerToken(bearerToken);
             // Split the command string into a argv list. The reference CLI uses shlex.split;
             // a whitespace split is a sufficient approximation for the common cases.
             List<String> commandArray = new ArrayList<>(Arrays.asList(command.trim().split("\\s+")));
@@ -86,13 +88,13 @@ public class RuntimeCommand implements Runnable {
             if (commandArray.isEmpty()) {
                 CliSupport.fail("Command cannot be empty");
             }
-            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
-                if (JsonUtils.isNotBlank(bearerToken)) {
-                    client.setAuthToken(bearerToken);
+            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, resolvedBearerToken)) {
+                if (JsonUtils.isNotBlank(resolvedBearerToken)) {
+                    client.setAuthToken(resolvedBearerToken);
                 }
                 Map<String, Object> result = client.execCommand(
                         agentName, sessionId, commandArray, chunked,
-                        bearerToken, endpoint, userId, timeout);
+                        resolvedBearerToken, endpoint, userId, timeout);
                 CliSupport.printJson(result);
             } catch (Exception e) {
                 if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
@@ -115,7 +117,8 @@ public class RuntimeCommand implements Runnable {
         @Option(names = {"-p", "--path"}, description = "Remote directory path", defaultValue = "/home/user/")
         String remotePath;
 
-        @Option(names = {"-bt", "--bearer-token"}, description = "Bearer token")
+        @Option(names = {"-bt", "--bearer-token"}, arity = "0..1", interactive = true,
+                description = "Bearer token (omit value for hidden prompt; defaults to BEARER_TOKEN)")
         String bearerToken;
 
         @Option(names = {"-r", "--region"}, description = "Region name")
@@ -129,6 +132,7 @@ public class RuntimeCommand implements Runnable {
 
         @Override
         public void run() {
+            String resolvedBearerToken = CliSupport.resolveBearerToken(bearerToken);
             // Read each local file into memory and carry its bytes + filename.
             // RuntimeClient.uploadFiles streams single-file uploads as
             // application/octet-stream (raw bytes) and multi-file uploads as
@@ -148,13 +152,13 @@ public class RuntimeCommand implements Runnable {
                     CliSupport.fail("Failed to read file " + f + ": " + e.getMessage());
                 }
             }
-            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
-                if (JsonUtils.isNotBlank(bearerToken)) {
-                    client.setAuthToken(bearerToken);
+            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, resolvedBearerToken)) {
+                if (JsonUtils.isNotBlank(resolvedBearerToken)) {
+                    client.setAuthToken(resolvedBearerToken);
                 }
                 Map<String, Object> result = client.uploadFiles(
                         agentName, sessionId, fileMaps, remotePath,
-                        null, null, null, bearerToken, endpoint, userId, timeout);
+                        null, null, null, resolvedBearerToken, endpoint, userId, timeout);
                 CliSupport.printJson(result);
             } catch (Exception e) {
                 if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
@@ -187,7 +191,8 @@ public class RuntimeCommand implements Runnable {
         @Option(names = "--recursive", description = "Download directory as tar archive")
         boolean recursive;
 
-        @Option(names = {"-bt", "--bearer-token"}, description = "Bearer token")
+        @Option(names = {"-bt", "--bearer-token"}, arity = "0..1", interactive = true,
+                description = "Bearer token (omit value for hidden prompt; defaults to BEARER_TOKEN)")
         String bearerToken;
 
         @Option(names = {"-r", "--region"}, description = "Region name")
@@ -201,16 +206,17 @@ public class RuntimeCommand implements Runnable {
 
         @Override
         public void run() {
+            String resolvedBearerToken = CliSupport.resolveBearerToken(bearerToken);
             if (remotePath == null || remotePath.isEmpty()) {
                 CliSupport.fail("Path is required (--path)");
             }
-            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
-                if (JsonUtils.isNotBlank(bearerToken)) {
-                    client.setAuthToken(bearerToken);
+            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, resolvedBearerToken)) {
+                if (JsonUtils.isNotBlank(resolvedBearerToken)) {
+                    client.setAuthToken(resolvedBearerToken);
                 }
                 RequestResult result = client.downloadFiles(
                         agentName, sessionId, remotePath, recursive,
-                        bearerToken, endpoint, userId, timeout);
+                        resolvedBearerToken, endpoint, userId, timeout);
                 if (!result.isSuccess()) {
                     CliSupport.fail("Failed to download files (HTTP "
                             + result.getStatusCode() + "): " + result.getError());
@@ -262,7 +268,8 @@ public class RuntimeCommand implements Runnable {
         @Option(names = {"-r", "--region"}, description = "Region name")
         String region;
 
-        @Option(names = {"-bt", "--bearer-token"}, description = "Bearer token")
+        @Option(names = {"-bt", "--bearer-token"}, arity = "0..1", interactive = true,
+                description = "Bearer token (omit value for hidden prompt; defaults to BEARER_TOKEN)")
         String bearerToken;
 
         @Option(names = {"-e", "--endpoint"}, description = "Endpoint name")
@@ -276,12 +283,13 @@ public class RuntimeCommand implements Runnable {
 
         @Override
         public void run() {
-            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
-                if (JsonUtils.isNotBlank(bearerToken)) {
-                    client.setAuthToken(bearerToken);
+            String resolvedBearerToken = CliSupport.resolveBearerToken(bearerToken);
+            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, resolvedBearerToken)) {
+                if (JsonUtils.isNotBlank(resolvedBearerToken)) {
+                    client.setAuthToken(resolvedBearerToken);
                 }
                 Map<String, Object> result = client.startSession(
-                        agentName, bearerToken, endpoint, userId, 30);
+                        agentName, resolvedBearerToken, endpoint, userId, 30);
                 CliSupport.printJson(result);
             } catch (Exception e) {
                 if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
@@ -298,7 +306,8 @@ public class RuntimeCommand implements Runnable {
         @Option(names = {"-s", "--session"}, description = "Session ID", required = true)
         String sessionId;
 
-        @Option(names = {"-bt", "--bearer-token"}, description = "Bearer token")
+        @Option(names = {"-bt", "--bearer-token"}, arity = "0..1", interactive = true,
+                description = "Bearer token (omit value for hidden prompt; defaults to BEARER_TOKEN)")
         String bearerToken;
 
         @Option(names = {"-r", "--region"}, description = "Region name")
@@ -315,12 +324,13 @@ public class RuntimeCommand implements Runnable {
 
         @Override
         public void run() {
-            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
-                if (JsonUtils.isNotBlank(bearerToken)) {
-                    client.setAuthToken(bearerToken);
+            String resolvedBearerToken = CliSupport.resolveBearerToken(bearerToken);
+            try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, resolvedBearerToken)) {
+                if (JsonUtils.isNotBlank(resolvedBearerToken)) {
+                    client.setAuthToken(resolvedBearerToken);
                 }
                 Map<String, Object> result = client.stopSession(
-                        agentName, sessionId, bearerToken, endpoint, userId, 30);
+                        agentName, sessionId, resolvedBearerToken, endpoint, userId, 30);
                 CliSupport.printJson(result);
             } catch (Exception e) {
                 if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;

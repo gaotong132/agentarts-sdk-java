@@ -51,7 +51,7 @@ public final class CliSupport {
         if (source == null) return MAPPER.nullNode();
         if (source.isObject()) {
             ObjectNode result = MAPPER.createObjectNode();
-            source.fields().forEachRemaining(entry -> result.set(
+            source.properties().forEach(entry -> result.set(
                     entry.getKey(),
                     isSensitiveName(entry.getKey())
                             ? MAPPER.getNodeFactory().textNode("[REDACTED]")
@@ -78,6 +78,15 @@ public final class CliSupport {
                 || normalized.contains("PRIVATE_KEY")
                 || normalized.contains("AUTHORIZATION")
                 || normalized.contains("CREDENTIAL");
+    }
+
+    /** Resolve an explicitly supplied token, falling back to the reference CLI environment variable. */
+    public static String resolveBearerToken(String explicitToken) {
+        if (explicitToken != null && !explicitToken.isBlank()) {
+            return explicitToken;
+        }
+        String environmentToken = System.getenv("BEARER_TOKEN");
+        return environmentToken == null || environmentToken.isBlank() ? null : environmentToken;
     }
 
     /**

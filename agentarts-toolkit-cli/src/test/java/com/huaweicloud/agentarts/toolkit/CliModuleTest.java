@@ -338,6 +338,28 @@ class CliModuleTest {
             CommandLine invokeCmd = cli.getSubcommands().get("invoke");
             assertEquals("900", invokeCmd.getCommandSpec().optionsMap().get("--timeout").defaultValue());
         }
+
+        @Test
+        void bearerTokensSupportHiddenPromptAndEnvironmentFallback() {
+            var topLevelToken = cli.getSubcommands().get("invoke")
+                    .getCommandSpec().optionsMap().get("--bearer-token");
+            assertTrue(topLevelToken.interactive());
+            assertEquals("0..1", topLevelToken.arity().toString());
+
+            CommandLine runtime = cli.getSubcommands().get("runtime");
+            for (String command : java.util.List.of(
+                    "invoke", "exec-command", "upload-files", "download-files",
+                    "start-session", "stop-session")) {
+                var token = runtime.getSubcommands().get(command)
+                        .getCommandSpec().optionsMap().get("--bearer-token");
+                assertTrue(token.interactive(), command + " must support a hidden token prompt");
+                assertEquals("0..1", token.arity().toString());
+            }
+
+            assertEquals("unit-explicit-token",
+                    CliSupport.resolveBearerToken("unit-explicit-token"),
+                    "an explicit token must take precedence over the environment");
+        }
     }
 
     // ========================

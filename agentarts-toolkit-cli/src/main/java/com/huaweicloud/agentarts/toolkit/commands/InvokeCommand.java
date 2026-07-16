@@ -35,7 +35,8 @@ public class InvokeCommand implements Runnable {
     @Option(names = {"-s", "--session"}, description = "Session ID for stateful agents")
     String sessionId;
 
-    @Option(names = {"-bt", "--bearer-token"}, description = "Bearer token for authentication")
+    @Option(names = {"-bt", "--bearer-token"}, arity = "0..1", interactive = true,
+            description = "Bearer token (omit value for hidden prompt; defaults to BEARER_TOKEN)")
     String bearerToken;
 
     @Option(names = "--timeout", description = "Request timeout in seconds", defaultValue = "900")
@@ -52,9 +53,10 @@ public class InvokeCommand implements Runnable {
 
     @Override
     public void run() {
+        String resolvedBearerToken = CliSupport.resolveBearerToken(bearerToken);
         try {
             InvokeOperation.invokeAgent(payload, agentName, mode, region, port, endpoint,
-                    sessionId, bearerToken, timeout, skipSsl, userId, customPath);
+                    sessionId, resolvedBearerToken, timeout, skipSsl, userId, customPath);
         } catch (CliSupport.CliFailure e) {
             throw e;
         } catch (Exception e) {
