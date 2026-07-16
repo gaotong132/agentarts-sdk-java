@@ -5,6 +5,7 @@ import com.huaweicloud.sdk.swr.v2.SwrAsyncClient;
 import com.huaweicloud.sdk.swr.v2.model.*;
 import com.huaweicloud.sdk.core.auth.BasicCredentials;
 import com.huaweicloud.sdk.core.auth.ICredentialProvider;
+import com.huaweicloud.sdk.core.exception.ServiceResponseException;
 import com.huaweicloud.sdk.core.http.HttpConfig;
 import com.huaweicloud.sdk.core.ClientBuilder;
 import com.huaweicloud.agentarts.sdk.core.Constants;
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -69,6 +71,12 @@ public class SWRServiceClient implements AutoCloseable {
 
     public SWRServiceClient() {
         this(null, false);
+    }
+
+    SWRServiceClient(SwrClient syncClient, SwrAsyncClient asyncClient, String region) {
+        this.syncClient = Objects.requireNonNull(syncClient, "syncClient must not be null");
+        this.asyncClient = Objects.requireNonNull(asyncClient, "asyncClient must not be null");
+        this.region = Objects.requireNonNull(region, "region must not be null");
     }
 
     // ========================
@@ -188,12 +196,20 @@ public class SWRServiceClient implements AutoCloseable {
         try {
             showNamespace(new ShowNamespaceRequest().withNamespace(namespace));
             return false; // already exists
-        } catch (Exception e) {
-            // Not found, create it
-            CreateNamespaceRequest request = new CreateNamespaceRequest()
-                    .withBody(new CreateNamespaceRequestBody().withNamespace(namespace));
+        } catch (ServiceResponseException e) {
+            requireNotFound(e, "query SWR organization " + namespace);
+        }
+
+        CreateNamespaceRequest request = new CreateNamespaceRequest()
+                .withBody(new CreateNamespaceRequestBody().withNamespace(namespace));
+        try {
             createNamespace(request);
             return true;
+        } catch (ServiceResponseException e) {
+            if (e.getHttpStatusCode() == 409) {
+                return false;
+            }
+            throw e;
         }
     }
 
@@ -210,15 +226,90 @@ public class SWRServiceClient implements AutoCloseable {
                     .withNamespace(namespace)
                     .withRepository(repository));
             return false; // already exists
-        } catch (Exception e) {
-            CreateRepoRequest request = new CreateRepoRequest()
-                    .withNamespace(namespace)
-                    .withBody(new CreateRepoRequestBody()
-                            .withRepository(repository)
-                            .withIsPublic(false));
+        } catch (ServiceResponseException e) {
+            requireNotFound(e, "query SWR repository " + namespace + "/" + repository);
+        }
+
+        CreateRepoRequest request = new CreateRepoRequest()
+                .withNamespace(namespace)
+                .withBody(new CreateRepoRequestBody()
+                        .withRepository(repository)
+                        .withIsPublic(false));
+        try {
             createRepo(request);
             return true;
+        } catch (ServiceResponseException e) {
+            if (e.getHttpStatusCode() == 409) {
+                return false;
+            }
+            throw e;
         }
+    }
+
+    /** Get an SWR organization by name. */
+    public ShowNamespaceResponse getOrganization(String organization) {
+        return showNamespace(new ShowNamespaceRequest().withNamespace(organization));
+    }
+
+    /** Create an SWR organization and return its current representation. */
+    public ShowNamespaceResponse createOrganization(String organization) {
+        createNamespace(new CreateNamespaceRequest()
+                .withBody(new CreateNamespaceRequestBody().withNamespace(organization)));
+        return getOrganization(organization);
+    }
+
+    /** Create an SWR organization when absent and return its current representation. */
+    public ShowNamespaceResponse createOrGetOrganization(String organization) {
+        createNamespaceIfNotExists(organization);
+        return getOrganization(organization);
+    }
+
+    /** Get an SWR repository by organization and repository name. */
+    public ShowRepositoryResponse getRepository(String organization, String repository) {
+        return showRepository(new ShowRepositoryRequest()
+                .withNamespace(organization)
+                .withRepository(repository));
+    }
+
+    /** Create an SWR repository and return its current representation. */
+    public ShowRepositoryResponse createRepository(
+            String organization, String repository, boolean publicRepository) {
+        createRepo(new CreateRepoRequest()
+                .withNamespace(organization)
+                .withBody(new CreateRepoRequestBody()
+                        .withRepository(repository)
+                        .withIsPublic(publicRepository)));
+        return getRepository(organization, repository);
+    }
+
+    /** Create an SWR repository when absent and return its current representation. */
+    public ShowRepositoryResponse createOrGetRepository(
+            String organization, String repository, boolean publicRepository) {
+        try {
+            return getRepository(organization, repository);
+        } catch (ServiceResponseException e) {
+            requireNotFound(e, "query SWR repository " + organization + "/" + repository);
+        }
+        try {
+            return createRepository(organization, repository, publicRepository);
+        } catch (ServiceResponseException e) {
+            if (e.getHttpStatusCode() != 409) {
+                throw e;
+            }
+            return getRepository(organization, repository);
+        }
+    }
+
+    public ShowRepositoryResponse createOrGetRepository(
+            String organization, String repository) {
+        return createOrGetRepository(organization, repository, false);
+    }
+
+    private static void requireNotFound(ServiceResponseException exception, String operation) {
+        if (exception.getHttpStatusCode() != 404) {
+            throw exception;
+        }
+        LOG.debug("{} returned HTTP 404", operation);
     }
 
     /**
@@ -232,6 +323,11 @@ public class SWRServiceClient implements AutoCloseable {
     public String getFullImageName(String namespace, String repository, String tag) {
         String swrHost = "swr." + region + ".myhuaweicloud.com";
         return swrHost + "/" + namespace + "/" + repository + ":" + tag;
+    }
+
+    /** Get the full image name using the default {@code latest} tag. */
+    public String getFullImageName(String namespace, String repository) {
+        return getFullImageName(namespace, repository, "latest");
     }
 
     /**
