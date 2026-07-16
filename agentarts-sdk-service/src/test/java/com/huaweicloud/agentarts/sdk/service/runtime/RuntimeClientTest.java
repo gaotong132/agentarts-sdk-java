@@ -3,10 +3,14 @@ package com.huaweicloud.agentarts.sdk.service.runtime;
 import com.huaweicloud.agentarts.sdk.service.runtime.model.CreateAgentRequest;
 import com.huaweicloud.agentarts.sdk.service.runtime.model.UpdateAgentRequest;
 import org.junit.jupiter.api.*;
+import com.sun.net.httpserver.HttpServer;
 
 import java.lang.reflect.Method;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -65,6 +69,41 @@ class RuntimeClientTest {
             new RuntimeClient();
             new RuntimeClient("cn-southwest-2");
             new RuntimeClient("cn-southwest-2", true);
+        }
+
+        @Test
+        void perCallEndpointBearerAndEncodedQueryAreApplied() throws Exception {
+            AtomicReference<String> authorization = new AtomicReference<>();
+            AtomicReference<String> rawQuery = new AtomicReference<>();
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/", exchange -> {
+                authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                rawQuery.set(exchange.getRequestURI().getRawQuery());
+                byte[] response = "{}".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, response.length);
+                exchange.getResponseBody().write(response);
+                exchange.close();
+            });
+            server.start();
+
+            String endpoint = "http://127.0.0.1:" + server.getAddress().getPort();
+            try (RuntimeClient client = new RuntimeClient("cn-southwest-2")) {
+                Map<String, Object> result = client.invokeAgent(
+                        "agent", "session", "{}", "per-call-token", endpoint,
+                        2, "user", null);
+                assertNotNull(result);
+                assertEquals("Bearer per-call-token", authorization.get());
+
+                client.downloadFiles(
+                        "agent", "session", "/home/user/a b.txt", true,
+                        "download-token", endpoint, null, 2);
+                assertEquals("Bearer download-token", authorization.get());
+                assertTrue(rawQuery.get().contains("path=%2Fhome%2Fuser%2Fa%20b.txt"));
+                assertTrue(rawQuery.get().contains("recursive=true"));
+            } finally {
+                server.stop(0);
+            }
         }
     }
 

@@ -36,6 +36,7 @@ public class RuntimeClient implements AutoCloseable {
 
     private BaseHttpClient controlClient;
     private BaseHttpClient dataClient;
+    private String authToken;
 
     /**
      * Optional data-plane endpoint override. When set (e.g. from an agent's
@@ -44,9 +45,12 @@ public class RuntimeClient implements AutoCloseable {
      */
     private String dataEndpointOverride;
 
-    public void setDataPlaneEndpoint(String endpoint) {
-        // Must be set before the first data-plane call (data client is lazy-initialized).
+    public synchronized void setDataPlaneEndpoint(String endpoint) {
         this.dataEndpointOverride = endpoint;
+        if (dataClient != null) {
+            dataClient.close();
+            dataClient = null;
+        }
     }
 
     public RuntimeClient(String region, boolean verifySsl, SignMode signMode) {
@@ -67,8 +71,14 @@ public class RuntimeClient implements AutoCloseable {
         this(null, true, SignMode.SDK_HMAC_SHA256);
     }
 
-    public void setAuthToken(String token) {
-        getDataClient().setAuthToken("Bearer", token);
+    public synchronized void setAuthToken(String token) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("token must not be blank");
+        }
+        this.authToken = token;
+        if (dataClient != null) {
+            dataClient.setAuthToken("Bearer", token);
+        }
     }
 
     // ========================
@@ -98,6 +108,9 @@ public class RuntimeClient implements AutoCloseable {
                     .verifySsl(verifySsl)
                     .build();
             dataClient = new BaseHttpClient(config, useAkSk, signMode, region);
+            if (JsonUtils.isNotBlank(authToken)) {
+                dataClient.setAuthToken("Bearer", authToken);
+            }
         }
         return dataClient;
     }
@@ -284,7 +297,8 @@ public class RuntimeClient implements AutoCloseable {
         }
 
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
-        RequestResult result = getDataClient().post(path, headers, payload).block();
+        RequestResult result = getDataClient().request(
+                "POST", dataUrl(path, endpoint), headers, payload, null, (double) timeout).block();
         return check(result, "invoke_agent");
     }
 
@@ -301,7 +315,9 @@ public class RuntimeClient implements AutoCloseable {
                 .withChunked(chunked);
 
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
-        RequestResult result = getDataClient().post("/runtimes/" + agentName + "/commands", headers, req).block();
+        RequestResult result = getDataClient().request(
+                "POST", dataUrl("/runtimes/" + agentName + "/commands", endpoint),
+                headers, req, null, (double) timeout).block();
         return check(result, "exec_command");
     }
 
@@ -330,7 +346,6 @@ public class RuntimeClient implements AutoCloseable {
         if (fileUserId != null) params.put("user_id", List.of(String.valueOf(fileUserId)));
         if (fileGroupId != null) params.put("group_id", List.of(String.valueOf(fileGroupId)));
         if (fileMode != null) params.put("file_mode", List.of(fileMode));
-        if (endpoint != null && !endpoint.isBlank()) params.put("endpoint", List.of(endpoint));
 
         final String uploadUrl = "/runtimes/" + agentName + "/upload-files";
         RequestResult result;
@@ -349,7 +364,8 @@ public class RuntimeClient implements AutoCloseable {
                     : (path.endsWith("/") ? path + filename : path + "/" + filename);
             params.put("path", List.of(fileRemote));
             headers.put("Content-Type", "application/octet-stream");
-            result = getDataClient().request("POST", uploadUrl, headers, content, params).block();
+            result = getDataClient().request(
+                    "POST", dataUrl(uploadUrl, endpoint), headers, content, params, (double) timeout).block();
         } else {
             // Multiple files: multipart/form-data, path = remote DIRECTORY.
             params.put("path", List.of(path));
@@ -379,7 +395,9 @@ public class RuntimeClient implements AutoCloseable {
                 throw new IllegalStateException("Failed to build multipart upload body", e);
             }
             headers.put("Content-Type", "multipart/form-data; boundary=" + boundary);
-            result = getDataClient().request("POST", uploadUrl, headers, out.toByteArray(), params).block();
+            result = getDataClient().request(
+                    "POST", dataUrl(uploadUrl, endpoint), headers, out.toByteArray(), params,
+                    (double) timeout).block();
         }
         return check(result, "upload_files");
     }
@@ -405,12 +423,13 @@ public class RuntimeClient implements AutoCloseable {
     public RequestResult downloadFiles(String agentName, String sessionId, String path,
                                         boolean recursive, String bearerToken, String endpoint,
                                         String userId, int timeout) {
-        StringBuilder url = new StringBuilder("/runtimes/").append(agentName)
-                .append("/download-files?path=").append(path);
-        if (recursive) url.append("&recursive=true");
-
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
-        return getDataClient().get(url.toString(), headers).block();
+        Map<String, List<String>> params = new LinkedHashMap<>();
+        params.put("path", List.of(path));
+        if (recursive) params.put("recursive", List.of("true"));
+        return getDataClient().request(
+                "GET", dataUrl("/runtimes/" + agentName + "/download-files", endpoint),
+                headers, null, params, (double) timeout).block();
     }
 
     public RequestResult downloadFiles(String agentName, String sessionId, String path) {
@@ -425,8 +444,9 @@ public class RuntimeClient implements AutoCloseable {
     public Map<String, Object> startSession(String agentName, String bearerToken,
                                              String endpoint, String userId, int timeout) {
         Map<String, String> headers = buildDataHeaders(null, bearerToken, userId);
-        RequestResult result = getDataClient().post(
-                "/runtimes/" + agentName + "/sessions-start", headers, Map.of()).block();
+        RequestResult result = getDataClient().request(
+                "POST", dataUrl("/runtimes/" + agentName + "/sessions-start", endpoint),
+                headers, Map.of(), null, (double) timeout).block();
         return check(result, "start_session");
     }
 
@@ -442,8 +462,9 @@ public class RuntimeClient implements AutoCloseable {
                 .withSessionId(sessionId);
 
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
-        RequestResult result = getDataClient().post(
-                "/runtimes/" + agentName + "/sessions-stop", headers, req).block();
+        RequestResult result = getDataClient().request(
+                "POST", dataUrl("/runtimes/" + agentName + "/sessions-stop", endpoint),
+                headers, req, null, (double) timeout).block();
         return check(result, "stop_session");
     }
 
@@ -463,7 +484,24 @@ public class RuntimeClient implements AutoCloseable {
         if (JsonUtils.isNotBlank(userId)) {
             headers.put(Constants.USER_ID_HEADER, userId);
         }
-        return headers.isEmpty() ? null : headers;
+        if (JsonUtils.isNotBlank(bearerToken)) {
+            headers.put("Authorization", "Bearer " + bearerToken.trim());
+        }
+        return headers;
+    }
+
+    private String dataUrl(String path, String endpoint) {
+        if (JsonUtils.isBlank(endpoint)) {
+            return path;
+        }
+        String base = Constants.ensureHttps(endpoint);
+        if (base.endsWith("/") && path.startsWith("/")) {
+            return base + path.substring(1);
+        }
+        if (!base.endsWith("/") && !path.startsWith("/")) {
+            return base + "/" + path;
+        }
+        return base + path;
     }
 
     /**
