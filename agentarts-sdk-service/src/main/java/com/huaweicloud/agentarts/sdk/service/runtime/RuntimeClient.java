@@ -214,14 +214,9 @@ public class RuntimeClient implements AutoCloseable {
     }
 
     public AgentInfo findAgentById(String agentId) {
-        try {
         RequestResult result = getControlClient().get(
                 "/runtimes/" + UrlUtils.encodePathSegment(agentId, "agentId")).block();
-            return parseResult(result, AgentInfo.class, "find_agent_by_id");
-        } catch (Exception e) {
-            LOG.debug("findAgentById failed: {}", e.getMessage());
-            return null;
-        }
+        return parseResult(result, AgentInfo.class, "find_agent_by_id");
     }
 
     public boolean deleteAgentByName(String agentName) {
@@ -229,7 +224,13 @@ public class RuntimeClient implements AutoCloseable {
         if (agent == null) return false;
         RequestResult result = getControlClient().delete(
                 "/runtimes/" + UrlUtils.encodePathSegment(agent.getId(), "agentId")).block();
-        return result != null && result.isSuccess();
+        if (result == null || !result.isSuccess()) {
+            throw new APIException(
+                    result == null ? 0 : result.getStatusCode(),
+                    "delete_agent_by_name",
+                    result == null ? "null response" : result.getError());
+        }
+        return true;
     }
 
     // ========================

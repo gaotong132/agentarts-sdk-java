@@ -1,6 +1,7 @@
 package com.huaweicloud.agentarts.sdk.service.runtime;
 
 import com.huaweicloud.agentarts.sdk.core.SignMode;
+import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
@@ -152,6 +153,36 @@ class RuntimeClientTest {
             assertEquals(List.of("10"), query.getValue().get("limit"));
             verify(controlClient).close();
             verify(dataClient).close();
+        }
+
+        @Test
+        void lookupAndDeletePropagateControlPlaneFailures() throws Exception {
+            BaseHttpClient controlClient = mock(BaseHttpClient.class);
+            BaseHttpClient dataClient = mock(BaseHttpClient.class);
+            RequestResult forbidden = RequestResult.builder()
+                    .success(false).statusCode(403).error("forbidden").build();
+            when(controlClient.get("/runtimes/agent-id")).thenReturn(Mono.just(forbidden));
+
+            try (RuntimeClient client = new RuntimeClient(
+                    "test-region", true, SignMode.SDK_HMAC_SHA256,
+                    controlClient, dataClient)) {
+                APIException lookupError = assertThrows(
+                        APIException.class, () -> client.findAgentById("agent-id"));
+                assertEquals(403, lookupError.getStatusCode());
+
+                RequestResult agents = RequestResult.builder()
+                        .success(true).statusCode(200)
+                        .data(JsonUtils.MAPPER.readTree(
+                                "{\"items\":[{\"id\":\"agent-id\",\"name\":\"agent\"}],\"total\":1}"))
+                        .build();
+                when(controlClient.request(eq("GET"), eq("/runtimes"),
+                        isNull(), isNull(), anyMap())).thenReturn(Mono.just(agents));
+                when(controlClient.delete("/runtimes/agent-id")).thenReturn(Mono.just(forbidden));
+
+                APIException deleteError = assertThrows(
+                        APIException.class, () -> client.deleteAgentByName("agent"));
+                assertEquals(403, deleteError.getStatusCode());
+            }
         }
 
         @Test
