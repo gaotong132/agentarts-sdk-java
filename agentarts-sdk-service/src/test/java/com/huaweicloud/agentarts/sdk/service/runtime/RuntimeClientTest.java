@@ -58,6 +58,8 @@ class RuntimeClientTest {
         void dataPlaneMethodsExist() throws Exception {
             Class<?> cls = RuntimeClient.class;
             assertNotNull(cls.getMethod("invokeAgent", String.class, String.class, String.class));
+            assertNotNull(cls.getMethod("invokeAgentRaw", String.class, String.class, String.class,
+                    String.class, String.class, int.class, String.class, String.class));
             assertNotNull(cls.getMethod("execCommand", String.class, String.class, String.class));
             assertNotNull(cls.getMethod("uploadFiles", String.class, String.class, List.class));
             assertNotNull(cls.getMethod("downloadFiles", String.class, String.class, String.class));
@@ -152,6 +154,10 @@ class RuntimeClientTest {
         void methodsExist() throws Exception {
             Class<?> cls = LocalRuntimeClient.class;
             assertNotNull(cls.getMethod("invokeAgent", String.class));
+            assertNotNull(cls.getMethod("invokeAgent", String.class, String.class,
+                    String.class, String.class, String.class, String.class));
+            assertNotNull(cls.getMethod("invokeAgentRaw", String.class, String.class,
+                    String.class, String.class, String.class, String.class));
             assertNotNull(cls.getMethod("pingAgent"));
         }
 
@@ -162,24 +168,61 @@ class RuntimeClientTest {
 
         @Test
         void constructorsWork() {
-            LocalRuntimeClient c0 = new LocalRuntimeClient();
-            assertEquals(8080, c0.getPort());
-            assertEquals("localhost", c0.getHost());
-
-            LocalRuntimeClient c1 = new LocalRuntimeClient(3000);
-            assertEquals(3000, c1.getPort());
-            assertEquals("localhost", c1.getHost());
-
-            LocalRuntimeClient c2 = new LocalRuntimeClient(3000, "localhost", 60);
-            assertEquals(3000, c2.getPort());
-            assertEquals("localhost", c2.getHost());
+            try (LocalRuntimeClient c0 = new LocalRuntimeClient();
+                 LocalRuntimeClient c1 = new LocalRuntimeClient(3000);
+                 LocalRuntimeClient c2 = new LocalRuntimeClient(3000, "localhost", 60)) {
+                assertEquals(8080, c0.getPort());
+                assertEquals("localhost", c0.getHost());
+                assertEquals(3000, c1.getPort());
+                assertEquals("localhost", c1.getHost());
+                assertEquals(3000, c2.getPort());
+                assertEquals("localhost", c2.getHost());
+            }
         }
 
         @Test
         void defaultPortAndHost() {
-            LocalRuntimeClient client = new LocalRuntimeClient();
-            assertEquals(8080, client.getPort());
-            assertEquals("localhost", client.getHost());
+            try (LocalRuntimeClient client = new LocalRuntimeClient()) {
+                assertEquals(8080, client.getPort());
+                assertEquals("localhost", client.getHost());
+            }
+        }
+
+        @Test
+        void completeInvokeOptionsReachLocalRuntime() throws Exception {
+            AtomicReference<String> path = new AtomicReference<>();
+            AtomicReference<String> query = new AtomicReference<>();
+            AtomicReference<String> authorization = new AtomicReference<>();
+            AtomicReference<String> session = new AtomicReference<>();
+            AtomicReference<String> user = new AtomicReference<>();
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/", exchange -> {
+                path.set(exchange.getRequestURI().getPath());
+                query.set(exchange.getRequestURI().getRawQuery());
+                authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                session.set(exchange.getRequestHeaders().getFirst("x-hw-agentarts-session-id"));
+                user.set(exchange.getRequestHeaders().getFirst("X-HW-AgentGateway-User-Id"));
+                byte[] response = "{}".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, response.length);
+                exchange.getResponseBody().write(response);
+                exchange.close();
+            });
+            server.start();
+
+            try (LocalRuntimeClient client = new LocalRuntimeClient(
+                    server.getAddress().getPort(), "127.0.0.1", 5)) {
+                assertNotNull(client.invokeAgent(
+                        "{}", "unit-session", "unit-token", "named endpoint",
+                        "unit-user", "stream"));
+                assertEquals("/invocations/stream", path.get());
+                assertEquals("endpoint=named%20endpoint", query.get());
+                assertEquals("Bearer unit-token", authorization.get());
+                assertEquals("unit-session", session.get());
+                assertEquals("unit-user", user.get());
+            } finally {
+                server.stop(0);
+            }
         }
     }
 }

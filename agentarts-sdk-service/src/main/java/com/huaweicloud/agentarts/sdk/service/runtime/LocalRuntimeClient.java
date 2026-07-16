@@ -63,6 +63,30 @@ public class LocalRuntimeClient implements AutoCloseable {
     public Map<String, Object> invokeAgent(String payload, String sessionId,
                                             String bearerToken, String userId,
                                             String customPath) {
+        return invokeAgent(payload, sessionId, bearerToken, null, userId, customPath);
+    }
+
+    /** Invoke the local agent with the complete Python SDK-compatible option set. */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> invokeAgent(String payload, String sessionId,
+                                            String bearerToken, String endpoint,
+                                            String userId, String customPath) {
+        try (RequestResult result = invokeAgentRaw(
+                payload, sessionId, bearerToken, endpoint, userId, customPath)) {
+            if (result.isStreaming()) {
+                throw new APIException(result.getStatusCode(), "invoke_agent",
+                        "streaming response requires invokeAgentRaw");
+            }
+            Object data = result.getData();
+            if (data instanceof Map) return (Map<String, Object>) data;
+            return Map.of();
+        }
+    }
+
+    /** Invoke and return the raw response, including streaming responses. */
+    public RequestResult invokeAgentRaw(String payload, String sessionId,
+                                         String bearerToken, String endpoint,
+                                         String userId, String customPath) {
         String path = "/invocations";
         if (JsonUtils.isNotBlank(customPath)) {
             path += "/" + customPath;
@@ -79,15 +103,21 @@ public class LocalRuntimeClient implements AutoCloseable {
             headers.put("Authorization", "Bearer " + bearerToken);
         }
 
-        RequestResult result = httpClient.post(path, headers.isEmpty() ? null : headers, payload).block();
+        Map<String, java.util.List<String>> query = JsonUtils.isNotBlank(endpoint)
+                ? Map.of("endpoint", java.util.List.of(endpoint)) : null;
+        RequestResult result = httpClient.request(
+                "POST", path, headers.isEmpty() ? null : headers, payload, query).block();
         if (result == null || !result.isSuccess()) {
             int status = result != null ? result.getStatusCode() : 0;
             String err = result != null ? result.getError() : "null response";
+            if (result != null) {
+                try (result) {
+                    throw new APIException(status, "invoke_agent", err);
+                }
+            }
             throw new APIException(status, "invoke_agent", err);
         }
-        Object data = result.getData();
-        if (data instanceof Map) return (Map<String, Object>) data;
-        return Map.of();
+        return result;
     }
 
     public Map<String, Object> invokeAgent(String payload) {

@@ -301,6 +301,20 @@ public class RuntimeClient implements AutoCloseable {
     public Map<String, Object> invokeAgent(String agentName, String sessionId, String payload,
                                             String bearerToken, String endpoint, int timeout,
                                             String userId, String customPath) {
+        try (RequestResult result = invokeAgentRaw(
+                agentName, sessionId, payload, bearerToken, endpoint, timeout, userId, customPath)) {
+            if (result.isStreaming()) {
+                throw new APIException(result.getStatusCode(), "invoke_agent",
+                        "streaming response requires invokeAgentRaw");
+            }
+            return check(result, "invoke_agent");
+        }
+    }
+
+    /** Invoke an agent and return the raw response, including SSE or NDJSON streams. */
+    public RequestResult invokeAgentRaw(String agentName, String sessionId, String payload,
+                                         String bearerToken, String endpoint, int timeout,
+                                         String userId, String customPath) {
         String path = "/runtimes/" + agentName + "/invocations";
         if (JsonUtils.isNotBlank(customPath)) {
             path += "/" + customPath;
@@ -309,7 +323,15 @@ public class RuntimeClient implements AutoCloseable {
         Map<String, String> headers = buildDataHeaders(sessionId, bearerToken, userId);
         RequestResult result = getDataClient().request(
                 "POST", dataUrl(path, endpoint), headers, payload, null, (double) timeout).block();
-        return check(result, "invoke_agent");
+        if (result == null) {
+            throw new APIException(0, "invoke_agent", "null response");
+        }
+        if (!result.isSuccess()) {
+            try (result) {
+                throw new APIException(result.getStatusCode(), "invoke_agent", result.getError());
+            }
+        }
+        return result;
     }
 
     public Map<String, Object> invokeAgent(String agentName, String sessionId, String payload) {
