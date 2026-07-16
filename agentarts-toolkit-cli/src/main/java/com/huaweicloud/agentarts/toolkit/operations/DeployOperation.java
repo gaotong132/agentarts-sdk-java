@@ -13,11 +13,7 @@ import com.huaweicloud.agentarts.sdk.service.runtime.model.AgentInfo;
 import com.huaweicloud.agentarts.sdk.service.runtime.model.CreateAgentRequest;
 import com.huaweicloud.agentarts.sdk.service.swr.SWRServiceClient;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -26,7 +22,6 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Deploy operation: build → SWR push → runtime create.
@@ -443,47 +438,7 @@ public class DeployOperation {
      * a string to stdin. Returns the exit code.
      */
     private static int runProcess(List<String> command, File workDir, String stdin, String label) {
-        ProcessBuilder pb = new ProcessBuilder(command);
-        if (workDir != null) {
-            pb.directory(workDir);
-        }
-        pb.redirectErrorStream(true);
-        Process process = null;
-        try {
-            process = pb.start();
-            if (stdin != null) {
-                process.getOutputStream().write(stdin.getBytes(StandardCharsets.UTF_8));
-                process.getOutputStream().close();
-            }
-            StringBuilder captured = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    System.out.println("  [" + label + "] " + line);
-                    captured.append(line).append('\n');
-                }
-            }
-            boolean finished = process.waitFor(30, TimeUnit.MINUTES);
-            if (!finished) {
-                process.destroyForcibly();
-                System.err.println("  " + label + " timed out");
-                return -1;
-            }
-            return process.exitValue();
-        } catch (IOException e) {
-            // Most commonly: docker/mvn not on PATH.
-            System.err.println("  " + label + " failed to start: " + e.getMessage()
-                    + " (is '" + command.get(0) + "' installed and on PATH?)");
-            return -1;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            System.err.println("  " + label + " interrupted");
-            return -1;
-        } finally {
-            if (process != null && process.isAlive()) {
-                process.destroyForcibly();
-            }
-        }
+        return ProcessRunner.run(command, workDir, stdin, label,
+                ProcessRunner.configuredTimeout());
     }
 }
