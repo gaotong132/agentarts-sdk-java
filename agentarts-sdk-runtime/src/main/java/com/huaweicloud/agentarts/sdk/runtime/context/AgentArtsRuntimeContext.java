@@ -1,5 +1,14 @@
 package com.huaweicloud.agentarts.sdk.runtime.context;
 
+import io.micrometer.context.ContextRegistry;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Hooks;
+import reactor.core.publisher.Mono;
+import reactor.util.context.Context;
+
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 /**
  * Coroutine/thread-safe runtime context for AgentArts.
  *
@@ -29,6 +38,15 @@ public final class AgentArtsRuntimeContext {
     private static final ThreadLocal<String> OAUTH2_CALLBACK_URL = new ThreadLocal<>();
     private static final ThreadLocal<String> USER_TOKEN = new ThreadLocal<>();
     private static final ThreadLocal<String> OAUTH2_CUSTOM_STATE = new ThreadLocal<>();
+    private static final String CONTEXT_PREFIX = AgentArtsRuntimeContext.class.getName() + ".";
+    private static final String SESSION_ID_KEY = CONTEXT_PREFIX + "sessionId";
+    private static final String REQUEST_ID_KEY = CONTEXT_PREFIX + "requestId";
+    private static final String WORKLOAD_ACCESS_TOKEN_KEY = CONTEXT_PREFIX + "workloadAccessToken";
+    private static final String USER_ID_KEY = CONTEXT_PREFIX + "userId";
+    private static final String OAUTH2_CALLBACK_URL_KEY = CONTEXT_PREFIX + "oauth2CallbackUrl";
+    private static final String USER_TOKEN_KEY = CONTEXT_PREFIX + "userToken";
+    private static final String OAUTH2_CUSTOM_STATE_KEY = CONTEXT_PREFIX + "oauth2CustomState";
+    private static final AtomicBoolean REACTOR_PROPAGATION_ENABLED = new AtomicBoolean();
 
     // ========================
     // Session ID
@@ -133,6 +151,71 @@ public final class AgentArtsRuntimeContext {
      */
     public static RequestContext toRequestContext() {
         return new RequestContext(getRequestId(), getSessionId(), getUserId(), getWorkloadAccessToken());
+    }
+
+    /**
+     * Register AgentArts ThreadLocals with Micrometer Context Propagation and
+     * enable Reactor's automatic restoration mode. Registration is idempotent
+     * for the current class loader and affects new Reactor subscriptions.
+     */
+    public static void enableReactorContextPropagation() {
+        if (!REACTOR_PROPAGATION_ENABLED.compareAndSet(false, true)) {
+            return;
+        }
+        ContextRegistry registry = ContextRegistry.getInstance();
+        registry.registerThreadLocalAccessor(SESSION_ID_KEY, SESSION_ID);
+        registry.registerThreadLocalAccessor(REQUEST_ID_KEY, REQUEST_ID);
+        registry.registerThreadLocalAccessor(WORKLOAD_ACCESS_TOKEN_KEY, WORKLOAD_ACCESS_TOKEN);
+        registry.registerThreadLocalAccessor(USER_ID_KEY, USER_ID);
+        registry.registerThreadLocalAccessor(OAUTH2_CALLBACK_URL_KEY, OAUTH2_CALLBACK_URL);
+        registry.registerThreadLocalAccessor(USER_TOKEN_KEY, USER_TOKEN);
+        registry.registerThreadLocalAccessor(OAUTH2_CUSTOM_STATE_KEY, OAUTH2_CUSTOM_STATE);
+        Hooks.enableAutomaticContextPropagation();
+    }
+
+    /** Capture the current AgentArts context and attach it to a Flux subscription. */
+    public static <T> Flux<T> propagate(Flux<T> publisher) {
+        Objects.requireNonNull(publisher, "publisher must not be null");
+        enableReactorContextPropagation();
+        Snapshot snapshot = Snapshot.capture();
+        return publisher.contextWrite(snapshot::writeTo);
+    }
+
+    /** Capture the current AgentArts context and attach it to a Mono subscription. */
+    public static <T> Mono<T> propagate(Mono<T> publisher) {
+        Objects.requireNonNull(publisher, "publisher must not be null");
+        enableReactorContextPropagation();
+        Snapshot snapshot = Snapshot.capture();
+        return publisher.contextWrite(snapshot::writeTo);
+    }
+
+    private record Snapshot(
+            String sessionId,
+            String requestId,
+            String workloadAccessToken,
+            String userId,
+            String oauth2CallbackUrl,
+            String userToken,
+            String oauth2CustomState) {
+
+        static Snapshot capture() {
+            return new Snapshot(getSessionId(), getRequestId(), getWorkloadAccessToken(),
+                    getUserId(), getOAuth2CallbackUrl(), getUserToken(), getOAuth2CustomState());
+        }
+
+        Context writeTo(Context context) {
+            Context result = putOrDelete(context, SESSION_ID_KEY, sessionId);
+            result = putOrDelete(result, REQUEST_ID_KEY, requestId);
+            result = putOrDelete(result, WORKLOAD_ACCESS_TOKEN_KEY, workloadAccessToken);
+            result = putOrDelete(result, USER_ID_KEY, userId);
+            result = putOrDelete(result, OAUTH2_CALLBACK_URL_KEY, oauth2CallbackUrl);
+            result = putOrDelete(result, USER_TOKEN_KEY, userToken);
+            return putOrDelete(result, OAUTH2_CUSTOM_STATE_KEY, oauth2CustomState);
+        }
+
+        private static Context putOrDelete(Context context, String key, String value) {
+            return value != null ? context.put(key, value) : context.delete(key);
+        }
     }
 
     /**

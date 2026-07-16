@@ -9,11 +9,16 @@ import io.vertx.ext.web.client.WebClient;
 import io.vertx.ext.web.client.WebClientOptions;
 import org.junit.jupiter.api.*;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
@@ -260,6 +265,90 @@ class AgentArtsRuntimeAppTest {
         assertTrue(body.contains("\"chunk\":3"));
     }
 
+    @Test
+    @DisplayName("SSE requests one item at a time from an off-event-loop publisher")
+    void sseAppliesBackpressureAcrossSchedulerBoundary() throws Exception {
+        AtomicLong largestRequest = new AtomicLong();
+        AtomicLong requestSignals = new AtomicLong();
+        app.setEntrypoint((payload, ctx) -> Flux.range(1, 20)
+                .publishOn(Schedulers.parallel(), 1)
+                .doOnRequest(requested -> {
+                    largestRequest.accumulateAndGet(requested, Math::max);
+                    requestSignals.incrementAndGet();
+                })
+                .map(value -> Map.of("chunk", value)));
+
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<String> responseBody = new AtomicReference<>();
+        webClient.post(port, "localhost", "/invocations")
+                .putHeader("Content-Type", "application/json")
+                .sendBuffer(Buffer.buffer("{}"))
+                .onComplete(ar -> {
+                    responseBody.set(ar.result().bodyAsString());
+                    latch.countDown();
+                });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(responseBody.get().contains("\"chunk\":20"));
+        assertTrue(requestSignals.get() >= 20);
+        assertEquals(1, largestRequest.get(),
+                "Runtime must not request the complete Flux before socket writes drain");
+    }
+
+    @Test
+    @DisplayName("POST /invocations resolves Mono responses")
+    void invocationReturnsMonoResponse() throws Exception {
+        app.setEntrypoint((payload, ctx) -> Mono.just(Map.of("async", true)));
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<String> body = new AtomicReference<>();
+
+        webClient.post(port, "localhost", "/invocations")
+                .putHeader("Content-Type", "application/json")
+                .sendBuffer(Buffer.buffer("{}"))
+                .onComplete(ar -> {
+                    body.set(ar.result().bodyAsString());
+                    latch.countDown();
+                });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(body.get().contains("\"async\":true"));
+    }
+
+    @Test
+    @DisplayName("streaming invocation holds concurrency permit until completion")
+    void streamingInvocationHoldsConcurrencyPermit() throws Exception {
+        app.stop();
+        app = new AgentArtsRuntimeApp(1, vertx);
+        app.run(0);
+        port = app.getPort();
+
+        Sinks.Many<Map<String, Object>> sink = Sinks.many().unicast().onBackpressureBuffer();
+        CountDownLatch subscribed = new CountDownLatch(1);
+        app.setEntrypoint((payload, ctx) -> sink.asFlux().doOnSubscribe(ignored -> subscribed.countDown()));
+
+        CountDownLatch firstDone = new CountDownLatch(1);
+        webClient.post(port, "localhost", "/invocations")
+                .putHeader("Content-Type", "application/json")
+                .sendBuffer(Buffer.buffer("{}"))
+                .onComplete(ar -> firstDone.countDown());
+        assertTrue(subscribed.await(5, TimeUnit.SECONDS));
+
+        CountDownLatch secondDone = new CountDownLatch(1);
+        AtomicReference<Integer> secondStatus = new AtomicReference<>();
+        webClient.post(port, "localhost", "/invocations")
+                .putHeader("Content-Type", "application/json")
+                .sendBuffer(Buffer.buffer("{}"))
+                .onComplete(ar -> {
+                    secondStatus.set(ar.result().statusCode());
+                    secondDone.countDown();
+                });
+        assertTrue(secondDone.await(5, TimeUnit.SECONDS));
+        assertEquals(503, secondStatus.get());
+
+        sink.tryEmitComplete();
+        assertTrue(firstDone.await(5, TimeUnit.SECONDS));
+    }
+
     // ========================
     // Context management
     // ========================
@@ -282,6 +371,49 @@ class AgentArtsRuntimeAppTest {
         // After the request, the context should be cleared
         assertNull(AgentArtsRuntimeContext.getSessionId());
         assertNull(AgentArtsRuntimeContext.getRequestId());
+    }
+
+    @Test
+    @DisplayName("AgentArtsRuntimeContext propagates across a Reactor scheduler and is cleared")
+    void contextPropagatesAcrossReactorScheduler() throws Exception {
+        Scheduler scheduler = Schedulers.newSingle("agentarts-context-test");
+        try {
+            app.setEntrypoint((payload, ctx) -> Mono.just(1)
+                    .publishOn(scheduler)
+                    .map(ignored -> Map.of(
+                            "session", AgentArtsRuntimeContext.getSessionId(),
+                            "request", AgentArtsRuntimeContext.getRequestId(),
+                            "user", AgentArtsRuntimeContext.getUserId(),
+                            "token", AgentArtsRuntimeContext.getWorkloadAccessToken())));
+
+            CountDownLatch latch = new CountDownLatch(1);
+            AtomicReference<String> responseBody = new AtomicReference<>();
+            webClient.post(port, "localhost", "/invocations")
+                    .putHeader("Content-Type", "application/json")
+                    .putHeader("x-hw-agentarts-session-id", "reactive-session")
+                    .putHeader("X-Request-Id", "reactive-request")
+                    .putHeader("X-HW-AgentGateway-User-Id", "reactive-user")
+                    .putHeader("X-HW-AgentGateway-Workload-Access-Token", "reactive-token")
+                    .sendBuffer(Buffer.buffer("{}"))
+                    .onComplete(ar -> {
+                        responseBody.set(ar.result().bodyAsString());
+                        latch.countDown();
+                    });
+
+            assertTrue(latch.await(5, TimeUnit.SECONDS));
+            String body = responseBody.get();
+            assertTrue(body.contains("\"session\":\"reactive-session\""));
+            assertTrue(body.contains("\"request\":\"reactive-request\""));
+            assertTrue(body.contains("\"user\":\"reactive-user\""));
+            assertTrue(body.contains("\"token\":\"reactive-token\""));
+
+            String leaked = Mono.fromCallable(AgentArtsRuntimeContext::getSessionId)
+                    .subscribeOn(scheduler)
+                    .block(Duration.ofSeconds(2));
+            assertNull(leaked, "request context must not leak on a reused scheduler thread");
+        } finally {
+            scheduler.dispose();
+        }
     }
 
     // ========================

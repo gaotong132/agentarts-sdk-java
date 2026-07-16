@@ -6,9 +6,11 @@ import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.PingStatus;
 import com.huaweicloud.agentarts.sdk.runtime.context.AgentArtsRuntimeContext;
 import com.huaweicloud.agentarts.sdk.runtime.context.RequestContext;
+import io.vertx.core.Context;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
+import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.http.ServerWebSocket;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
@@ -16,6 +18,9 @@ import io.vertx.ext.web.handler.BodyHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.Disposable;
+import reactor.core.publisher.BaseSubscriber;
 
 import java.util.Map;
 import java.util.concurrent.Semaphore;
@@ -56,6 +61,7 @@ import java.util.function.Supplier;
 public class AgentArtsRuntimeApp {
 
     private static final Logger LOG = LoggerFactory.getLogger(AgentArtsRuntimeApp.class);
+    private static final Object EMPTY_MONO_RESPONSE = new Object();
     private static final ObjectMapper OBJECT_MAPPER = com.huaweicloud.agentarts.sdk.core.util.JsonUtils.MAPPER;
 
     private final int maxConcurrency;
@@ -87,6 +93,7 @@ public class AgentArtsRuntimeApp {
      * @param vertx          shared Vert.x instance (nullable, creates own if null)
      */
     public AgentArtsRuntimeApp(int maxConcurrency, Vertx vertx) {
+        AgentArtsRuntimeContext.enableReactorContextPropagation();
         this.maxConcurrency = maxConcurrency > 0 ? maxConcurrency : Constants.DEFAULT_MAX_CONCURRENCY;
         this.invocationSemaphore = new Semaphore(this.maxConcurrency);
         if (vertx != null) {
@@ -267,36 +274,52 @@ public class AgentArtsRuntimeApp {
         RequestContext ctx = RequestContext.fromHeaders(name ->
                 rc.request().getHeader(name));
 
-        // Load context into thread-local
-        AgentArtsRuntimeContext.fromRequestContext(ctx);
+        // Concurrency check: if all permits are taken, return immediately.
+        if (!invocationSemaphore.tryAcquire()) {
+            sendJsonError(rc, 503, "Service busy - maximum concurrency reached", null);
+            return;
+        }
 
-        try {
-            // Concurrency check: if all permits taken, return 503 immediately
-            if (!invocationSemaphore.tryAcquire()) {
-                // Match Python: single "error" key with full message
-                sendJsonError(rc, 503, "Service busy - maximum concurrency reached", null);
+        // User handlers are allowed to block. Run handler construction on a worker
+        // thread so a slow SDK/model call cannot stall the Vert.x event loop.
+        vertx.executeBlocking(() -> {
+            AgentArtsRuntimeContext.fromRequestContext(ctx);
+            try {
+                Object result = entrypointHandler.apply(payload, ctx);
+                if (result instanceof Flux<?> flux) {
+                    return AgentArtsRuntimeContext.propagate(flux);
+                }
+                if (result instanceof Mono<?> mono) {
+                    return AgentArtsRuntimeContext.propagate(mono);
+                }
+                return result;
+            } finally {
+                AgentArtsRuntimeContext.clear();
+            }
+        }, false).onComplete(ar -> {
+            if (ar.failed()) {
+                invocationSemaphore.release();
+                Throwable error = ar.cause();
+                LOG.error("Invocation error: {}", error.getMessage(), error);
+                sendJsonError(rc, 500, error.getClass().getSimpleName(), error.getMessage());
                 return;
             }
 
-            try {
-                Object result = entrypointHandler.apply(payload, ctx);
-
-                if (result instanceof Flux<?> flux) {
-                    // SSE streaming response
-                    sendSseStream(rc, flux, ctx.getSessionId());
-                } else {
-                    // Regular JSON response
+            Object result = ar.result();
+            if (result instanceof Flux<?> flux) {
+                sendSseStream(rc, flux.doFinally(signal -> invocationSemaphore.release()),
+                        ctx.getSessionId());
+            } else if (result instanceof Mono<?> mono) {
+                sendMonoResponse(rc, mono.doFinally(signal -> invocationSemaphore.release()),
+                        ctx.getSessionId());
+            } else {
+                try {
                     sendJsonResponse(rc, 200, result, ctx.getSessionId());
+                } finally {
+                    invocationSemaphore.release();
                 }
-            } finally {
-                invocationSemaphore.release();
             }
-        } catch (Exception e) {
-            LOG.error("Invocation error: {}", e.getMessage(), e);
-            sendJsonError(rc, 500, e.getClass().getSimpleName(), e.getMessage());
-        } finally {
-            AgentArtsRuntimeContext.clear();
-        }
+        });
     }
 
     // ========================
@@ -436,32 +459,124 @@ public class AgentArtsRuntimeApp {
             rc.response().putHeader(Constants.SESSION_HEADER, sessionId);
         }
 
-        flux.subscribe(
-                item -> {
-                    try {
-                        String json = OBJECT_MAPPER.writeValueAsString(item);
-                        rc.response().write("data: " + json + "\n\n");
-                    } catch (JsonProcessingException e) {
-                        String errorJson = "{\"error\":\"SerializationError\",\"message\":\""
-                                + escapeJson(e.getMessage()) + "\"}";
-                        rc.response().write("data: " + errorJson + "\n\n");
-                    }
-                },
+        Context context = Vertx.currentContext();
+        if (context == null) {
+            context = vertx.getOrCreateContext();
+        }
+        SseSubscriber subscriber = new SseSubscriber(rc, context);
+        flux.subscribe(subscriber);
+        rc.response().exceptionHandler(error -> subscriber.cancel());
+        rc.request().connection().closeHandler(ignored -> subscriber.cancel());
+    }
+
+    private void sendMonoResponse(RoutingContext rc, Mono<?> mono, String sessionId) {
+        Context context = Vertx.currentContext();
+        if (context == null) {
+            context = vertx.getOrCreateContext();
+        }
+        Context responseContext = context;
+        Disposable subscription = mono
+                .map(value -> (Object) value)
+                .defaultIfEmpty(EMPTY_MONO_RESPONSE)
+                .subscribe(item -> responseContext.runOnContext(ignored -> sendJsonResponse(
+                                rc, 200, item == EMPTY_MONO_RESPONSE ? null : item, sessionId)),
                 error -> {
-                    try {
-                        Map<String, String> errorBody = Map.of(
-                                "error", error.getClass().getSimpleName(),
-                                "error_type", error.getClass().getName(),
-                                "message", error.getMessage() != null ? error.getMessage() : ""
-                        );
-                        String json = OBJECT_MAPPER.writeValueAsString(errorBody);
-                        rc.response().write("data: " + json + "\n\n");
-                    } catch (JsonProcessingException ignored) {
+                    LOG.error("Async invocation error: {}", error.getMessage(), error);
+                    responseContext.runOnContext(ignored -> sendJsonError(
+                            rc, 500, error.getClass().getSimpleName(), error.getMessage()));
+                });
+        rc.request().connection().closeHandler(ignored -> subscription.dispose());
+    }
+
+    private final class SseSubscriber extends BaseSubscriber<Object> {
+        private final RoutingContext routingContext;
+        private final Context context;
+
+        private SseSubscriber(RoutingContext routingContext, Context context) {
+            this.routingContext = routingContext;
+            this.context = context;
+        }
+
+        @Override
+        protected void hookOnSubscribe(org.reactivestreams.Subscription subscription) {
+            context.runOnContext(ignored -> request(1));
+        }
+
+        @Override
+        protected void hookOnNext(Object value) {
+            String frame;
+            try {
+                frame = "data: " + OBJECT_MAPPER.writeValueAsString(value) + "\n\n";
+            } catch (JsonProcessingException e) {
+                frame = "data: {\"error\":\"SerializationError\",\"message\":\""
+                        + escapeJson(e.getMessage()) + "\"}\n\n";
+            }
+            writeFrameAndRequestNext(frame);
+        }
+
+        private void writeFrameAndRequestNext(String frame) {
+            context.runOnContext(ignored -> {
+                HttpServerResponse response = routingContext.response();
+                if (response.ended() || response.closed()) {
+                    cancel();
+                    return;
+                }
+                response.write(frame).onComplete(write -> {
+                    if (write.failed()) {
+                        LOG.debug("SSE client write failed: {}", write.cause().getMessage());
+                        cancel();
+                    } else {
+                        requestWhenWritable(response);
                     }
-                    rc.response().end();
-                },
-                () -> rc.response().end()
-        );
+                });
+            });
+        }
+
+        private void requestWhenWritable(HttpServerResponse response) {
+            if (isDisposed()) {
+                return;
+            }
+            if (response.writeQueueFull()) {
+                response.drainHandler(ignored -> {
+                    response.drainHandler(null);
+                    if (!isDisposed()) {
+                        request(1);
+                    }
+                });
+            } else {
+                request(1);
+            }
+        }
+
+        @Override
+        protected void hookOnError(Throwable error) {
+            context.runOnContext(ignored -> {
+                HttpServerResponse response = routingContext.response();
+                if (response.ended() || response.closed()) {
+                    return;
+                }
+                try {
+                    Map<String, String> errorBody = Map.of(
+                            "error", error.getClass().getSimpleName(),
+                            "error_type", error.getClass().getName(),
+                            "message", error.getMessage() != null ? error.getMessage() : "");
+                    response.write("data: " + OBJECT_MAPPER.writeValueAsString(errorBody) + "\n\n")
+                            .onComplete(done -> response.end());
+                } catch (JsonProcessingException serializationError) {
+                    response.end();
+                }
+            });
+        }
+
+        @Override
+        protected void hookOnComplete() {
+            context.runOnContext(ignored -> {
+                HttpServerResponse response = routingContext.response();
+                if (!response.ended() && !response.closed()) {
+                    response.end();
+                }
+            });
+        }
     }
 
     private static String escapeJson(String value) {
