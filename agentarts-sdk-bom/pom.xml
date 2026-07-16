@@ -15,6 +15,7 @@
     <properties>
         <revision>0.1.0-SNAPSHOT</revision>
         <reactor-bom.version>2025.0.2</reactor-bom.version>
+        <context-propagation.version>1.2.0</context-propagation.version>
         <jackson-bom.version>2.21.1</jackson-bom.version>
         <slf4j.version>2.0.17</slf4j.version>
         <vertx.version>4.5.14</vertx.version>
@@ -92,6 +93,11 @@
                 <version>${reactor-bom.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.micrometer</groupId>
+                <artifactId>context-propagation</artifactId>
+                <version>${context-propagation.version}</version>
             </dependency>
 
             <!-- ==================== -->
@@ -231,12 +237,6 @@
                 <version>${mockito-bom.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
-            </dependency>
-            <dependency>
-                <groupId>io.projectreactor</groupId>
-                <artifactId>reactor-test</artifactId>
-                <version>3.7.6</version>
-                <scope>test</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
