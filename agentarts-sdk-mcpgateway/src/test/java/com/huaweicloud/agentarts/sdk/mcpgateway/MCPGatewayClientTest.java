@@ -163,6 +163,16 @@ class MCPGatewayClientTest {
     }
 
     @Test
+    void encodesUntrustedGatewayAndTargetIdentifiers() {
+        String path = "/gateways/..%2Fgateway/targets/target%3Fx%3D1";
+        when(httpClient.get(path)).thenReturn(Mono.just(success));
+
+        assertSame(success, client.getMcpGatewayTarget("../gateway", "target?x=1"));
+        verify(httpClient).get(path);
+        assertThrows(IllegalArgumentException.class, () -> client.getMcpGateway(" "));
+    }
+
+    @Test
     void generatesDefaultTargetNameAndRejectsEmptyUpdates() {
         String targets = "/gateways/gateway/targets";
         when(httpClient.post(eq(targets), isNull(), any())).thenReturn(Mono.just(success));

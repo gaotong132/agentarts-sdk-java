@@ -3,6 +3,7 @@ package com.huaweicloud.agentarts.sdk.mcpgateway;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
+import com.huaweicloud.agentarts.sdk.core.util.UrlUtils;
 import com.huaweicloud.agentarts.sdk.mcpgateway.model.CreateMcpGatewayRequest;
 import com.huaweicloud.agentarts.sdk.mcpgateway.model.CreateMcpGatewayTargetRequest;
 import com.huaweicloud.agentarts.sdk.mcpgateway.model.UpdateMcpGatewayRequest;
@@ -212,15 +213,18 @@ public class MCPGatewayClient implements AutoCloseable {
                 .withProtocolConfiguration(protocolConfiguration)
                 .withLogDeliveryConfiguration(logDeliveryConfiguration)
                 .withTags(tags);
-        return httpClient.put("/gateways/" + gatewayId, null, req).block();
+        return httpClient.put(
+                "/gateways/" + UrlUtils.encodePathSegment(gatewayId, "gatewayId"), null, req).block();
     }
 
     public RequestResult deleteMcpGateway(String gatewayId) {
-        return httpClient.delete("/gateways/" + gatewayId).block();
+        return httpClient.delete(
+                "/gateways/" + UrlUtils.encodePathSegment(gatewayId, "gatewayId")).block();
     }
 
     public RequestResult getMcpGateway(String gatewayId) {
-        return httpClient.get("/gateways/" + gatewayId).block();
+        return httpClient.get(
+                "/gateways/" + UrlUtils.encodePathSegment(gatewayId, "gatewayId")).block();
     }
 
     public RequestResult listMcpGateways(String name, Integer limit, Integer offset) {
@@ -276,7 +280,9 @@ public class MCPGatewayClient implements AutoCloseable {
                 .withDescription(description)
                 .withTargetConfiguration(targetConfiguration)
                 .withCredentialProviderConfiguration(credConfig);
-        return httpClient.post("/gateways/" + gatewayId + "/targets", null, req).block();
+        return httpClient.post(
+                "/gateways/" + UrlUtils.encodePathSegment(gatewayId, "gatewayId")
+                        + "/targets", null, req).block();
     }
 
     public RequestResult createMcpGatewayTarget(String gatewayId, String name, String description) {
@@ -296,15 +302,21 @@ public class MCPGatewayClient implements AutoCloseable {
                 .withDescription(description)
                 .withTargetConfiguration(targetConfiguration)
                 .withCredentialProviderConfiguration(credentialProviderConfiguration);
-        return httpClient.put("/gateways/" + gatewayId + "/targets/" + targetId, null, req).block();
+        return httpClient.put(
+                "/gateways/" + UrlUtils.encodePathSegment(gatewayId, "gatewayId")
+                        + "/targets/" + UrlUtils.encodePathSegment(targetId, "targetId"), null, req).block();
     }
 
     public RequestResult deleteMcpGatewayTarget(String gatewayId, String targetId) {
-        return httpClient.delete("/gateways/" + gatewayId + "/targets/" + targetId).block();
+        return httpClient.delete(
+                "/gateways/" + UrlUtils.encodePathSegment(gatewayId, "gatewayId")
+                        + "/targets/" + UrlUtils.encodePathSegment(targetId, "targetId")).block();
     }
 
     public RequestResult getMcpGatewayTarget(String gatewayId, String targetId) {
-        return httpClient.get("/gateways/" + gatewayId + "/targets/" + targetId).block();
+        return httpClient.get(
+                "/gateways/" + UrlUtils.encodePathSegment(gatewayId, "gatewayId")
+                        + "/targets/" + UrlUtils.encodePathSegment(targetId, "targetId")).block();
     }
 
     public RequestResult listMcpGatewayTargets(String gatewayId, Integer limit, Integer offset) {
@@ -312,7 +324,8 @@ public class MCPGatewayClient implements AutoCloseable {
         if (limit != null) query.put("limit", List.of(String.valueOf(limit)));
         if (offset != null) query.put("offset", List.of(String.valueOf(offset)));
         return httpClient.request(
-                "GET", "/gateways/" + gatewayId + "/targets", null, null, query).block();
+                "GET", "/gateways/" + UrlUtils.encodePathSegment(gatewayId, "gatewayId")
+                        + "/targets", null, null, query).block();
     }
 
     public RequestResult listMcpGatewayTargets(String gatewayId) {
