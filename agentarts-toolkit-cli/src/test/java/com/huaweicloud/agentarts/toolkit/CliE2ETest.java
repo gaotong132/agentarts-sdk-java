@@ -159,6 +159,67 @@ class CliE2ETest {
                 server.stop(0);
             }
         }
+
+        @Test
+        void runtimeDownloadPreservesBinaryBytesAndRequiresForceToReplace(
+                @TempDir Path tempDir) throws Exception {
+            byte[] response = new byte[] {0, 1, 2, (byte) 0x80, (byte) 0xff};
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/runtimes/unit-agent/download-files", exchange -> {
+                exchange.getResponseHeaders().set("Content-Type", "application/octet-stream");
+                exchange.sendResponseHeaders(200, response.length);
+                exchange.getResponseBody().write(response);
+                exchange.close();
+            });
+            server.start();
+
+            Path outputPath = tempDir.resolve("nested/download.bin");
+            String endpoint = "http://127.0.0.1:" + server.getAddress().getPort();
+            CommandLine cli = CliSupport.withCleanExit(new CommandLine(new AgentArtsCli()));
+            try {
+                int firstExit = cli.execute(
+                        "runtime", "download-files", "--agent", "unit-agent",
+                        "--session", "unit-session", "--path", "/remote/download.bin",
+                        "--output", outputPath.toString(), "--endpoint", endpoint,
+                        "--bearer-token", "unit-token");
+                assertEquals(0, firstExit);
+                assertArrayEquals(response, Files.readAllBytes(outputPath));
+
+                Files.write(outputPath, new byte[] {42});
+                assertNotEquals(0, cli.execute(
+                        "runtime", "download-files", "--agent", "unit-agent",
+                        "--session", "unit-session", "--path", "/remote/download.bin",
+                        "--output", outputPath.toString(), "--endpoint", endpoint,
+                        "--bearer-token", "unit-token"));
+                assertArrayEquals(new byte[] {42}, Files.readAllBytes(outputPath));
+
+                assertEquals(0, cli.execute(
+                        "runtime", "download-files", "--agent", "unit-agent",
+                        "--session", "unit-session", "--path", "/remote/download.bin",
+                        "--output", outputPath.toString(), "--endpoint", endpoint,
+                        "--bearer-token", "unit-token", "--force"));
+                assertArrayEquals(response, Files.readAllBytes(outputPath));
+            } finally {
+                server.stop(0);
+            }
+        }
+
+        @Test
+        void runtimeFileTransfersRejectInvalidTimeoutBeforeNetwork(@TempDir Path tempDir)
+                throws IOException {
+            Path input = tempDir.resolve("input.txt");
+            Files.writeString(input, "content");
+            CommandLine cli = CliSupport.withCleanExit(new CommandLine(new AgentArtsCli()));
+
+            assertNotEquals(0, cli.execute(
+                    "runtime", "upload-files", "--agent", "unit-agent",
+                    "--session", "unit-session", "--files", input.toString(),
+                    "--timeout", "0", "--bearer-token", "unit-token"));
+            assertNotEquals(0, cli.execute(
+                    "runtime", "download-files", "--agent", "unit-agent",
+                    "--session", "unit-session", "--path", "/remote/file",
+                    "--timeout", "0", "--bearer-token", "unit-token"));
+        }
     }
 
     // ============================================================

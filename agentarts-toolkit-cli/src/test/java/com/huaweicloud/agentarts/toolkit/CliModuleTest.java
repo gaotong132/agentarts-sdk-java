@@ -370,6 +370,16 @@ class CliModuleTest {
             assertThrows(RuntimeException.class,
                     () -> CliSupport.parseCommandArguments("echo 'unterminated"));
         }
+
+        @Test
+        void boundedFileReaderRejectsOversizedInputs(@TempDir Path tempDir) throws Exception {
+            Path input = tempDir.resolve("oversized.bin");
+            Files.write(input, new byte[] {1, 2, 3, 4});
+
+            RuntimeException error = assertThrows(RuntimeException.class,
+                    () -> CliSupport.readFileBytes(input, 3));
+            assertTrue(error.getMessage().contains("upload limit"));
+        }
     }
 
     // ========================

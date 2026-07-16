@@ -8,7 +8,6 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -35,6 +34,9 @@ import java.util.Map;
     }
 )
 public class RuntimeCommand implements Runnable {
+
+    private static final long MAX_UPLOAD_FILE_BYTES = 64L * 1024 * 1024;
+    private static final long MAX_UPLOAD_TOTAL_BYTES = 128L * 1024 * 1024;
 
     @Override
     public void run() {
@@ -130,24 +132,27 @@ public class RuntimeCommand implements Runnable {
         @Override
         public void run() {
             String resolvedBearerToken = CliSupport.resolveBearerToken(bearerToken);
+            if (timeout < 1) {
+                CliSupport.fail("timeout must be greater than zero");
+            }
             // Read each local file into memory and carry its bytes + filename.
             // RuntimeClient.uploadFiles streams single-file uploads as
             // application/octet-stream (raw bytes) and multi-file uploads as
             // multipart/form-data, matching the reference CLI's wire format.
             List<Map<String, Object>> fileMaps = new ArrayList<>();
+            long totalBytes = 0;
             for (String f : files) {
                 Path local = Path.of(f);
-                if (!Files.isRegularFile(local)) {
-                    CliSupport.fail("Local file not found: " + f);
+                byte[] content = CliSupport.readFileBytes(local, MAX_UPLOAD_FILE_BYTES);
+                totalBytes += content.length;
+                if (totalBytes > MAX_UPLOAD_TOTAL_BYTES) {
+                    CliSupport.fail("Selected files exceed the " + MAX_UPLOAD_TOTAL_BYTES
+                            + " byte total upload limit");
                 }
-                try {
-                    Map<String, Object> spec = new LinkedHashMap<>();
-                    spec.put("filename", local.getFileName().toString());
-                    spec.put("content", Files.readAllBytes(local));
-                    fileMaps.add(spec);
-                } catch (Exception e) {
-                    CliSupport.fail("Failed to read file " + f + ": " + e.getMessage());
-                }
+                Map<String, Object> spec = new LinkedHashMap<>();
+                spec.put("filename", local.getFileName().toString());
+                spec.put("content", content);
+                fileMaps.add(spec);
             }
             try (RuntimeClient client = RuntimeResolver.resolve(
                     agentName, region, !skipSsl, resolvedBearerToken, endpoint)) {
@@ -187,6 +192,9 @@ public class RuntimeCommand implements Runnable {
         @Option(names = "--recursive", description = "Download directory as tar archive")
         boolean recursive;
 
+        @Option(names = {"-f", "--force"}, description = "Replace an existing output file")
+        boolean force;
+
         @Option(names = {"-bt", "--bearer-token"}, arity = "0..1", interactive = true,
                 description = "Bearer token (omit value for hidden prompt; defaults to BEARER_TOKEN)")
         String bearerToken;
@@ -203,8 +211,11 @@ public class RuntimeCommand implements Runnable {
         @Override
         public void run() {
             String resolvedBearerToken = CliSupport.resolveBearerToken(bearerToken);
-            if (remotePath == null || remotePath.isEmpty()) {
+            if (remotePath == null || remotePath.isBlank()) {
                 CliSupport.fail("Path is required (--path)");
+            }
+            if (timeout < 1) {
+                CliSupport.fail("timeout must be greater than zero");
             }
             try (RuntimeClient client = RuntimeResolver.resolve(
                     agentName, region, !skipSsl, resolvedBearerToken, endpoint)) {
@@ -233,13 +244,9 @@ public class RuntimeCommand implements Runnable {
                     if (bytes == null) {
                         CliSupport.fail("Download returned no file content");
                     }
-                    try {
-                        Files.write(Path.of(out), bytes);
-                    } catch (Exception e) {
-                        CliSupport.fail("Failed to write output file " + out + ": " + e.getMessage());
-                    }
+                    Path savedPath = CliSupport.writeFileAtomically(Path.of(out), bytes, force);
                     Map<String, Object> outMap = new LinkedHashMap<>();
-                    outMap.put("saved_path", out);
+                    outMap.put("saved_path", savedPath.toString());
                     outMap.put("size", bytes.length);
                     outMap.put("content_type", result.getHeaders().get("Content-Type"));
                     outMap.put("path", remotePath);

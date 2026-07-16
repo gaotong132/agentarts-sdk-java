@@ -8,9 +8,17 @@ import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import picocli.CommandLine;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.InputStream;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -144,6 +152,93 @@ public final class CliSupport {
             fail("Command cannot be empty");
         }
         return arguments;
+    }
+
+    /** Read a regular file while enforcing a hard byte limit to avoid exhausting the CLI heap. */
+    public static byte[] readFileBytes(Path path, long maximumBytes) {
+        if (path == null || !Files.isRegularFile(path)) {
+            fail("Local file not found: " + path);
+        }
+        if (maximumBytes < 1 || maximumBytes > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("maximumBytes must be between 1 and Integer.MAX_VALUE");
+        }
+        try {
+            long declaredSize = Files.size(path);
+            if (declaredSize > maximumBytes) {
+                fail("Local file exceeds the " + maximumBytes + " byte upload limit: " + path);
+            }
+            try (InputStream input = Files.newInputStream(path);
+                 ByteArrayOutputStream output = new ByteArrayOutputStream(
+                         (int) Math.min(declaredSize, 8192L))) {
+                byte[] buffer = new byte[8192];
+                long total = 0;
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    total += read;
+                    if (total > maximumBytes) {
+                        fail("Local file exceeds the " + maximumBytes
+                                + " byte upload limit while being read: " + path);
+                    }
+                    output.write(buffer, 0, read);
+                }
+                return output.toByteArray();
+            }
+        } catch (CliFailure e) {
+            throw e;
+        } catch (IOException e) {
+            fail("Failed to read file " + path + ": " + e.getMessage());
+            return null; // unreachable
+        }
+    }
+
+    /** Persist downloaded bytes through a same-directory temporary file. */
+    public static Path writeFileAtomically(Path outputPath, byte[] bytes, boolean replaceExisting) {
+        if (outputPath == null) throw new IllegalArgumentException("outputPath must not be null");
+        if (bytes == null) throw new IllegalArgumentException("bytes must not be null");
+        Path target = outputPath.toAbsolutePath().normalize();
+        Path parent = target.getParent();
+        if (parent == null) throw new IllegalArgumentException("Output path has no parent: " + outputPath);
+        Path temporary = null;
+        try {
+            Files.createDirectories(parent);
+            if (Files.exists(target) && !replaceExisting) {
+                fail("Output file already exists; use --force to replace it: " + outputPath);
+            }
+            String filename = target.getFileName() != null ? target.getFileName().toString() : "download";
+            temporary = Files.createTempFile(parent, "." + filename + ".", ".tmp");
+            Files.write(temporary, bytes, StandardOpenOption.TRUNCATE_EXISTING);
+            try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.WRITE)) {
+                channel.force(true);
+            }
+            try {
+                if (replaceExisting) {
+                    Files.move(temporary, target,
+                            StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                } else {
+                    Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE);
+                }
+            } catch (AtomicMoveNotSupportedException e) {
+                if (replaceExisting) {
+                    Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+                } else {
+                    Files.move(temporary, target);
+                }
+            }
+            return target;
+        } catch (CliFailure e) {
+            throw e;
+        } catch (IOException e) {
+            fail("Failed to write output file " + outputPath + ": " + e.getMessage());
+            return null; // unreachable
+        } finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                    // Best effort cleanup after the primary operation has already completed or failed.
+                }
+            }
+        }
     }
 
     /** Read a sensitive value without echo when a console is available, or from piped stdin. */
