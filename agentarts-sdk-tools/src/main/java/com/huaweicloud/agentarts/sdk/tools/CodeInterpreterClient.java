@@ -43,6 +43,11 @@ public class CodeInterpreterClient implements AutoCloseable {
     private String sessionId;
 
     public CodeInterpreterClient(String region, String dataEndpoint, String authType, boolean verifySsl) {
+        this(region, dataEndpoint, authType, verifySsl, null, null);
+    }
+
+    CodeInterpreterClient(String region, String dataEndpoint, String authType, boolean verifySsl,
+                          BaseHttpClient controlClient, BaseHttpClient dataClient) {
         this.region = region != null ? region : Constants.getRegion();
         this.dataEndpoint = dataEndpoint;
         String normalizedAuthType = authType != null ? authType.trim().toUpperCase(java.util.Locale.ROOT) : "API_KEY";
@@ -51,6 +56,8 @@ public class CodeInterpreterClient implements AutoCloseable {
         }
         this.authType = normalizedAuthType;
         this.verifySsl = verifySsl;
+        this.controlClient = controlClient;
+        this.dataClient = dataClient;
     }
 
     public CodeInterpreterClient(String region, String dataEndpoint) {
