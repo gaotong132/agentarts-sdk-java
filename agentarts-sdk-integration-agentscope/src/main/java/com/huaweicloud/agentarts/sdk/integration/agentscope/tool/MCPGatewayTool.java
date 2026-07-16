@@ -1,6 +1,7 @@
 package com.huaweicloud.agentarts.sdk.integration.agentscope.tool;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import io.agentscope.core.agent.RuntimeContext;
@@ -37,7 +38,7 @@ import java.util.regex.Pattern;
  * as a Bearer token. Gateways configured without inbound authentication do not
  * require either value.</p>
  */
-public class MCPGatewayTool implements AgentTool {
+public final class MCPGatewayTool implements AgentTool {
 
     private static final String TOOL_NAME = "mcp_gateway_call";
     private static final String TOOL_DESCRIPTION =
@@ -47,6 +48,10 @@ public class MCPGatewayTool implements AgentTool {
             "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$");
     private static final Duration INVOCATION_TIMEOUT = Duration.ofSeconds(60);
     private static final Duration INITIALIZATION_TIMEOUT = Duration.ofSeconds(30);
+    private static final int MAX_TOOL_NAME_LENGTH = 256;
+    private static final int MAX_ARGUMENT_JSON_LENGTH = 1_000_000;
+    private static final int MAX_ENDPOINT_LENGTH = 2048;
+    private static final int MAX_HEADER_VALUE_LENGTH = 4096;
 
     private final MCPGatewayClient gatewayClient;
     private final GatewayMcpInvoker invoker;
@@ -137,8 +142,22 @@ public class MCPGatewayTool implements AgentTool {
         if (!(toolName instanceof String) || ((String) toolName).isBlank()) {
             return Validation.error("tool_name must be a non-blank string");
         }
+        if (((String) toolName).length() > MAX_TOOL_NAME_LENGTH) {
+            return Validation.error("tool_name exceeds 256 characters");
+        }
         if (!(arguments instanceof Map<?, ?>)) {
             return Validation.error("arguments must be an object");
+        }
+        Map<?, ?> argumentMap = (Map<?, ?>) arguments;
+        if (argumentMap.keySet().stream().anyMatch(key -> !(key instanceof String))) {
+            return Validation.error("argument names must be strings");
+        }
+        try {
+            if (JsonUtils.toJson(argumentMap).length() > MAX_ARGUMENT_JSON_LENGTH) {
+                return Validation.error("arguments exceed the maximum serialized size");
+            }
+        } catch (RuntimeException e) {
+            return Validation.error("arguments must be JSON serializable");
         }
         @SuppressWarnings("unchecked")
         Map<String, Object> typedArguments = (Map<String, Object>) arguments;
@@ -156,6 +175,9 @@ public class MCPGatewayTool implements AgentTool {
                 ? data.get("endpoint_url").asText() : null;
         if (endpoint == null || endpoint.isBlank()) {
             throw new IllegalStateException("Gateway response did not contain endpoint_url");
+        }
+        if (endpoint.length() > MAX_ENDPOINT_LENGTH) {
+            throw new IllegalStateException("Gateway endpoint_url exceeds 2048 characters");
         }
 
         URI uri;
@@ -178,7 +200,7 @@ public class MCPGatewayTool implements AgentTool {
         }
         String authorization = context.get("gatewayAuthorization", String.class);
         if (authorization != null && !authorization.isBlank()) {
-            if (authorization.length() > 4096) {
+            if (authorization.length() > MAX_HEADER_VALUE_LENGTH) {
                 throw new IllegalArgumentException("gatewayAuthorization exceeds 4096 characters");
             }
             return authorization.trim();
@@ -187,7 +209,7 @@ public class MCPGatewayTool implements AgentTool {
         if (workloadToken == null || workloadToken.isBlank()) {
             return null;
         }
-        if (workloadToken.length() > 4089) {
+        if (workloadToken.length() > MAX_HEADER_VALUE_LENGTH - "Bearer ".length()) {
             throw new IllegalArgumentException("workloadAccessToken exceeds the Authorization limit");
         }
         return "Bearer " + workloadToken.trim();
@@ -199,6 +221,9 @@ public class MCPGatewayTool implements AgentTool {
             return null;
         }
         String sessionId = context.getSessionId();
+        if (sessionId.length() > MAX_HEADER_VALUE_LENGTH) {
+            throw new IllegalArgumentException("sessionId exceeds 4096 characters");
+        }
         for (int i = 0; i < sessionId.length(); i++) {
             char ch = sessionId.charAt(i);
             if (ch < 0x21 || ch > 0x7e) {

@@ -428,6 +428,22 @@ class IntegrationModuleTest {
         }
 
         @Test
+        void rejectsOversizedToolInputBeforeNetworkCall() {
+            MCPGatewayClient gatewayClient = mock(MCPGatewayClient.class);
+            MCPGatewayTool tool = new MCPGatewayTool(gatewayClient);
+
+            ToolResultBlock result = tool.callAsync(ToolCallParam.builder()
+                    .input(Map.of(
+                            "gateway_id", "01234567-89ab-cdef-0123-456789abcdef",
+                            "tool_name", "x".repeat(257)))
+                    .build()).block();
+
+            assertNotNull(result);
+            assertEquals(io.agentscope.core.message.ToolResultState.ERROR, result.getState());
+            verifyNoInteractions(gatewayClient);
+        }
+
+        @Test
         void failsClosedWhenCustomInvokerReturnsRunningResult() throws Exception {
             String gatewayId = "01234567-89ab-cdef-0123-456789abcdef";
             MCPGatewayClient gatewayClient = mock(MCPGatewayClient.class);
