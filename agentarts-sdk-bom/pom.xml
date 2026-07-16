@@ -19,7 +19,7 @@
         <jackson-bom.version>2.21.1</jackson-bom.version>
         <snakeyaml.version>2.6</snakeyaml.version>
         <slf4j.version>2.0.17</slf4j.version>
-        <vertx.version>4.5.14</vertx.version>
+        <vertx.version>4.5.26</vertx.version>
         <huaweicloud-sdk.version>3.1.202</huaweicloud-sdk.version>
         <agentscope.version>2.0.0-RC4</agentscope.version>
         <picocli.version>4.7.6</picocli.version>
