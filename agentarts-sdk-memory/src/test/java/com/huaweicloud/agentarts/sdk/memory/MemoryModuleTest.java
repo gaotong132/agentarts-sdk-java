@@ -4,16 +4,79 @@ import com.huaweicloud.agentarts.sdk.memory.model.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Method;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 /**
  * Tests for Memory module: model classes, MemoryClient API parity, MemorySession, RetrievalConfig.
  */
 class MemoryModuleTest {
+
+    @Nested
+    @DisplayName("AsyncMemorySession")
+    class AsyncMemorySessionTests {
+
+        @Test
+        void sharesLazyInitializationAcrossSubscribers() {
+            MemoryClient client = mock(MemoryClient.class);
+            when(client.getRegionName()).thenReturn("test-region");
+            SessionInfo created = new SessionInfo();
+            created.setId("session-id");
+            when(client.createMemorySessionAsync("space-id", null, "actor-id", null))
+                    .thenReturn(Mono.just(created));
+            AsyncMemorySession session =
+                    new AsyncMemorySession(client, "space-id", "actor-id", null);
+
+            session.initialize().block();
+            session.initialize().block();
+
+            assertEquals("session-id", session.getSessionId());
+            verify(client, times(1))
+                    .createMemorySessionAsync("space-id", null, "actor-id", null);
+        }
+
+        @Test
+        void retriesInitializationAfterFailure() {
+            MemoryClient client = mock(MemoryClient.class);
+            when(client.getRegionName()).thenReturn("test-region");
+            SessionInfo created = new SessionInfo();
+            created.setId("session-id");
+            when(client.createMemorySessionAsync("space-id", null, "actor-id", null))
+                    .thenReturn(Mono.error(new IllegalStateException("temporary failure")))
+                    .thenReturn(Mono.just(created));
+            AsyncMemorySession session =
+                    new AsyncMemorySession(client, "space-id", "actor-id", null);
+
+            assertThrows(IllegalStateException.class, () -> session.initialize().block());
+            session.initialize().block();
+
+            assertEquals("session-id", session.getSessionId());
+            verify(client, times(2))
+                    .createMemorySessionAsync("space-id", null, "actor-id", null);
+        }
+
+        @Test
+        void delegatesOperationsAndDoesNotCloseInjectedClient() {
+            MemoryClient client = mock(MemoryClient.class);
+            when(client.getRegionName()).thenReturn("test-region");
+            MemoryInfo memory = mock(MemoryInfo.class);
+            when(client.getMemoryAsync("space-id", "memory-id")).thenReturn(Mono.just(memory));
+            AsyncMemorySession session =
+                    new AsyncMemorySession(client, "space-id", "actor-id", "session-id");
+
+            assertSame(memory, session.getMemory("memory-id").block());
+            session.closeAsync().block();
+
+            verify(client).getMemoryAsync("space-id", "memory-id");
+            verify(client, never()).close();
+            assertThrows(IllegalStateException.class, () -> session.initialize().block());
+        }
+    }
 
     // ========================
     // API verification: Method signature verification

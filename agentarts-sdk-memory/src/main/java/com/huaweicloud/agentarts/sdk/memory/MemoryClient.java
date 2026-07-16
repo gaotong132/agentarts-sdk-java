@@ -586,6 +586,11 @@ public class MemoryClient implements AutoCloseable {
         return async(() -> listMemories(spaceId));
     }
 
+    /** Async variant of {@link #getMemory(String, String)}. */
+    public Mono<MemoryInfo> getMemoryAsync(String spaceId, String memoryId) {
+        return async(() -> getMemory(spaceId, memoryId));
+    }
+
     /** Async variant of {@link #deleteMemory(String, String)}. */
     public Mono<Void> deleteMemoryAsync(String spaceId, String memoryId) {
         return async(() -> { deleteMemory(spaceId, memoryId); return null; }).then();
