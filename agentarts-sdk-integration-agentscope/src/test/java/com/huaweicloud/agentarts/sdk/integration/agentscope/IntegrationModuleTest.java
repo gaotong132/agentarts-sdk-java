@@ -1,6 +1,7 @@
 package com.huaweicloud.agentarts.sdk.integration.agentscope;
 
 import com.huaweicloud.agentarts.sdk.core.APIException;
+import com.huaweicloud.agentarts.sdk.core.PingStatus;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.message.MessageConverter;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.message.MessageConversionException;
@@ -12,6 +13,7 @@ import com.huaweicloud.agentarts.sdk.integration.agentscope.tool.MCPGatewayTool;
 import com.huaweicloud.agentarts.sdk.mcpgateway.MCPGatewayClient;
 import com.huaweicloud.agentarts.sdk.memory.MemoryClient;
 import com.huaweicloud.agentarts.sdk.memory.model.*;
+import com.huaweicloud.agentarts.sdk.runtime.AgentArtsRuntimeApp;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.TextBlock;
@@ -29,6 +31,7 @@ import reactor.core.publisher.Mono;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -526,14 +529,14 @@ class IntegrationModuleTest {
         void bridgeContextMapsRequestId() {
             RequestContext rc = new RequestContext("req-1", "sess-123", "user-456", "token-789");
             RuntimeContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
-            assertEquals("req-1", ctx.get("requestId"));
+            assertEquals("req-1", ctx.get(AgentscopeRuntimeHost.REQUEST_ID_KEY));
         }
 
         @Test
         void bridgeContextMapsWorkloadAccessToken() {
             RequestContext rc = new RequestContext("req-1", "sess-123", "user-456", "token-789");
             RuntimeContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
-            assertEquals("token-789", ctx.get("workloadAccessToken"));
+            assertEquals("token-789", ctx.get(AgentscopeRuntimeHost.WORKLOAD_ACCESS_TOKEN_KEY));
         }
 
         @Test
@@ -543,6 +546,31 @@ class IntegrationModuleTest {
             assertNotNull(ctx);
             assertNull(ctx.getSessionId());
             assertNull(ctx.getUserId());
+        }
+
+        @Test
+        void rejectsNullDependenciesAndContext() {
+            AgentArtsRuntimeApp app = mock(AgentArtsRuntimeApp.class);
+            assertThrows(
+                    NullPointerException.class,
+                    () -> new AgentscopeRuntimeHost(null, (payload, ctx) -> payload));
+            assertThrows(NullPointerException.class, () -> new AgentscopeRuntimeHost(app, null));
+            assertThrows(
+                    NullPointerException.class,
+                    () -> new AgentscopeRuntimeHost(app, (payload, ctx) -> payload, null));
+            assertThrows(NullPointerException.class, () -> AgentscopeRuntimeHost.bridgeContext(null));
+            verifyNoInteractions(app);
+        }
+
+        @Test
+        void registersApplicationReadinessProbe() {
+            AgentArtsRuntimeApp app = mock(AgentArtsRuntimeApp.class);
+            Supplier<PingStatus> probe = () -> PingStatus.HEALTHY_BUSY;
+
+            new AgentscopeRuntimeHost(app, (payload, ctx) -> payload, probe);
+
+            verify(app).setPingHandler(probe);
+            verify(app).setEntrypoint(any(java.util.function.BiFunction.class));
         }
     }
 

@@ -8,7 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 
 /**
  * Bridge layer between AgentArts Runtime and agentscope-java.
@@ -32,9 +34,11 @@ import java.util.function.BiFunction;
  * app.run(8080);
  * }</pre>
  */
-public class AgentscopeRuntimeHost {
+public final class AgentscopeRuntimeHost {
 
     private static final Logger LOG = LoggerFactory.getLogger(AgentscopeRuntimeHost.class);
+    public static final String REQUEST_ID_KEY = "requestId";
+    public static final String WORKLOAD_ACCESS_TOKEN_KEY = "workloadAccessToken";
 
     private final AgentArtsRuntimeApp app;
 
@@ -46,16 +50,26 @@ public class AgentscopeRuntimeHost {
      */
     public AgentscopeRuntimeHost(AgentArtsRuntimeApp app,
                                   BiFunction<Map<String, Object>, RuntimeContext, Object> handler) {
-        this.app = app;
+        this(app, handler, () -> PingStatus.HEALTHY);
+    }
+
+    /** Create a runtime host with an application-specific readiness probe. */
+    public AgentscopeRuntimeHost(
+            AgentArtsRuntimeApp app,
+            BiFunction<Map<String, Object>, RuntimeContext, Object> handler,
+            Supplier<PingStatus> pingHandler) {
+        this.app = Objects.requireNonNull(app, "app must not be null");
+        Objects.requireNonNull(handler, "handler must not be null");
+        Objects.requireNonNull(pingHandler, "pingHandler must not be null");
 
         // Register entrypoint that bridges RequestContext → RuntimeContext
-        app.setEntrypoint((Map<String, Object> payload, RequestContext requestCtx) -> {
+        this.app.setEntrypoint((Map<String, Object> payload, RequestContext requestCtx) -> {
             RuntimeContext runtimeCtx = bridgeContext(requestCtx);
             return handler.apply(payload, runtimeCtx);
         });
 
         // Default ping handler
-        app.setPingHandler(() -> PingStatus.HEALTHY);
+        this.app.setPingHandler(pingHandler);
 
         LOG.info("AgentscopeRuntimeHost registered on AgentArts Runtime");
     }
@@ -64,6 +78,7 @@ public class AgentscopeRuntimeHost {
      * Bridge AgentArts RequestContext to agentscope RuntimeContext.
      */
     public static RuntimeContext bridgeContext(RequestContext requestCtx) {
+        Objects.requireNonNull(requestCtx, "requestCtx must not be null");
         RuntimeContext.Builder builder = RuntimeContext.builder();
 
         if (requestCtx.getSessionId() != null) {
@@ -73,10 +88,10 @@ public class AgentscopeRuntimeHost {
             builder.userId(requestCtx.getUserId());
         }
         if (requestCtx.getRequestId() != null) {
-            builder.put("requestId", requestCtx.getRequestId());
+            builder.put(REQUEST_ID_KEY, requestCtx.getRequestId());
         }
         if (requestCtx.getWorkloadAccessToken() != null) {
-            builder.put("workloadAccessToken", requestCtx.getWorkloadAccessToken());
+            builder.put(WORKLOAD_ACCESS_TOKEN_KEY, requestCtx.getWorkloadAccessToken());
         }
 
         return builder.build();
