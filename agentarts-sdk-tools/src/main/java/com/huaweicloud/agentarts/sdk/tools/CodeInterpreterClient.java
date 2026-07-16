@@ -161,9 +161,14 @@ public class CodeInterpreterClient implements AutoCloseable {
     }
 
     public CodeInterpreterListResponse listCodeInterpreters(String name, int limit, int offset) {
-        String url = "/code-interpreters?limit=" + limit + "&offset=" + offset;
-        if (name != null) url += "&name=" + name;
-        RequestResult r = getControlClient().get(url).block();
+        Map<String, List<String>> query = new LinkedHashMap<>();
+        query.put("limit", List.of(String.valueOf(limit)));
+        query.put("offset", List.of(String.valueOf(offset)));
+        if (name != null) {
+            query.put("name", List.of(name));
+        }
+        RequestResult r = getControlClient()
+                .request("GET", "/code-interpreters", null, null, query).block();
         return parseResult(r, CodeInterpreterListResponse.class);
     }
 

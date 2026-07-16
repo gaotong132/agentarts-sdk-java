@@ -40,7 +40,8 @@ class CodeInterpreterClientTest {
     void executesControlPlaneCrudAndParsesTypedResponses() throws Exception {
         when(controlClient.post(eq("/code-interpreters"), isNull(), any()))
                 .thenReturn(Mono.just(success("{\"id\":\"created\",\"name\":\"valid-name\"}")));
-        when(controlClient.get("/code-interpreters?limit=20&offset=5&name=valid-name"))
+        when(controlClient.request(eq("GET"), eq("/code-interpreters"),
+                isNull(), isNull(), anyMap()))
                 .thenReturn(Mono.just(success("{\"items\":[],\"total_count\":0}")));
         when(controlClient.put(eq("/code-interpreters/interpreter"), isNull(), any()))
                 .thenReturn(Mono.just(success("{\"id\":\"interpreter\",\"description\":\"updated\"}")));
@@ -52,7 +53,7 @@ class CodeInterpreterClientTest {
         var created = client.createCodeInterpreter(new CreateCodeInterpreterRequest()
                 .withName("valid-name").withAuthType("IAM"));
         assertEquals("created", created.getId());
-        assertEquals(0, client.listCodeInterpreters("valid-name", 20, 5).getTotalCount());
+        assertEquals(0, client.listCodeInterpreters("name&limit=999", 20, 5).getTotalCount());
         assertEquals("updated", client.updateCodeInterpreter(
                 "interpreter", Map.of("logs", true), List.of(Map.of("key", "value")))
                 .getDescription());
@@ -62,6 +63,14 @@ class CodeInterpreterClientTest {
         var create = ArgumentCaptor.forClass(CreateCodeInterpreterRequest.class);
         verify(controlClient).post(eq("/code-interpreters"), isNull(), create.capture());
         assertEquals("IAM", create.getValue().getAuthType());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, List<String>>> query = ArgumentCaptor.forClass(Map.class);
+        verify(controlClient).request(eq("GET"), eq("/code-interpreters"),
+                isNull(), isNull(), query.capture());
+        assertEquals(List.of("name&limit=999"), query.getValue().get("name"));
+        assertEquals(List.of("20"), query.getValue().get("limit"));
+        assertEquals(List.of("5"), query.getValue().get("offset"));
 
         var update = ArgumentCaptor.forClass(UpdateCodeInterpreterRequest.class);
         verify(controlClient).put(eq("/code-interpreters/interpreter"), isNull(), update.capture());
