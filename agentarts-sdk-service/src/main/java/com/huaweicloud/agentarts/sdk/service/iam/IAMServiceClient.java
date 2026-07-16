@@ -6,10 +6,12 @@ import com.huaweicloud.sdk.iam.v5.model.CreateAgencyReqBody;
 import com.huaweicloud.sdk.iam.v5.model.CreateAgencyV5Request;
 import com.huaweicloud.sdk.iam.v5.model.CreateAgencyV5Response;
 import com.huaweicloud.sdk.core.auth.GlobalCredentials;
+import com.huaweicloud.sdk.core.auth.ICredentialProvider;
 import com.huaweicloud.sdk.core.http.HttpConfig;
 import com.huaweicloud.sdk.core.ClientBuilder;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
+import com.huaweicloud.agentarts.sdk.service.auth.CredentialProviders;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +37,14 @@ public class IAMServiceClient {
     private final String region;
 
     public IAMServiceClient(String region, boolean ignoreSslVerification) {
+        this(region, ignoreSslVerification, CredentialProviders.defaultGlobalProvider());
+    }
+
+    /**
+     * Create a client with an explicit global-credential provider.
+     */
+    public IAMServiceClient(String region, boolean ignoreSslVerification,
+                            ICredentialProvider credentialProvider) {
         this.region = region != null ? region : Constants.getRegion();
 
         HttpConfig httpConfig = HttpConfig.getDefaultHttpConfig();
@@ -42,14 +52,7 @@ public class IAMServiceClient {
 
         String endpoint = Constants.getIamEndpoint(this.region);
 
-        GlobalCredentials credentials = new GlobalCredentials()
-                .withAk(Constants.getAk())
-                .withSk(Constants.getSk());
-
-        String securityToken = Constants.getSecurityToken();
-        if (JsonUtils.isNotBlank(securityToken)) {
-            credentials.withSecurityToken(securityToken);
-        }
+        GlobalCredentials credentials = CredentialProviders.resolveGlobal(credentialProvider);
 
         this.syncClient = new ClientBuilder<>(IamClient::new)
                 .withCredential(credentials)

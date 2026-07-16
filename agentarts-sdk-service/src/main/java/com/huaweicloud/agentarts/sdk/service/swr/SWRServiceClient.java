@@ -4,9 +4,11 @@ import com.huaweicloud.sdk.swr.v2.SwrClient;
 import com.huaweicloud.sdk.swr.v2.SwrAsyncClient;
 import com.huaweicloud.sdk.swr.v2.model.*;
 import com.huaweicloud.sdk.core.auth.BasicCredentials;
+import com.huaweicloud.sdk.core.auth.ICredentialProvider;
 import com.huaweicloud.sdk.core.http.HttpConfig;
 import com.huaweicloud.sdk.core.ClientBuilder;
 import com.huaweicloud.agentarts.sdk.core.Constants;
+import com.huaweicloud.agentarts.sdk.service.auth.CredentialProviders;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +33,14 @@ public class SWRServiceClient implements AutoCloseable {
     private final String region;
 
     public SWRServiceClient(String region, boolean ignoreSslVerification) {
+        this(region, ignoreSslVerification, CredentialProviders.defaultBasicProvider());
+    }
+
+    /**
+     * Create a client with an explicit credential provider.
+     */
+    public SWRServiceClient(String region, boolean ignoreSslVerification,
+                            ICredentialProvider credentialProvider) {
         this.region = region != null ? region : Constants.getRegion();
 
         HttpConfig httpConfig = HttpConfig.getDefaultHttpConfig();
@@ -38,14 +48,7 @@ public class SWRServiceClient implements AutoCloseable {
 
         String endpoint = Constants.getSwrEndpoint(this.region);
 
-        BasicCredentials credentials = new BasicCredentials()
-                .withAk(Constants.getAk())
-                .withSk(Constants.getSk());
-
-        String securityToken = Constants.getSecurityToken();
-        if (com.huaweicloud.agentarts.sdk.core.util.JsonUtils.isNotBlank(securityToken)) {
-            credentials.withSecurityToken(securityToken);
-        }
+        BasicCredentials credentials = CredentialProviders.resolveBasic(credentialProvider);
 
         this.syncClient = new ClientBuilder<>(SwrClient::new)
                 .withCredential(credentials)

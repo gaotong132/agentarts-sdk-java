@@ -10,8 +10,10 @@ import com.huaweicloud.agentarts.sdk.mcpgateway.model.UpdateMcpGatewayTargetRequ
 import com.huaweicloud.agentarts.sdk.service.http.BaseHttpClient;
 import com.huaweicloud.agentarts.sdk.service.http.RequestConfig;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
+import com.huaweicloud.agentarts.sdk.service.auth.CredentialProviders;
 import com.huaweicloud.sdk.core.ClientBuilder;
 import com.huaweicloud.sdk.core.auth.BasicCredentials;
+import com.huaweicloud.sdk.core.auth.ICredentialProvider;
 import com.huaweicloud.sdk.core.http.HttpConfig;
 import com.huaweicloud.sdk.iam.v5.IamClient;
 import com.huaweicloud.sdk.iam.v5.model.Agency;
@@ -80,15 +82,26 @@ public class MCPGatewayClient implements AutoCloseable {
 
     private final BaseHttpClient httpClient;
     private final boolean verifySsl;
+    private final ICredentialProvider credentialProvider;
 
     public MCPGatewayClient(boolean verifySsl) {
+        this(verifySsl, CredentialProviders.defaultBasicProvider());
+    }
+
+    /**
+     * Create a client with an explicit credential provider.
+     */
+    public MCPGatewayClient(boolean verifySsl, ICredentialProvider credentialProvider) {
         this.verifySsl = verifySsl;
+        this.credentialProvider = java.util.Objects.requireNonNull(
+                credentialProvider, "credentialProvider must not be null");
         String endpoint = Constants.getControlPlaneEndpoint() + "/v1/core";
         RequestConfig config = RequestConfig.builder()
                 .baseUrl(endpoint)
                 .verifySsl(verifySsl)
                 .build();
-        this.httpClient = new BaseHttpClient(config, true, SignMode.SDK_HMAC_SHA256, Constants.getRegion());
+        this.httpClient = new BaseHttpClient(
+                config, true, SignMode.SDK_HMAC_SHA256, Constants.getRegion(), credentialProvider);
     }
 
     public MCPGatewayClient() {
@@ -148,11 +161,11 @@ public class MCPGatewayClient implements AutoCloseable {
     }
 
     public RequestResult listMcpGateways(String name, Integer limit, Integer offset) {
-        StringBuilder url = new StringBuilder("/gateways?");
-        if (name != null) url.append("name=").append(name).append("&");
-        if (limit != null) url.append("limit=").append(limit).append("&");
-        if (offset != null) url.append("offset=").append(offset).append("&");
-        return httpClient.get(url.toString()).block();
+        Map<String, List<String>> query = new HashMap<>();
+        if (name != null) query.put("name", List.of(name));
+        if (limit != null) query.put("limit", List.of(String.valueOf(limit)));
+        if (offset != null) query.put("offset", List.of(String.valueOf(offset)));
+        return httpClient.request("GET", "/gateways", null, null, query).block();
     }
 
     public RequestResult listMcpGateways() {
@@ -206,10 +219,11 @@ public class MCPGatewayClient implements AutoCloseable {
     }
 
     public RequestResult listMcpGatewayTargets(String gatewayId, Integer limit, Integer offset) {
-        StringBuilder url = new StringBuilder("/gateways/" + gatewayId + "/targets?");
-        if (limit != null) url.append("limit=").append(limit).append("&");
-        if (offset != null) url.append("offset=").append(offset).append("&");
-        return httpClient.get(url.toString()).block();
+        Map<String, List<String>> query = new HashMap<>();
+        if (limit != null) query.put("limit", List.of(String.valueOf(limit)));
+        if (offset != null) query.put("offset", List.of(String.valueOf(offset)));
+        return httpClient.request(
+                "GET", "/gateways/" + gatewayId + "/targets", null, null, query).block();
     }
 
     public RequestResult listMcpGatewayTargets(String gatewayId) {
@@ -265,13 +279,7 @@ public class MCPGatewayClient implements AutoCloseable {
 
     private IamClient buildIamClient() {
         // BasicCredentials (not GlobalCredentials) — the IAM v5 agency API requires it.
-        BasicCredentials credentials = new BasicCredentials()
-                .withAk(Constants.getAk())
-                .withSk(Constants.getSk());
-        String securityToken = Constants.getSecurityToken();
-        if (JsonUtils.isNotBlank(securityToken)) {
-            credentials.withSecurityToken(securityToken);
-        }
+        BasicCredentials credentials = CredentialProviders.resolveBasic(credentialProvider);
         HttpConfig httpConfig = HttpConfig.getDefaultHttpConfig();
         httpConfig.setIgnoreSSLVerification(!verifySsl);
         String endpoint = Constants.getIamEndpoint(Constants.getRegion());
