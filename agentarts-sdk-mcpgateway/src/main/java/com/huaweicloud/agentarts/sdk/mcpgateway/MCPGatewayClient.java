@@ -92,16 +92,25 @@ public class MCPGatewayClient implements AutoCloseable {
      * Create a client with an explicit credential provider.
      */
     public MCPGatewayClient(boolean verifySsl, ICredentialProvider credentialProvider) {
+        this(verifySsl, credentialProvider, null);
+    }
+
+    MCPGatewayClient(boolean verifySsl, ICredentialProvider credentialProvider,
+                     BaseHttpClient httpClient) {
         this.verifySsl = verifySsl;
         this.credentialProvider = java.util.Objects.requireNonNull(
                 credentialProvider, "credentialProvider must not be null");
-        String endpoint = Constants.getControlPlaneEndpoint() + "/v1/core";
-        RequestConfig config = RequestConfig.builder()
-                .baseUrl(endpoint)
-                .verifySsl(verifySsl)
-                .build();
-        this.httpClient = new BaseHttpClient(
-                config, true, SignMode.SDK_HMAC_SHA256, Constants.getRegion(), credentialProvider);
+        if (httpClient != null) {
+            this.httpClient = httpClient;
+        } else {
+            String endpoint = Constants.getControlPlaneEndpoint() + "/v1/core";
+            RequestConfig config = RequestConfig.builder()
+                    .baseUrl(endpoint)
+                    .verifySsl(verifySsl)
+                    .build();
+            this.httpClient = new BaseHttpClient(
+                    config, true, SignMode.SDK_HMAC_SHA256, Constants.getRegion(), credentialProvider);
+        }
     }
 
     public MCPGatewayClient() {
