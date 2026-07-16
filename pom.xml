@@ -72,6 +72,7 @@
         <spring-boot.version>3.5.16</spring-boot.version>
 
         <!-- Testing (JUnit and Mockito are managed by the supported Spring Boot BOM) -->
+        <mockito.version>5.17.0</mockito.version>
         <test.timeout.default>30 s</test.timeout.default>
         <test.fork.timeout.seconds>180</test.fork.timeout.seconds>
 
@@ -328,7 +329,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
-                        <argLine>@{argLine} -Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+                        <argLine>@{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar -Xshare:off -Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
                         <forkedProcessTimeoutInSeconds>${test.fork.timeout.seconds}</forkedProcessTimeoutInSeconds>
                         <systemPropertyVariables>
                             <junit.jupiter.execution.timeout.default>${test.timeout.default}</junit.jupiter.execution.timeout.default>
