@@ -3,6 +3,7 @@ package com.huaweicloud.agentarts.sdk.integration.agentscope;
 import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.message.MessageConverter;
+import com.huaweicloud.agentarts.sdk.integration.agentscope.message.MessageConversionException;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.runtime.AgentscopeRuntimeHost;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.state.AgentStateStoreException;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.state.MemoryAgentStateStore;
@@ -596,15 +597,48 @@ class IntegrationModuleTest {
             ToolResultBlock block = MessageConverter.toToolResultBlock(msg);
             assertEquals("call-1", block.getId());
             assertFalse(block.getOutput().isEmpty());
+            assertEquals(io.agentscope.core.message.ToolResultState.SUCCESS, block.getState());
         }
 
         @Test
         void toolResultBlockToToolResultMessage() {
             TextBlock textOut = TextBlock.builder().text("output text").build();
-            ToolResultBlock block = ToolResultBlock.of("call-1", "tool", textOut);
+            ToolResultBlock block = ToolResultBlock.of("call-1", "tool", textOut)
+                    .withState(io.agentscope.core.message.ToolResultState.SUCCESS);
             ToolResultMessage msg = MessageConverter.toToolResultMessage(block);
             assertEquals("call-1", msg.getToolCallId());
             assertEquals("output text", msg.getContent());
+        }
+
+        @Test
+        void toolResultStateSurvivesRoundTrip() {
+            ToolResultBlock block = ToolResultBlock.error("failed")
+                    .withState(io.agentscope.core.message.ToolResultState.ERROR);
+
+            ToolResultMessage memoryMessage = MessageConverter.toToolResultMessage(block);
+            ToolResultBlock restored = MessageConverter.toToolResultBlock(memoryMessage);
+
+            assertEquals(io.agentscope.core.message.ToolResultState.ERROR, restored.getState());
+        }
+
+        @Test
+        void rejectsRunningToolResults() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> MessageConverter.toToolResultMessage(ToolResultBlock.text("pending")));
+        }
+
+        @Test
+        void serializationFailureIsNotSilentlyReplaced() {
+            Map<String, Object> recursive = new HashMap<>();
+            recursive.put("self", recursive);
+            ToolUseBlock block = ToolUseBlock.builder()
+                    .id("call-recursive")
+                    .name("recursive")
+                    .input(recursive)
+                    .build();
+
+            assertThrows(MessageConversionException.class,
+                    () -> MessageConverter.toToolCallMessage(block));
         }
 
         @Test
