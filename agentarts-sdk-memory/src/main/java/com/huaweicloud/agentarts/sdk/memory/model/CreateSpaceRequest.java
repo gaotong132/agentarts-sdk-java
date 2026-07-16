@@ -89,12 +89,37 @@ public class CreateSpaceRequest {
         if (!(o instanceof CreateSpaceRequest that)) return false;
         return messageTtlHours == that.messageTtlHours
                 && Objects.equals(name, that.name)
-                && Objects.equals(description, that.description);
+                && Objects.equals(description, that.description)
+                && Objects.equals(apiKeyId, that.apiKeyId)
+                && Objects.equals(tags, that.tags)
+                && Objects.equals(publicAccessEnable, that.publicAccessEnable)
+                && Objects.equals(privateVpcId, that.privateVpcId)
+                && Objects.equals(privateSubnetId, that.privateSubnetId)
+                && Objects.equals(networkAccess, that.networkAccess)
+                && Objects.equals(memoryExtractIdleSeconds, that.memoryExtractIdleSeconds)
+                && Objects.equals(memoryExtractMaxTokens, that.memoryExtractMaxTokens)
+                && Objects.equals(memoryExtractMaxMessages, that.memoryExtractMaxMessages)
+                && Objects.equals(memoryStrategiesBuiltin, that.memoryStrategiesBuiltin)
+                && Objects.equals(memoryStrategiesCustomized, that.memoryStrategiesCustomized);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, description, messageTtlHours);
+        return Objects.hash(
+                name,
+                description,
+                apiKeyId,
+                tags,
+                publicAccessEnable,
+                privateVpcId,
+                privateSubnetId,
+                networkAccess,
+                memoryExtractIdleSeconds,
+                memoryExtractMaxTokens,
+                memoryExtractMaxMessages,
+                memoryStrategiesBuiltin,
+                memoryStrategiesCustomized,
+                messageTtlHours);
     }
 
     @Override

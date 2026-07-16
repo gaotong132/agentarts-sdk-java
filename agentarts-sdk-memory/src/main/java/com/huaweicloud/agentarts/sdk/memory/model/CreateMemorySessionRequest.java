@@ -38,12 +38,13 @@ public class CreateMemorySessionRequest {
         if (!(o instanceof CreateMemorySessionRequest that)) return false;
         return Objects.equals(id, that.id)
                 && Objects.equals(actorId, that.actorId)
-                && Objects.equals(assistantId, that.assistantId);
+                && Objects.equals(assistantId, that.assistantId)
+                && Objects.equals(meta, that.meta);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, actorId, assistantId);
+        return Objects.hash(id, actorId, assistantId, meta);
     }
 
     @Override

@@ -64,12 +64,27 @@ public class UpdateSpaceRequest {
         if (!(o instanceof UpdateSpaceRequest that)) return false;
         return Objects.equals(name, that.name)
                 && Objects.equals(description, that.description)
-                && Objects.equals(messageTtlHours, that.messageTtlHours);
+                && Objects.equals(messageTtlHours, that.messageTtlHours)
+                && Objects.equals(memoryExtractEnabled, that.memoryExtractEnabled)
+                && Objects.equals(memoryExtractIdleSeconds, that.memoryExtractIdleSeconds)
+                && Objects.equals(memoryExtractMaxTokens, that.memoryExtractMaxTokens)
+                && Objects.equals(memoryExtractMaxMessages, that.memoryExtractMaxMessages)
+                && Objects.equals(tags, that.tags)
+                && Objects.equals(memoryStrategiesBuiltin, that.memoryStrategiesBuiltin);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, description, messageTtlHours);
+        return Objects.hash(
+                name,
+                description,
+                messageTtlHours,
+                memoryExtractEnabled,
+                memoryExtractIdleSeconds,
+                memoryExtractMaxTokens,
+                memoryExtractMaxMessages,
+                tags,
+                memoryStrategiesBuiltin);
     }
 
     @Override

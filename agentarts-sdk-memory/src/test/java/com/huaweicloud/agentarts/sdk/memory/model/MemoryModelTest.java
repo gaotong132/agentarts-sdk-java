@@ -570,10 +570,31 @@ class MemoryModelTest {
 
         @Test
         void equalityAndHashCode() {
-            CreateSpaceRequest a = new CreateSpaceRequest().withName("test").withMessageTtlHours(168);
-            CreateSpaceRequest b = new CreateSpaceRequest().withName("test").withMessageTtlHours(168);
+            CreateSpaceRequest a = fullyConfiguredCreateSpaceRequest();
+            CreateSpaceRequest b = fullyConfiguredCreateSpaceRequest();
             assertEquals(a, b);
             assertEquals(a.hashCode(), b.hashCode());
+
+            b.withPublicAccessEnable(false);
+            assertNotEquals(a, b);
+        }
+
+        private CreateSpaceRequest fullyConfiguredCreateSpaceRequest() {
+            return new CreateSpaceRequest()
+                    .withName("test")
+                    .withDescription("description")
+                    .withApiKeyId("key-id")
+                    .withTags(List.of(Map.of("key", "environment", "value", "test")))
+                    .withPublicAccessEnable(true)
+                    .withPrivateVpcId("vpc-id")
+                    .withPrivateSubnetId("subnet-id")
+                    .withNetworkAccess(Map.of("public_access_enable", true))
+                    .withMemoryExtractIdleSeconds(30)
+                    .withMemoryExtractMaxTokens(1000)
+                    .withMemoryExtractMaxMessages(20)
+                    .withMemoryStrategiesBuiltin(List.of("semantic"))
+                    .withMemoryStrategiesCustomized(List.of(Map.of("name", "custom")))
+                    .withMessageTtlHours(168);
         }
 
         @Test
@@ -661,6 +682,26 @@ class MemoryModelTest {
             assertEquals("key-123", info.getApiKey());
             assertEquals("kid-1", info.getApiKeyId());
             assertEquals("https://example.com", info.getPublicDomain());
+        }
+
+        @Test
+        void spaceInfoDeserializesAdvancedConfiguration() throws Exception {
+            String json = "{\"id\":\"sp-123\",\"memory_extract_idle_seconds\":30,"
+                    + "\"memory_extract_max_tokens\":1000,\"memory_extract_max_messages\":20,"
+                    + "\"memory_strategies_builtin\":[\"semantic\"],"
+                    + "\"memory_strategies_customized\":[{\"name\":\"custom\"}],"
+                    + "\"private_access\":{\"domain\":\"private.example\",\"ip\":\"192.0.2.1\"},"
+                    + "\"private_domain\":\"private.example\",\"private_ip\":\"192.0.2.1\"}";
+            SpaceInfo info = JsonUtils.MAPPER.readValue(json, SpaceInfo.class);
+
+            assertEquals(30, info.getMemoryExtractIdleSeconds());
+            assertEquals(1000, info.getMemoryExtractMaxTokens());
+            assertEquals(20, info.getMemoryExtractMaxMessages());
+            assertEquals(List.of("semantic"), info.getMemoryStrategiesBuiltin());
+            assertEquals("custom", info.getMemoryStrategiesCustomized().get(0).get("name"));
+            assertEquals("private.example", info.getPrivateAccess().get("domain"));
+            assertEquals("private.example", info.getPrivateDomain());
+            assertEquals("192.0.2.1", info.getPrivateIp());
         }
 
         @Test
@@ -834,6 +875,20 @@ class MemoryModelTest {
             assertNotNull(req.getMeta());
             assertEquals("val", req.getMeta().get("key"));
         }
+
+        @Test
+        void equalityIncludesMetadata() {
+            CreateMemorySessionRequest first = new CreateMemorySessionRequest()
+                    .withId("session-id")
+                    .withMeta(Map.of("tenant", "one"));
+            CreateMemorySessionRequest second = new CreateMemorySessionRequest()
+                    .withId("session-id")
+                    .withMeta(Map.of("tenant", "one"));
+
+            assertEquals(first, second);
+            assertEquals(first.hashCode(), second.hashCode());
+            assertNotEquals(first, second.withMeta(Map.of("tenant", "two")));
+        }
     }
 
     // ============================================================
@@ -851,6 +906,29 @@ class MemoryModelTest {
             String json = JsonUtils.toJson(req);
             assertTrue(json.contains("\"name\":\"updated-space\""));
             assertTrue(json.contains("\"description\":\"Updated\""));
+        }
+
+        @Test
+        void equalityIncludesAdvancedConfiguration() {
+            UpdateSpaceRequest first = fullyConfiguredUpdateSpaceRequest();
+            UpdateSpaceRequest second = fullyConfiguredUpdateSpaceRequest();
+
+            assertEquals(first, second);
+            assertEquals(first.hashCode(), second.hashCode());
+            assertNotEquals(first, second.withMemoryExtractEnabled(false));
+        }
+
+        private UpdateSpaceRequest fullyConfiguredUpdateSpaceRequest() {
+            return new UpdateSpaceRequest()
+                    .withName("updated-space")
+                    .withDescription("Updated")
+                    .withMessageTtlHours(336)
+                    .withMemoryExtractEnabled(true)
+                    .withMemoryExtractIdleSeconds(30)
+                    .withMemoryExtractMaxTokens(1000)
+                    .withMemoryExtractMaxMessages(20)
+                    .withTags(List.of(Map.of("key", "environment", "value", "test")))
+                    .withMemoryStrategiesBuiltin(List.of("semantic"));
         }
     }
 }
