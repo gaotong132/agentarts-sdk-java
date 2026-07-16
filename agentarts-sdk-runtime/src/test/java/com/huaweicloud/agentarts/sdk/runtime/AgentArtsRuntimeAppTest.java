@@ -115,6 +115,33 @@ class AgentArtsRuntimeAppTest {
         assertEquals(List.of("last", "failing", "first"), closed);
     }
 
+    @Test
+    @DisplayName("runUntilShutdown cleans up when its thread is interrupted")
+    void runUntilShutdownCleansUpAfterInterrupt() throws Exception {
+        app.stop();
+        app = new AgentArtsRuntimeApp(15, vertx);
+        AtomicReference<Boolean> closed = new AtomicReference<>(false);
+        app.registerManagedResource(() -> closed.set(true));
+        AgentArtsRuntimeApp blockingApp = app;
+        Thread serverThread = new Thread(
+                () -> blockingApp.runUntilShutdown(0, "127.0.0.1"),
+                "runtime-blocking-test");
+
+        serverThread.start();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (blockingApp.getPort() == 0 && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+        }
+        assertNotEquals(0, blockingApp.getPort());
+        serverThread.interrupt();
+        serverThread.join(TimeUnit.SECONDS.toMillis(5));
+
+        assertFalse(serverThread.isAlive());
+        assertEquals(Boolean.TRUE, closed.get());
+        assertThrows(IllegalStateException.class,
+                () -> blockingApp.run(0, "127.0.0.1"));
+    }
+
     // ========================
     // GET /ping
     // ========================

@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
@@ -309,6 +310,43 @@ public class AgentArtsRuntimeApp {
 
     public void run() {
         run(Constants.DEFAULT_PORT);
+    }
+
+    /**
+     * Start the server and keep the calling thread alive until interruption or JVM shutdown.
+     * The shutdown path always invokes {@link #stop()}, including managed-resource cleanup.
+     */
+    public void runUntilShutdown(int port, String host) {
+        CountDownLatch stopped = new CountDownLatch(1);
+        Thread shutdownHook = new Thread(() -> {
+            try {
+                stop();
+            } finally {
+                stopped.countDown();
+            }
+        }, "agentarts-runtime-shutdown");
+        Runtime.getRuntime().addShutdownHook(shutdownHook);
+        try {
+            run(port, host);
+            stopped.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            try {
+                Runtime.getRuntime().removeShutdownHook(shutdownHook);
+            } catch (IllegalStateException ignored) {
+                // JVM shutdown is already in progress.
+            }
+            stop();
+        }
+    }
+
+    public void runUntilShutdown(int port) {
+        runUntilShutdown(port, "0.0.0.0");
+    }
+
+    public void runUntilShutdown() {
+        runUntilShutdown(Constants.DEFAULT_PORT);
     }
 
     /**
