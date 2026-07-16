@@ -24,6 +24,8 @@ import reactor.core.Disposable;
 import reactor.core.publisher.BaseSubscriber;
 
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -88,6 +90,7 @@ public class AgentArtsRuntimeApp {
     private final java.util.concurrent.atomic.AtomicInteger activeTaskCount =
             new java.util.concurrent.atomic.AtomicInteger();
     private final Object lifecycleLock = new Object();
+    private final List<AutoCloseable> managedResources = new ArrayList<>();
     private volatile HttpServer httpServer;
     private volatile boolean closed;
 
@@ -116,6 +119,25 @@ public class AgentArtsRuntimeApp {
 
     public AgentArtsRuntimeApp() {
         this(Constants.DEFAULT_MAX_CONCURRENCY, null);
+    }
+
+    /**
+     * Register an application resource that is closed exactly once when this runtime stops.
+     * Resources are closed in reverse registration order after the HTTP listener has stopped.
+     *
+     * @param resource resource owned by this application
+     * @return the same resource for fluent construction
+     * @param <T> resource type
+     */
+    public <T extends AutoCloseable> T registerManagedResource(T resource) {
+        java.util.Objects.requireNonNull(resource, "resource");
+        synchronized (lifecycleLock) {
+            if (closed) {
+                throw new IllegalStateException("AgentArts Runtime is closed");
+            }
+            managedResources.add(resource);
+        }
+        return resource;
     }
 
     /** Configure the maximum aggregated HTTP invocation body before the server is started. */
@@ -295,18 +317,50 @@ public class AgentArtsRuntimeApp {
     public void stop() {
         HttpServer server;
         boolean closeVertx;
+        List<AutoCloseable> resources;
         synchronized (lifecycleLock) {
             server = httpServer;
             httpServer = null;
             closeVertx = !closed && ownVertx;
             closed = true;
+            resources = new ArrayList<>(managedResources);
+            managedResources.clear();
         }
+        RuntimeException failure = null;
         if (server != null) {
-            server.close().toCompletionStage().toCompletableFuture().join();
+            try {
+                server.close().toCompletionStage().toCompletableFuture().join();
+            } catch (RuntimeException e) {
+                failure = e;
+            }
+        }
+        for (int i = resources.size() - 1; i >= 0; i--) {
+            try {
+                resources.get(i).close();
+            } catch (Exception e) {
+                failure = appendFailure(failure,
+                        new IllegalStateException("Failed to close a managed runtime resource", e));
+            }
         }
         if (closeVertx) {
-            vertx.close().toCompletionStage().toCompletableFuture().join();
+            try {
+                vertx.close().toCompletionStage().toCompletableFuture().join();
+            } catch (RuntimeException e) {
+                failure = appendFailure(failure, e);
+            }
         }
+        if (failure != null) {
+            throw failure;
+        }
+    }
+
+    private static RuntimeException appendFailure(
+            RuntimeException current, RuntimeException additional) {
+        if (current == null) {
+            return additional;
+        }
+        current.addSuppressed(additional);
+        return current;
     }
 
     public int getPort() {

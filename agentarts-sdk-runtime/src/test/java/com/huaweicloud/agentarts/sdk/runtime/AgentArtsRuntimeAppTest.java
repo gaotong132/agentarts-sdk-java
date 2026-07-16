@@ -15,6 +15,8 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -78,6 +80,39 @@ class AgentArtsRuntimeAppTest {
         loopbackApp.stop();
         loopbackApp.stop();
         assertThrows(IllegalStateException.class, () -> loopbackApp.run(0, "localhost"));
+    }
+
+    @Test
+    @DisplayName("managed resources close once in reverse order")
+    void managedResourcesCloseOnceInReverseOrder() {
+        List<String> closed = new ArrayList<>();
+        AutoCloseable first = app.registerManagedResource(() -> closed.add("first"));
+        assertNotNull(first);
+        app.registerManagedResource(() -> closed.add("second"));
+
+        app.stop();
+        app.stop();
+
+        assertEquals(List.of("second", "first"), closed);
+        assertThrows(IllegalStateException.class,
+                () -> app.registerManagedResource(() -> { }));
+    }
+
+    @Test
+    @DisplayName("managed resource failures do not skip remaining cleanup")
+    void managedResourceFailuresDoNotSkipCleanup() {
+        List<String> closed = new ArrayList<>();
+        app.registerManagedResource(() -> closed.add("first"));
+        app.registerManagedResource(() -> {
+            closed.add("failing");
+            throw new Exception("expected test failure");
+        });
+        app.registerManagedResource(() -> closed.add("last"));
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class, app::stop);
+
+        assertTrue(failure.getMessage().contains("managed runtime resource"));
+        assertEquals(List.of("last", "failing", "first"), closed);
     }
 
     // ========================
