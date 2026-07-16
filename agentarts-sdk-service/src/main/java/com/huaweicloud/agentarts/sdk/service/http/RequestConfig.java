@@ -15,8 +15,8 @@ public class RequestConfig {
     }
 
     public RequestConfig(String baseUrl, double timeoutSeconds, boolean verifySsl) {
-        this.baseUrl = baseUrl != null ? baseUrl : "";
-        this.timeoutSeconds = timeoutSeconds;
+        setBaseUrl(baseUrl);
+        setTimeoutSeconds(timeoutSeconds);
         this.verifySsl = verifySsl;
     }
 
@@ -25,7 +25,7 @@ public class RequestConfig {
     }
 
     public void setBaseUrl(String baseUrl) {
-        this.baseUrl = baseUrl != null ? baseUrl : "";
+        this.baseUrl = baseUrl != null ? baseUrl.trim() : "";
     }
 
     public double getTimeoutSeconds() {
@@ -33,6 +33,9 @@ public class RequestConfig {
     }
 
     public void setTimeoutSeconds(double timeoutSeconds) {
+        if (!Double.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+            throw new IllegalArgumentException("timeoutSeconds must be a finite value greater than zero");
+        }
         this.timeoutSeconds = timeoutSeconds;
     }
 

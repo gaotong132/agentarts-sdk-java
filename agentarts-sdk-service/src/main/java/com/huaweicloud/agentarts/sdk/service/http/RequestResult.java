@@ -4,7 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import reactor.core.publisher.Flux;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Result of an HTTP request, with support for streaming responses.
@@ -16,9 +18,11 @@ import java.util.Map;
  *
  * <p>For streaming responses (Content-Type: text/event-stream or application/x-ndjson),
  * {@link #isStreaming()} returns true and the response body is available via
- * {@link #iterLines()} or {@link #iterBytes()}.</p>
+ * {@link #iterLines()} or {@link #iterBytes()}. The network body is single-use:
+ * callers must choose one representation and subscribe once. Cancelling that
+ * subscription aborts the underlying HTTP response.</p>
  */
-public class RequestResult {
+public class RequestResult implements AutoCloseable {
 
     private final boolean success;
     private final int statusCode;
@@ -28,16 +32,21 @@ public class RequestResult {
     private final boolean streaming;
     private final Flux<String> lineStream;
     private final Flux<byte[]> byteStream;
+    private final Runnable closeAction;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     private RequestResult(Builder builder) {
         this.success = builder.success;
         this.statusCode = builder.statusCode;
         this.data = builder.data;
         this.error = builder.error;
-        this.headers = builder.headers != null ? Collections.unmodifiableMap(builder.headers) : Collections.emptyMap();
+        this.headers = builder.headers != null
+                ? Collections.unmodifiableMap(new HashMap<>(builder.headers))
+                : Collections.emptyMap();
         this.streaming = builder.streaming;
         this.lineStream = builder.lineStream;
         this.byteStream = builder.byteStream;
+        this.closeAction = builder.closeAction != null ? builder.closeAction : () -> { };
     }
 
     /** Whether the response was successful (2xx status code). */
@@ -96,6 +105,7 @@ public class RequestResult {
 
     /**
      * Stream response body as lines (for SSE / NDJSON).
+     * Empty delimiter lines are preserved and CRLF is normalized.
      *
      * @throws IllegalStateException if not a streaming response
      */
@@ -108,6 +118,7 @@ public class RequestResult {
 
     /**
      * Stream response body as byte chunks.
+     * This cannot be consumed after {@link #iterLines()} has been subscribed.
      *
      * @throws IllegalStateException if not a streaming response
      */
@@ -116,6 +127,21 @@ public class RequestResult {
             throw new IllegalStateException("Not a streaming response");
         }
         return byteStream;
+    }
+
+    /**
+     * Release an unconsumed or partially consumed streaming response.
+     *
+     * <p>Closing a non-streaming result is a no-op. Closing is idempotent. A
+     * streaming subscription also releases the response when it is cancelled,
+     * so try-with-resources is mainly useful when code may decide not to consume
+     * a response after inspecting its status or headers.</p>
+     */
+    @Override
+    public void close() {
+        if (closed.compareAndSet(false, true)) {
+            closeAction.run();
+        }
     }
 
     /**
@@ -160,6 +186,7 @@ public class RequestResult {
         private boolean streaming;
         private Flux<String> lineStream;
         private Flux<byte[]> byteStream;
+        private Runnable closeAction;
 
         public Builder success(boolean success) { this.success = success; return this; }
         public Builder statusCode(int statusCode) { this.statusCode = statusCode; return this; }
@@ -169,6 +196,7 @@ public class RequestResult {
         public Builder streaming(boolean streaming) { this.streaming = streaming; return this; }
         public Builder lineStream(Flux<String> lineStream) { this.lineStream = lineStream; return this; }
         public Builder byteStream(Flux<byte[]> byteStream) { this.byteStream = byteStream; return this; }
+        public Builder closeAction(Runnable closeAction) { this.closeAction = closeAction; return this; }
 
         public RequestResult build() {
             return new RequestResult(this);

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Nested;
 import reactor.core.publisher.Flux;
 
 import java.util.Map;
+import java.util.HashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -92,10 +93,13 @@ class HttpModelTest {
         }
 
         @Test
-        void timeoutZero() {
+        void timeoutMustBePositiveAndFinite() {
             RequestConfig config = new RequestConfig();
-            config.setTimeoutSeconds(0.0);
-            assertEquals(0.0, config.getTimeoutSeconds());
+            assertThrows(IllegalArgumentException.class, () -> config.setTimeoutSeconds(0.0));
+            assertThrows(IllegalArgumentException.class, () -> config.setTimeoutSeconds(-1.0));
+            assertThrows(IllegalArgumentException.class, () -> config.setTimeoutSeconds(Double.NaN));
+            assertThrows(IllegalArgumentException.class,
+                    () -> config.setTimeoutSeconds(Double.POSITIVE_INFINITY));
         }
 
         @Test
@@ -200,6 +204,20 @@ class HttpModelTest {
 
             assertThrows(UnsupportedOperationException.class,
                     () -> result.getHeaders().put("new", "value"));
+        }
+
+        @Test
+        void headersAreDefensivelyCopied() {
+            Map<String, String> source = new HashMap<>();
+            source.put("key", "value");
+            RequestResult result = RequestResult.builder()
+                    .success(true)
+                    .statusCode(200)
+                    .headers(source)
+                    .build();
+
+            source.put("key", "changed");
+            assertEquals("value", result.getHeaders().get("key"));
         }
 
         @Test

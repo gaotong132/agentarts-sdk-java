@@ -6,30 +6,39 @@ import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.SignMode;
 import com.huaweicloud.agentarts.sdk.core.signer.V11Signer;
+import com.huaweicloud.agentarts.sdk.service.auth.CredentialProviders;
 import com.huaweicloud.sdk.core.auth.AKSKSigner;
 import com.huaweicloud.sdk.core.auth.BasicCredentials;
+import com.huaweicloud.sdk.core.auth.ICredentialProvider;
 import com.huaweicloud.sdk.core.http.HttpMethod;
+import io.vertx.core.Context;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
-import io.vertx.ext.web.client.HttpRequest;
-import io.vertx.ext.web.client.HttpResponse;
-import io.vertx.ext.web.client.WebClient;
-import io.vertx.ext.web.client.WebClientOptions;
+import io.vertx.core.http.HttpClient;
+import io.vertx.core.http.HttpClientOptions;
+import io.vertx.core.http.HttpClientRequest;
+import io.vertx.core.http.HttpClientResponse;
+import io.vertx.core.http.RequestOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.io.ByteArrayOutputStream;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Base HTTP client for AgentArts services with signing support.
@@ -54,7 +63,8 @@ public class BaseHttpClient implements AutoCloseable {
     private final boolean openAkSk;
     private final SignMode signMode;
     private final String regionId;
-    private final WebClient webClient;
+    private final ICredentialProvider credentialProvider;
+    private final HttpClient httpClient;
     private final Vertx vertx;
     private final boolean ownVertx;
 
@@ -67,13 +77,22 @@ public class BaseHttpClient implements AutoCloseable {
      */
     public BaseHttpClient(RequestConfig config, boolean openAkSk, SignMode signMode,
                           String regionId, Vertx vertx) {
+        this(config, openAkSk, signMode, regionId, vertx, CredentialProviders.defaultBasicProvider());
+    }
+
+    /**
+     * Create a BaseHttpClient with a shared Vert.x instance and credential provider.
+     */
+    public BaseHttpClient(RequestConfig config, boolean openAkSk, SignMode signMode,
+                          String regionId, Vertx vertx, ICredentialProvider credentialProvider) {
         this.config = config != null ? config : new RequestConfig();
         this.openAkSk = openAkSk;
         this.signMode = signMode != null ? signMode : SignMode.SDK_HMAC_SHA256;
         this.regionId = regionId != null ? regionId : Constants.getRegion();
+        this.credentialProvider = Objects.requireNonNull(credentialProvider, "credentialProvider must not be null");
         this.vertx = vertx;
         this.ownVertx = false;
-        this.webClient = createWebClient(vertx);
+        this.httpClient = createHttpClient(vertx);
     }
 
     /**
@@ -88,10 +107,19 @@ public class BaseHttpClient implements AutoCloseable {
      * could resolve fine.</p>
      */
     public BaseHttpClient(RequestConfig config, boolean openAkSk, SignMode signMode, String regionId) {
+        this(config, openAkSk, signMode, regionId, CredentialProviders.defaultBasicProvider());
+    }
+
+    /**
+     * Create a BaseHttpClient with its own Vert.x instance and credential provider.
+     */
+    public BaseHttpClient(RequestConfig config, boolean openAkSk, SignMode signMode, String regionId,
+                          ICredentialProvider credentialProvider) {
         this.config = config != null ? config : new RequestConfig();
         this.openAkSk = openAkSk;
         this.signMode = signMode != null ? signMode : SignMode.SDK_HMAC_SHA256;
         this.regionId = regionId != null ? regionId : Constants.getRegion();
+        this.credentialProvider = Objects.requireNonNull(credentialProvider, "credentialProvider must not be null");
         io.vertx.core.VertxOptions vertxOptions = new io.vertx.core.VertxOptions()
                 .setAddressResolverOptions(new io.vertx.core.dns.AddressResolverOptions()
                         .setQueryTimeout(10_000L)
@@ -100,7 +128,7 @@ public class BaseHttpClient implements AutoCloseable {
                         .setRdFlag(true));
         this.vertx = Vertx.vertx(vertxOptions);
         this.ownVertx = true;
-        this.webClient = createWebClient(vertx);
+        this.httpClient = createHttpClient(vertx);
     }
 
     /**
@@ -110,12 +138,14 @@ public class BaseHttpClient implements AutoCloseable {
         this(config, false, SignMode.SDK_HMAC_SHA256, null);
     }
 
-    private WebClient createWebClient(Vertx vertx) {
-        WebClientOptions options = new WebClientOptions()
+    private HttpClient createHttpClient(Vertx vertx) {
+        HttpClientOptions options = new HttpClientOptions()
                 .setConnectTimeout((int) (config.getTimeoutSeconds() * 1000))
                 .setIdleTimeout((int) config.getTimeoutSeconds())
-                .setTrustAll(!config.isVerifySsl());
-        return WebClient.create(vertx, options);
+                .setTrustAll(!config.isVerifySsl())
+                .setVerifyHost(config.isVerifySsl())
+                .setDecompressionSupported(true);
+        return vertx.createHttpClient(options);
     }
 
     // ========================
@@ -169,7 +199,13 @@ public class BaseHttpClient implements AutoCloseable {
      * @param token  the token value
      */
     public void setAuthToken(String scheme, String token) {
-        this.authHeader = scheme + " " + token;
+        if (scheme == null || scheme.isBlank()) {
+            throw new IllegalArgumentException("Authentication scheme must not be blank");
+        }
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("Authentication token must not be blank");
+        }
+        this.authHeader = scheme.trim() + " " + token.trim();
     }
 
     public void setAuthToken(String token) {
@@ -183,7 +219,10 @@ public class BaseHttpClient implements AutoCloseable {
 
     /** Set a default header that will be sent with every request. */
     public void setHeader(String name, String value) {
-        defaultHeaders.put(name, value);
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Header name must not be blank");
+        }
+        defaultHeaders.put(name, Objects.requireNonNull(value, "Header value must not be null"));
     }
 
     public RequestConfig getConfig() {
@@ -212,7 +251,21 @@ public class BaseHttpClient implements AutoCloseable {
                                         Map<String, String> headers,
                                         Object body,
                                         Map<String, List<String>> queryParams) {
-        return Mono.fromFuture(() -> executeRequest(method, url, headers, body, queryParams))
+        return request(method, url, headers, body, queryParams, null);
+    }
+
+    /** Execute a request with an optional per-request timeout override. */
+    public Mono<RequestResult> request(String method, String url,
+                                        Map<String, String> headers,
+                                        Object body,
+                                        Map<String, List<String>> queryParams,
+                                        Double timeoutSeconds) {
+        if (timeoutSeconds != null && (!Double.isFinite(timeoutSeconds) || timeoutSeconds <= 0)) {
+            return Mono.error(new IllegalArgumentException(
+                    "timeoutSeconds must be a finite value greater than zero"));
+        }
+        return Mono.fromFuture(() -> executeRequest(
+                        method, url, headers, body, queryParams, timeoutSeconds))
                 .subscribeOn(Schedulers.boundedElastic())
                 // Retry on transient DNS resolution failures — the Netty async
                 // resolver can time out on networks where the system resolver
@@ -242,25 +295,29 @@ public class BaseHttpClient implements AutoCloseable {
     private CompletableFuture<RequestResult> executeRequest(String method, String url,
                                                              Map<String, String> headers,
                                                              Object body,
-                                                             Map<String, List<String>> queryParams) {
+                                                             Map<String, List<String>> queryParams,
+                                                             Double timeoutSeconds) {
         try {
             // Build full URL
-            String fullUrl = config.getBaseUrl() + url;
+            String fullUrl = joinUrl(config.getBaseUrl(), url);
             if (queryParams != null && !queryParams.isEmpty()) {
                 fullUrl = appendQueryParams(fullUrl, queryParams);
             }
 
             // Merge headers
-            Map<String, String> mergedHeaders = new HashMap<>(defaultHeaders);
-            if (headers != null) {
-                mergedHeaders.putAll(headers);
-            }
+            Map<String, String> mergedHeaders = new HashMap<>();
+            defaultHeaders.forEach((name, value) ->
+                    setHeaderReplacingCaseInsensitive(mergedHeaders, name, value));
             if (authHeader != null) {
-                mergedHeaders.put("Authorization", authHeader);
+                setHeaderReplacingCaseInsensitive(mergedHeaders, "Authorization", authHeader);
+            }
+            if (headers != null) {
+                headers.forEach((name, value) ->
+                        setHeaderReplacingCaseInsensitive(mergedHeaders, name, value));
             }
 
             // Set Content-Type for body requests
-            if (body != null && !mergedHeaders.containsKey("Content-Type")) {
+            if (body != null && !containsHeader(mergedHeaders, "Content-Type")) {
                 mergedHeaders.put("Content-Type", "application/json");
             }
 
@@ -296,26 +353,34 @@ public class BaseHttpClient implements AutoCloseable {
                 path = path + "?" + uri.getRawQuery();
             }
 
-            HttpRequest<Buffer> request = webClient
-                    .request(io.vertx.core.http.HttpMethod.valueOf(method), port, host, path)
-                    .ssl("https".equals(uri.getScheme()))
-                    .timeout((long) (config.getTimeoutSeconds() * 1000));
-
-            // Set headers
-            for (Map.Entry<String, String> entry : mergedHeaders.entrySet()) {
-                request.putHeader(entry.getKey(), entry.getValue());
-            }
-
-            // Send request
+            double effectiveTimeout = timeoutSeconds != null
+                    ? timeoutSeconds : config.getTimeoutSeconds();
             CompletableFuture<RequestResult> future = new CompletableFuture<>();
+            RequestOptions options = new RequestOptions()
+                    .setMethod(io.vertx.core.http.HttpMethod.valueOf(method))
+                    .setHost(host)
+                    .setPort(port)
+                    .setSsl("https".equals(uri.getScheme()))
+                    .setURI(path)
+                    .setFollowRedirects(true)
+                    .setTimeout((long) (effectiveTimeout * 1000));
+            mergedHeaders.forEach(options::putHeader);
 
-            if (bodyBytes != null) {
-                request.sendBuffer(Buffer.buffer(bodyBytes), ar -> handleResponse(ar, future));
-            } else if (bodyStr != null) {
-                request.sendBuffer(Buffer.buffer(bodyStr), ar -> handleResponse(ar, future));
-            } else {
-                request.send(ar -> handleResponse(ar, future));
-            }
+            Buffer requestBody = bodyBytes != null
+                    ? Buffer.buffer(bodyBytes)
+                    : bodyStr != null ? Buffer.buffer(bodyStr) : null;
+            httpClient.request(options).onComplete(requestAr -> {
+                if (requestAr.failed()) {
+                    completeRequestFailure(future, requestAr.cause());
+                    return;
+                }
+                HttpClientRequest request = requestAr.result();
+                if (requestBody != null) {
+                    request.send(requestBody).onComplete(ar -> handleResponse(ar, future));
+                } else {
+                    request.send().onComplete(ar -> handleResponse(ar, future));
+                }
+            });
 
             return future;
         } catch (Exception e) {
@@ -330,20 +395,15 @@ public class BaseHttpClient implements AutoCloseable {
         }
     }
 
-    private void handleResponse(io.vertx.core.AsyncResult<HttpResponse<Buffer>> ar,
+    private void handleResponse(io.vertx.core.AsyncResult<HttpClientResponse> ar,
                                  CompletableFuture<RequestResult> future) {
         if (ar.failed()) {
-            LOG.error("Request failed: {}", ar.cause().getMessage(), ar.cause());
-            future.complete(RequestResult.builder()
-                    .success(false)
-                    .statusCode(0)
-                    .error("Request error: " + ar.cause().getMessage())
-                    .build());
+            completeRequestFailure(future, ar.cause());
             return;
         }
 
         try {
-            HttpResponse<Buffer> response = ar.result();
+            HttpClientResponse response = ar.result();
             int statusCode = response.statusCode();
             boolean success = statusCode >= 200 && statusCode < 300;
 
@@ -353,18 +413,22 @@ public class BaseHttpClient implements AutoCloseable {
                     responseHeaders.put(entry.getKey(), entry.getValue()));
 
             // Check for streaming content type
-            String contentType = responseHeaders.getOrDefault("Content-Type", "").toLowerCase();
+            String contentType = response.getHeader("Content-Type");
+            contentType = contentType != null ? contentType.toLowerCase() : "";
             boolean isStreaming = contentType.contains(STREAM_SSE) || contentType.contains(STREAM_NDJSON);
 
             if (isStreaming) {
-                // For streaming responses, provide the body as a Flux
-                Buffer body = response.body();
-                String bodyStr = body != null ? body.toString(StandardCharsets.UTF_8) : "";
-
-                Flux<String> lineStream = Flux.fromArray(bodyStr.split("\n"))
-                        .filter(line -> !line.isEmpty());
-
-                Flux<byte[]> byteStream = Flux.just(bodyStr.getBytes(StandardCharsets.UTF_8));
+                // Stop the Vert.x stream before exposing the result. Demand from
+                // the selected Reactor stream drives response.fetch(n), so the
+                // entire body is never materialized in memory.
+                response.pause();
+                Context responseContext = Vertx.currentContext();
+                AtomicBoolean subscribed = new AtomicBoolean();
+                AtomicBoolean terminated = new AtomicBoolean();
+                Runnable closeAction = () -> abortStreamingResponse(response, responseContext, terminated);
+                Flux<byte[]> byteStream = createByteStream(
+                        response, responseContext, subscribed, terminated, closeAction);
+                Flux<String> lineStream = decodeLines(byteStream);
 
                 future.complete(RequestResult.builder()
                         .success(success)
@@ -373,43 +437,166 @@ public class BaseHttpClient implements AutoCloseable {
                         .streaming(true)
                         .lineStream(lineStream)
                         .byteStream(byteStream)
+                        .closeAction(closeAction)
                         .build());
             } else {
-                // For non-streaming, parse the body
-                Buffer body = response.body();
-                String bodyStr = body != null ? body.toString(StandardCharsets.UTF_8) : "";
-                Object data = null;
-                String error = null;
-
-                if (!bodyStr.isEmpty()) {
+                response.body().onComplete(bodyAr -> {
+                    if (bodyAr.failed()) {
+                        completeRequestFailure(future, bodyAr.cause());
+                        return;
+                    }
                     try {
-                        data = OBJECT_MAPPER.readTree(bodyStr);
+                        Buffer body = bodyAr.result();
+                        String bodyStr = body != null ? body.toString(StandardCharsets.UTF_8) : "";
+                        Object data = null;
+                        String error = null;
+
+                        if (!bodyStr.isEmpty()) {
+                            try {
+                                data = OBJECT_MAPPER.readTree(bodyStr);
+                            } catch (Exception e) {
+                                data = bodyStr;
+                            }
+                            if (!success) {
+                                error = extractErrorFromBody(data);
+                            }
+                        }
+
+                        future.complete(RequestResult.builder()
+                                .success(success)
+                                .statusCode(statusCode)
+                                .data(data)
+                                .error(error)
+                                .headers(responseHeaders)
+                                .streaming(false)
+                                .build());
                     } catch (Exception e) {
-                        data = bodyStr;
+                        completeResponseFailure(future, e);
                     }
-
-                    // Extract error message for failed responses
-                    if (!success) {
-                        error = extractErrorFromBody(data);
-                    }
-                }
-
-                future.complete(RequestResult.builder()
-                        .success(success)
-                        .statusCode(statusCode)
-                        .data(data)
-                        .error(error)
-                        .headers(responseHeaders)
-                        .streaming(false)
-                        .build());
+                });
             }
         } catch (Exception e) {
-            LOG.error("Response handling error: {}", e.getMessage(), e);
-            future.complete(RequestResult.builder()
-                    .success(false)
-                    .statusCode(0)
-                    .error("Unexpected error: " + e.getMessage())
-                    .build());
+            completeResponseFailure(future, e);
+        }
+    }
+
+    private Flux<byte[]> createByteStream(HttpClientResponse response, Context responseContext,
+                                          AtomicBoolean subscribed, AtomicBoolean terminated,
+                                          Runnable closeAction) {
+        return Flux.create(sink -> {
+            if (!subscribed.compareAndSet(false, true)) {
+                sink.error(new IllegalStateException(
+                        "A streaming response body can only be consumed once; choose iterLines() or iterBytes()"));
+                return;
+            }
+            if (terminated.get()) {
+                sink.error(new IllegalStateException("Streaming response has already been closed"));
+                return;
+            }
+
+            if (responseContext == null) {
+                terminated.set(true);
+                sink.error(new IllegalStateException("Streaming response is not associated with a Vert.x context"));
+                return;
+            }
+
+            responseContext.runOnContext(ignored -> {
+                response.exceptionHandler(error -> {
+                    if (terminated.compareAndSet(false, true)) {
+                        sink.error(error);
+                    }
+                });
+                response.handler(buffer -> {
+                    if (!terminated.get()) {
+                        sink.next(buffer.getBytes());
+                    }
+                });
+                response.endHandler(ignoredEnd -> {
+                    if (terminated.compareAndSet(false, true)) {
+                        sink.complete();
+                    }
+                });
+            });
+
+            sink.onRequest(demand -> responseContext.runOnContext(ignored -> {
+                if (!terminated.get()) {
+                    if (demand == Long.MAX_VALUE) {
+                        response.resume();
+                    } else if (demand > 0) {
+                        response.fetch(demand);
+                    }
+                }
+            }));
+            sink.onCancel(closeAction::run);
+        }, FluxSink.OverflowStrategy.ERROR);
+    }
+
+    private void abortStreamingResponse(HttpClientResponse response, Context responseContext,
+                                        AtomicBoolean terminated) {
+        if (!terminated.compareAndSet(false, true)) {
+            return;
+        }
+        Runnable reset = () -> response.request().reset();
+        if (responseContext != null) {
+            responseContext.runOnContext(ignored -> reset.run());
+        } else {
+            reset.run();
+        }
+    }
+
+    private Flux<String> decodeLines(Flux<byte[]> byteStream) {
+        return Flux.defer(() -> {
+            Utf8LineDecoder decoder = new Utf8LineDecoder();
+            return byteStream.concatMapIterable(decoder::accept)
+                    .concatWith(Flux.defer(() -> Flux.fromIterable(decoder.finish())));
+        });
+    }
+
+    private void completeRequestFailure(CompletableFuture<RequestResult> future, Throwable error) {
+        LOG.error("Request failed: {}", error.getMessage(), error);
+        future.complete(RequestResult.builder()
+                .success(false)
+                .statusCode(0)
+                .error("Request error: " + error.getMessage())
+                .build());
+    }
+
+    private void completeResponseFailure(CompletableFuture<RequestResult> future, Throwable error) {
+        LOG.error("Response handling error: {}", error.getMessage(), error);
+        future.complete(RequestResult.builder()
+                .success(false)
+                .statusCode(0)
+                .error("Unexpected error: " + error.getMessage())
+                .build());
+    }
+
+    private static final class Utf8LineDecoder {
+        private final ByteArrayOutputStream currentLine = new ByteArrayOutputStream();
+
+        List<String> accept(byte[] bytes) {
+            List<String> lines = new ArrayList<>();
+            for (byte value : bytes) {
+                if (value == '\n') {
+                    lines.add(takeLine());
+                } else {
+                    currentLine.write(value);
+                }
+            }
+            return lines;
+        }
+
+        List<String> finish() {
+            return currentLine.size() == 0 ? List.of() : List.of(takeLine());
+        }
+
+        private String takeLine() {
+            byte[] bytes = currentLine.toByteArray();
+            currentLine.reset();
+            int length = bytes.length;
+            if (length > 0 && bytes[length - 1] == '\r') {
+                length--;
+            }
+            return new String(bytes, 0, length, StandardCharsets.UTF_8);
         }
     }
 
@@ -420,21 +607,16 @@ public class BaseHttpClient implements AutoCloseable {
     private void signRequest(String method, String fullUrl, Map<String, String> headers,
                               Object body, Map<String, List<String>> queryParams) {
         try {
-            String ak = Constants.getAk();
-            String sk = Constants.getSk();
+            BasicCredentials credentials = loadCredentials();
 
-            if (ak.isEmpty() || sk.isEmpty()) {
-                LOG.error("AK/SK not configured — skipping {} signing; request will be rejected by server", signMode);
-                return;
-            }
-
+            Map<String, List<String>> effectiveQueryParams = parseQueryParams(URI.create(fullUrl));
             if (signMode == SignMode.V11_HMAC_SHA256) {
-                signRequestV11(method, fullUrl, headers, body, queryParams, ak, sk);
+                signRequestV11(method, fullUrl, headers, body, effectiveQueryParams, credentials);
             } else {
-                signRequestSdk(method, fullUrl, headers, body, queryParams, ak, sk);
+                signRequestSdk(method, fullUrl, headers, body, effectiveQueryParams, credentials);
             }
         } catch (Exception e) {
-            LOG.error("Failed to sign request — request will be sent unsigned: {}", e.getMessage(), e);
+            throw new IllegalStateException("Failed to sign request; request was not sent", e);
         }
     }
 
@@ -443,7 +625,7 @@ public class BaseHttpClient implements AutoCloseable {
      */
     private void signRequestSdk(String method, String fullUrl, Map<String, String> headers,
                                  Object body, Map<String, List<String>> queryParams,
-                                 String ak, String sk) throws Exception {
+                                 BasicCredentials credentials) throws Exception {
         URI uri = URI.create(fullUrl);
         String endpoint = uri.getScheme() + "://" + uri.getHost();
         if (uri.getPort() > 0 && uri.getPort() != 443 && uri.getPort() != 80) {
@@ -451,10 +633,12 @@ public class BaseHttpClient implements AutoCloseable {
         }
         String path = uri.getRawPath();
 
-        BasicCredentials credentials = new BasicCredentials().withAk(ak).withSk(sk);
-        String securityToken = Constants.getSecurityToken();
-        if (!securityToken.isEmpty()) {
-            credentials.withSecurityToken(securityToken);
+        // BaseHttpClient invokes AKSKSigner directly instead of the generated
+        // SDK client's auth pipeline. AKSKSigner does not inject the STS token,
+        // so it must be present before signing and before the request is sent.
+        String securityToken = credentials.getSecurityToken();
+        if (securityToken != null && !securityToken.isBlank()) {
+            setHeaderReplacingCaseInsensitive(headers, "X-Security-Token", securityToken);
         }
 
         com.huaweicloud.sdk.core.http.HttpRequest.HttpRequestBuilder builder = com.huaweicloud.sdk.core.http.HttpRequest
@@ -463,17 +647,8 @@ public class BaseHttpClient implements AutoCloseable {
                 .withPath(path)
                 .withMethod(HttpMethod.valueOf(method));
 
-        // Parse query params from the URL (they're embedded in fullUrl, not in the queryParams arg)
-        String rawQuery = uri.getRawQuery();
-        if (rawQuery != null && !rawQuery.isEmpty()) {
-            for (String pair : rawQuery.split("&")) {
-                String[] kv = pair.split("=", 2);
-                String key = java.net.URLDecoder.decode(kv[0], StandardCharsets.UTF_8);
-                String value = kv.length > 1 ? java.net.URLDecoder.decode(kv[1], StandardCharsets.UTF_8) : "";
-                builder.addQueryParam(key, List.of(value));
-            }
-        }
-        // Also add explicit queryParams if provided
+        // Query parameters are parsed once from the final URL by signRequest.
+        // Adding both the URL query and the original argument signs duplicates.
         if (queryParams != null) {
             for (Map.Entry<String, List<String>> entry : queryParams.entrySet()) {
                 builder.addQueryParam(entry.getKey(), entry.getValue());
@@ -486,6 +661,9 @@ public class BaseHttpClient implements AutoCloseable {
         // bytes — V11 (UNSIGNED-PAYLOAD) is unaffected, and bearer-token agents
         // do not verify the body signature.
         boolean binaryBody = body instanceof byte[];
+        if (binaryBody) {
+            setHeaderReplacingCaseInsensitive(headers, "x-sdk-content-sha256", "UNSIGNED-PAYLOAD");
+        }
         if (body != null && !binaryBody) {
             if (body instanceof String) {
                 bodyStr = (String) body;
@@ -495,9 +673,10 @@ public class BaseHttpClient implements AutoCloseable {
         }
         if (!"GET".equals(method) && !"HEAD".equals(method) && !bodyStr.isEmpty()) {
             builder.withBodyAsString(bodyStr);
-            builder.withContentType("application/json");
+            builder.withContentType(getHeader(headers, "Content-Type", "application/json"));
         }
 
+        builder.addHeaders(headers);
         com.huaweicloud.sdk.core.http.HttpRequest sdkRequest = builder.build();
         Map<String, String> signedHeaders = AKSKSigner.getInstance().sign(sdkRequest, credentials);
         headers.putAll(signedHeaders);
@@ -508,20 +687,23 @@ public class BaseHttpClient implements AutoCloseable {
      */
     private void signRequestV11(String method, String fullUrl, Map<String, String> headers,
                                  Object body, Map<String, List<String>> queryParams,
-                                 String ak, String sk) throws Exception {
+                                 BasicCredentials credentials) throws Exception {
         URI uri = URI.create(fullUrl);
         String host = uri.getHost();
+        if (uri.getPort() != -1) {
+            host += ":" + uri.getPort();
+        }
         String path = uri.getRawPath();
 
-        headers.put("Host", host);
-        headers.put("x-sdk-content-sha256", "UNSIGNED-PAYLOAD");
+        setHeaderReplacingCaseInsensitive(headers, "Host", host);
+        setHeaderReplacingCaseInsensitive(headers, "x-sdk-content-sha256", "UNSIGNED-PAYLOAD");
 
-        String securityToken = Constants.getSecurityToken();
-        if (!securityToken.isEmpty()) {
-            headers.put("X-Security-Token", securityToken);
+        String securityToken = credentials.getSecurityToken();
+        if (securityToken != null && !securityToken.isBlank()) {
+            setHeaderReplacingCaseInsensitive(headers, "X-Security-Token", securityToken);
         }
 
-        V11Signer signer = new V11Signer(ak, sk, regionId);
+        V11Signer signer = new V11Signer(credentials.getAk(), credentials.getSk(), regionId);
         signer.sign(method, path, queryParams, headers);
     }
 
@@ -535,16 +717,92 @@ public class BaseHttpClient implements AutoCloseable {
         boolean first = true;
         TreeMap<String, List<String>> sorted = new TreeMap<>(queryParams);
         for (Map.Entry<String, List<String>> entry : sorted.entrySet()) {
-            String key = URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8);
-            for (String value : entry.getValue()) {
+            String key = encodeQueryComponent(entry.getKey());
+            List<String> values = entry.getValue();
+            if (values == null || values.isEmpty()) {
+                values = List.of("");
+            }
+            for (String value : values) {
                 if (!first) {
                     sb.append('&');
                 }
-                sb.append(key).append('=').append(URLEncoder.encode(value, StandardCharsets.UTF_8));
+                sb.append(key).append('=').append(encodeQueryComponent(value));
                 first = false;
             }
         }
         return sb.toString();
+    }
+
+    private static String joinUrl(String baseUrl, String url) {
+        if (url == null || url.isBlank()) {
+            throw new IllegalArgumentException("Request URL must not be blank");
+        }
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            return url;
+        }
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new IllegalStateException("RequestConfig.baseUrl must be configured for relative URLs");
+        }
+        if (baseUrl.endsWith("/") && url.startsWith("/")) {
+            return baseUrl + url.substring(1);
+        }
+        if (!baseUrl.endsWith("/") && !url.startsWith("/")) {
+            return baseUrl + "/" + url;
+        }
+        return baseUrl + url;
+    }
+
+    static Map<String, List<String>> parseQueryParams(URI uri) {
+        Map<String, List<String>> result = new HashMap<>();
+        String rawQuery = uri.getRawQuery();
+        if (rawQuery == null || rawQuery.isEmpty()) {
+            return result;
+        }
+        for (String pair : rawQuery.split("&", -1)) {
+            // A few legacy clients build URLs ending in '?'/ '&'. HTTP servers
+            // ignore the empty segment, so the signer must ignore it as well;
+            // signing it as an empty-name parameter produces a different
+            // canonical query string from the service.
+            if (pair.isEmpty()) {
+                continue;
+            }
+            String[] keyValue = pair.split("=", 2);
+            String key = java.net.URLDecoder.decode(keyValue[0], StandardCharsets.UTF_8);
+            String value = keyValue.length == 2
+                    ? java.net.URLDecoder.decode(keyValue[1], StandardCharsets.UTF_8)
+                    : "";
+            result.computeIfAbsent(key, ignored -> new ArrayList<>()).add(value);
+        }
+        return result;
+    }
+
+    private static String encodeQueryComponent(String value) {
+        String encoded = URLEncoder.encode(value != null ? value : "", StandardCharsets.UTF_8);
+        return encoded.replace("+", "%20").replace("%7E", "~").replace("*", "%2A");
+    }
+
+    private static boolean containsHeader(Map<String, String> headers, String name) {
+        return headers.keySet().stream().anyMatch(key -> key.equalsIgnoreCase(name));
+    }
+
+    private static String getHeader(Map<String, String> headers, String name, String defaultValue) {
+        return headers.entrySet().stream()
+                .filter(entry -> entry.getKey().equalsIgnoreCase(name))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(defaultValue);
+    }
+
+    private static void setHeaderReplacingCaseInsensitive(
+            Map<String, String> headers, String name, String value) {
+        headers.keySet().removeIf(key -> key.equalsIgnoreCase(name));
+        headers.put(name, value);
+    }
+
+    // Package-visible seam keeps credential failure tests deterministic without
+    // mutating process environment or contacting metadata services.
+    BasicCredentials loadCredentials() {
+        return CredentialProviders.resolveBasic(credentialProvider);
     }
 
     private String extractErrorFromBody(Object data) {
@@ -564,7 +822,7 @@ public class BaseHttpClient implements AutoCloseable {
 
     @Override
     public void close() {
-        webClient.close();
+        httpClient.close();
         if (ownVertx) {
             vertx.close();
         }
