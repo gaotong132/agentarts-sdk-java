@@ -45,7 +45,11 @@ public class CodeInterpreterClient implements AutoCloseable {
     public CodeInterpreterClient(String region, String dataEndpoint, String authType, boolean verifySsl) {
         this.region = region != null ? region : Constants.getRegion();
         this.dataEndpoint = dataEndpoint;
-        this.authType = authType != null ? authType : "API_KEY";
+        String normalizedAuthType = authType != null ? authType.trim().toUpperCase(java.util.Locale.ROOT) : "API_KEY";
+        if (!"API_KEY".equals(normalizedAuthType) && !"IAM".equals(normalizedAuthType)) {
+            throw new IllegalArgumentException("authType must be API_KEY or IAM");
+        }
+        this.authType = normalizedAuthType;
         this.verifySsl = verifySsl;
     }
 
@@ -82,6 +86,11 @@ public class CodeInterpreterClient implements AutoCloseable {
     private synchronized BaseHttpClient getDataClient() {
         if (dataClient == null) {
             String endpoint = Constants.getCodeInterpreterDataPlaneEndpoint(dataEndpoint);
+            if (endpoint.isBlank()) {
+                throw new IllegalStateException(
+                        "Code Interpreter data endpoint is required; pass dataEndpoint or set "
+                                + "AGENTARTS_CODEINTERPRETER_DATA_ENDPOINT");
+            }
             boolean useAkSk = "IAM".equals(authType);
             RequestConfig config = RequestConfig.builder().baseUrl(endpoint).verifySsl(verifySsl).build();
             dataClient = new BaseHttpClient(config, useAkSk, SignMode.SDK_HMAC_SHA256, region);
@@ -89,6 +98,12 @@ public class CodeInterpreterClient implements AutoCloseable {
                 String key = System.getenv("HUAWEICLOUD_SDK_CODE_INTERPRETER_API_KEY");
                 if (com.huaweicloud.agentarts.sdk.core.util.JsonUtils.isNotBlank(key)) {
                     dataClient.setAuthToken("Bearer", key);
+                } else {
+                    dataClient.close();
+                    dataClient = null;
+                    throw new IllegalStateException(
+                            "Code Interpreter API key is required for API_KEY auth; "
+                                    + "set HUAWEICLOUD_SDK_CODE_INTERPRETER_API_KEY");
                 }
             }
         }
@@ -182,7 +197,7 @@ public class CodeInterpreterClient implements AutoCloseable {
     }
 
     public void deleteCodeInterpreter(String codeInterpreterId) {
-        getControlClient().delete("/code-interpreters/" + codeInterpreterId).block();
+        ensureSuccess(getControlClient().delete("/code-interpreters/" + codeInterpreterId).block());
     }
 
     // ========================
@@ -233,9 +248,10 @@ public class CodeInterpreterClient implements AutoCloseable {
         String url = "/v1/code-interpreters/" + codeInterpreterName + "/sessions-stop";
         Map<String, String> headers = Map.of(Constants.CODE_INTERPRETER_SESSION_HEADER, sessionId);
         RequestResult r = getDataClient().put(url, headers, null).block();
+        ensureSuccess(r);
         this.codeInterpreterName = null;
         this.sessionId = null;
-        return r != null && r.isSuccess();
+        return true;
     }
 
     // ========================
@@ -469,6 +485,14 @@ public class CodeInterpreterClient implements AutoCloseable {
         } catch (Exception e) {
             throw new APIException(result.getStatusCode(), "code_interpreter",
                     "Failed to parse response: " + e.getMessage(), e);
+        }
+    }
+
+    private void ensureSuccess(RequestResult result) {
+        if (result == null || !result.isSuccess()) {
+            int status = result != null ? result.getStatusCode() : 0;
+            String err = result != null ? result.getError() : "null response";
+            throw new APIException(status, "code_interpreter", err);
         }
     }
 

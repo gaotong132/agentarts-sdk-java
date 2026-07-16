@@ -1,8 +1,5 @@
 package com.huaweicloud.agentarts.sdk.tools;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * Context manager for Code Interpreter sessions.
  *
@@ -19,8 +16,6 @@ import org.slf4j.LoggerFactory;
  */
 public class CodeSession implements AutoCloseable {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CodeSession.class);
-
     private final CodeInterpreterClient client;
     private final boolean stopOnClose;
 
@@ -36,8 +31,13 @@ public class CodeSession implements AutoCloseable {
                                      String sessionName, String authType,
                                      boolean verifySsl) {
         CodeInterpreterClient client = new CodeInterpreterClient(region, null, authType, verifySsl);
-        client.startSession(codeInterpreterName, sessionName);
-        return new CodeSession(client, true);
+        try {
+            client.startSession(codeInterpreterName, sessionName);
+            return new CodeSession(client, true);
+        } catch (RuntimeException e) {
+            client.close();
+            throw e;
+        }
     }
 
     public static CodeSession start(String region, String codeInterpreterName, String sessionName) {
@@ -58,8 +58,6 @@ public class CodeSession implements AutoCloseable {
             if (stopOnClose) {
                 client.stopSession();
             }
-        } catch (Exception e) {
-            LOG.warn("Failed to stop code interpreter session on close: {}", e.getMessage());
         } finally {
             client.close();
         }
