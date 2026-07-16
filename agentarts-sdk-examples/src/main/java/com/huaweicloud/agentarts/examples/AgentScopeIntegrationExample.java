@@ -45,9 +45,7 @@ public final class AgentScopeIntegrationExample {
                 session, Duration.ofSeconds(timeoutSeconds));
 
         if ("server".equalsIgnoreCase(System.getenv("RUNTIME_MODE"))) {
-            Runtime.getRuntime().addShutdownHook(
-                    new Thread(session::close, "agentscope-session-shutdown"));
-            runServer(model, toolkit, executor);
+            runServer(model, toolkit, executor, session);
         } else {
             try {
                 runInteractive(model, toolkit, executor);
@@ -115,8 +113,10 @@ public final class AgentScopeIntegrationExample {
     }
 
     private static void runServer(
-            OpenAIChatModel model, Toolkit toolkit, AgentscopeSessionExecutor executor) {
+            OpenAIChatModel model, Toolkit toolkit, AgentscopeSessionExecutor executor,
+            Session session) {
         AgentArtsRuntimeApp app = new AgentArtsRuntimeApp();
+        app.registerManagedResource(session::close);
         new AgentscopeRuntimeHost(app, (payload, context) -> {
             Object value = payload.get("message");
             if (!(value instanceof String message) || message.isBlank()) {
@@ -127,7 +127,7 @@ public final class AgentScopeIntegrationExample {
         });
         int port = positiveIntEnvironment("PORT", 8080);
         String host = System.getenv().getOrDefault("HOST", "0.0.0.0");
-        app.run(port, host);
+        app.runUntilShutdown(port, host);
     }
 
     private static int positiveIntEnvironment(String name, int fallback) {

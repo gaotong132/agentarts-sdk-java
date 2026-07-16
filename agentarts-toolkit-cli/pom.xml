@@ -61,6 +61,18 @@
             <artifactId>slf4j-simple</artifactId>
             <scope>runtime</scope>
         </dependency>
+
+        <!-- Compile generated AgentScope sources as part of the template contract tests. -->
+        <dependency>
+            <groupId>com.huaweicloud.agentarts</groupId>
+            <artifactId>agentarts-sdk-integration-agentscope</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-core</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

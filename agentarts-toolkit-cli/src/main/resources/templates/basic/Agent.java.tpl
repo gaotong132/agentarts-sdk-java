@@ -24,6 +24,6 @@ public class Agent {
     public static void main(String[] args) {
         AgentArtsRuntimeApp app = createApp();
         System.out.println("Starting {{ name }} agent...");
-        app.run(8080);
+        app.runUntilShutdown(8080);
     }
 }

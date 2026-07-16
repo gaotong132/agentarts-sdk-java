@@ -62,8 +62,9 @@ public class InitCommand implements Callable<Integer> {
         }
         // Validate name: lowercase letters, digits, hyphens
         String normalized = name.toLowerCase();
-        if (!normalized.matches("[a-z0-9-]+")) {
-            System.err.println("Error: name must contain only lowercase letters, digits, and hyphens");
+        if (!normalized.matches("[a-z0-9][a-z0-9-]{0,62}")) {
+            System.err.println("Error: name must be 1-63 lowercase letters, digits, or hyphens "
+                    + "and start with a letter or digit");
             return 2;
         }
         name = normalized;

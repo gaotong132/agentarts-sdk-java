@@ -718,6 +718,7 @@ class CliE2ETest {
             // through these calls IS the check that every template is present.
             TemplateManager.loadTemplate("basic/Agent.java.tpl");
             TemplateManager.loadTemplate("agentscope/Agent.java.tpl");
+            TemplateManager.loadTemplate("agentscope/pom.xml.tpl");
             TemplateManager.loadTemplate("basic/pom.xml.tpl");
             TemplateManager.loadTemplate("basic/config.yaml.tpl");
             TemplateManager.loadTemplate("docker/Dockerfile.tpl");
@@ -735,6 +736,20 @@ class CliE2ETest {
                     "Class should be named Agent to match its file");
             assertFalse(content.contains("{{ name }}"), "Placeholder should be replaced");
             assertFalse(content.contains("{{name}}"), "Placeholder should be replaced");
+        }
+
+        @Test
+        void agentscopeTemplateUsesProductionRuntimeContract(@TempDir Path tempDir) throws Exception {
+            Path output = tempDir.resolve("Agent.java");
+            TemplateManager.renderToFile("agentscope/Agent.java.tpl", output, "name", "weather");
+
+            String content = Files.readString(output);
+            assertTrue(content.contains("public class Agent"));
+            assertTrue(content.contains("AgentscopeSessionExecutor"));
+            assertTrue(content.contains("runUntilShutdown"));
+            assertTrue(content.contains("registerManagedResource"));
+            assertFalse(content.contains("TODO"));
+            assertFalse(content.contains("{{ name }}"));
         }
 
         @Test
@@ -829,6 +844,29 @@ class CliE2ETest {
         }
 
         @Test
+        void generatedAgentscopeSourceCompiles(@TempDir Path tempDir) throws Exception {
+            InitOperation.initProject("agentscope", "compiled-agent", tempDir.toString(),
+                    "cn-southwest-2", null, null);
+            Path source = tempDir.resolve(
+                    "compiled-agent/src/main/java/com/example/Agent.java");
+            Path classes = tempDir.resolve("compiled-agent/target/test-classes");
+            Files.createDirectories(classes);
+            javax.tools.JavaCompiler compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
+            assertNotNull(compiler, "Template compilation requires a JDK");
+            java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+
+            int exitCode = compiler.run(null, output, output,
+                    "-proc:none",
+                    "--release", "17",
+                    "-classpath", System.getProperty("java.class.path"),
+                    "-d", classes.toString(),
+                    source.toString());
+
+            assertEquals(0, exitCode,
+                    () -> "Generated AgentScope source did not compile:\n" + output);
+        }
+
+        @Test
         void multipleInitDifferentTemplates(@TempDir Path tempDir) throws Exception {
             // Init basic template
             InitOperation.initProject("basic", "proj-basic", tempDir.toString(),
@@ -852,6 +890,10 @@ class CliE2ETest {
             String asAgent = Files.readString(
                     tempDir.resolve("proj-agentscope/src/main/java/com/example/Agent.java"));
             assertNotEquals(basicAgent, asAgent, "Different templates should produce different output");
+            String agentscopePom = Files.readString(tempDir.resolve("proj-agentscope/pom.xml"));
+            assertTrue(agentscopePom.contains("agentarts-sdk-integration-agentscope"));
+            assertTrue(agentscopePom.contains("agentscope-core"));
+            assertFalse(agentscopePom.contains("agentarts-sdk-runtime</artifactId>"));
         }
     }
 
@@ -861,6 +903,26 @@ class CliE2ETest {
 
     @Nested
     class InputValidationE2E {
+
+        @Test
+        void initRejectsUnsupportedTemplatesAndExistingProjects(@TempDir Path tempDir)
+                throws Exception {
+            assertThrows(IllegalArgumentException.class,
+                    () -> InitOperation.initProject(
+                            "../basic", "safe", tempDir.toString(),
+                            "cn-southwest-2", null, null));
+            InitOperation.initProject("basic", "safe", tempDir.toString(),
+                    "cn-southwest-2", null, null);
+            assertThrows(java.nio.file.FileAlreadyExistsException.class,
+                    () -> InitOperation.initProject(
+                            "basic", "safe", tempDir.toString(),
+                            "cn-southwest-2", null, null));
+            try (var entries = Files.list(tempDir)) {
+                assertEquals(1, entries
+                        .filter(path -> path.getFileName().toString().startsWith("safe"))
+                        .count());
+            }
+        }
 
         @Test
         void initPrintsErrorWhenNameMissing(@TempDir Path tempDir) throws Exception {
