@@ -20,4 +20,14 @@ class UrlUtilsTest {
         assertThrows(IllegalArgumentException.class,
                 () -> UrlUtils.encodePathSegment("  ", "id"));
     }
+
+    @Test
+    void encodesSafeNestedRelativePathsAndRejectsTraversal() {
+        assertEquals("stream/named%20endpoint",
+                UrlUtils.encodeRelativePath("stream/named endpoint", "customPath"));
+        assertThrows(IllegalArgumentException.class,
+                () -> UrlUtils.encodeRelativePath("../admin", "customPath"));
+        assertThrows(IllegalArgumentException.class,
+                () -> UrlUtils.encodeRelativePath("stream//events", "customPath"));
+    }
 }
