@@ -7,6 +7,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import picocli.CommandLine;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -74,6 +78,33 @@ public final class CliSupport {
                 || normalized.contains("PRIVATE_KEY")
                 || normalized.contains("AUTHORIZATION")
                 || normalized.contains("CREDENTIAL");
+    }
+
+    /**
+     * Require explicit confirmation before a destructive operation. An EOF or
+     * unreadable stdin is treated as a failure, so non-interactive callers must
+     * deliberately supply the command's force flag.
+     */
+    public static boolean confirmDestructiveAction(String description, boolean force) {
+        if (force) return true;
+        System.out.print("Are you sure you want to " + description + "? [y/N]: ");
+        System.out.flush();
+        final String answer;
+        try {
+            answer = new BufferedReader(new InputStreamReader(
+                    System.in, StandardCharsets.UTF_8)).readLine();
+        } catch (IOException e) {
+            fail("Unable to read confirmation; use --force for non-interactive execution");
+            return false; // unreachable
+        }
+        if (answer == null) {
+            fail("Confirmation required; use --force for non-interactive execution");
+        }
+        if (!"y".equalsIgnoreCase(answer.trim()) && !"yes".equalsIgnoreCase(answer.trim())) {
+            System.out.println("Aborted.");
+            return false;
+        }
+        return true;
     }
 
     /**

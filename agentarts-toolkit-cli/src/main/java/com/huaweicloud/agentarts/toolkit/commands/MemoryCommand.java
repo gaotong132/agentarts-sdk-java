@@ -178,6 +178,9 @@ public class MemoryCommand implements Runnable {
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
+            if (!CliSupport.confirmDestructiveAction("delete memory space '" + spaceId + "'", force)) {
+                return;
+            }
             try (MemoryClient client = new MemoryClient(region, null, !skipSsl)) {
                 client.deleteSpace(spaceId);
                 System.out.println("Space deleted successfully!");

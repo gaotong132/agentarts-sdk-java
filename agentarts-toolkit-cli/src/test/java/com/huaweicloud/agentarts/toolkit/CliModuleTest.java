@@ -128,6 +128,55 @@ class CliModuleTest {
         }
     }
 
+    @Nested
+    @DisplayName("Production safety: destructive commands")
+    class DestructiveCommandTests {
+
+        @Test
+        void destructiveCommandsAbortBeforeNetworkWhenDeclined() {
+            String[][] commands = {
+                    {"destroy", "--agent", "unit-agent"},
+                    {"memory", "delete", "unit-space"},
+                    {"mcp-gateway", "delete-mcp-gateway", "unit-gateway"},
+                    {"mcp-gateway", "delete-mcp-gateway-target", "unit-gateway", "unit-target"}
+            };
+            InputStream original = System.in;
+            try {
+                for (String[] command : commands) {
+                    System.setIn(new ByteArrayInputStream("n\n".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                    int exit = CliSupport.withCleanExit(
+                            new CommandLine(new AgentArtsCli())).execute(command);
+                    assertEquals(0, exit, "declining must abort without contacting the service");
+                }
+            } finally {
+                System.setIn(original);
+            }
+        }
+
+        @Test
+        void nonInteractiveDeleteRequiresExplicitForceFlag() {
+            InputStream original = System.in;
+            try {
+                System.setIn(new ByteArrayInputStream(new byte[0]));
+                int exit = CliSupport.withCleanExit(
+                        new CommandLine(new AgentArtsCli()))
+                        .execute("memory", "delete", "unit-space");
+                assertNotEquals(0, exit);
+            } finally {
+                System.setIn(original);
+            }
+        }
+
+        @Test
+        void mcpDeleteCommandsExposeForceOption() {
+            CommandLine mcp = cli.getSubcommands().get("mcp-gateway");
+            assertNotNull(mcp.getSubcommands().get("delete-mcp-gateway")
+                    .getCommandSpec().optionsMap().get("--force"));
+            assertNotNull(mcp.getSubcommands().get("delete-mcp-gateway-target")
+                    .getCommandSpec().optionsMap().get("--force"));
+        }
+    }
+
     // ========================
     // API verification: Init command options
     // ========================

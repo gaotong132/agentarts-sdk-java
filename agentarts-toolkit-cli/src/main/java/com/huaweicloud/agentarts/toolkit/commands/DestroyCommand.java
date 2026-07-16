@@ -26,22 +26,14 @@ public class DestroyCommand implements Runnable {
 
     @Override
     public void run() {
-        if (!skipConfirm) {
-            System.out.print("Are you sure you want to destroy agent '" + agentName + "'? [y/N]: ");
-            try {
-                String answer = System.console().readLine();
-                if (answer == null || !answer.toLowerCase().startsWith("y")) {
-                    System.out.println("Aborted.");
-                    return;
-                }
-            } catch (Exception e) {
-                // Non-interactive mode, proceed
-            }
+        String target = agentName == null ? "the configured agent" : "agent '" + agentName + "'";
+        if (!CliSupport.confirmDestructiveAction("destroy " + target, skipConfirm)) {
+            return;
         }
         try {
             DestroyOperation.destroyAgent(agentName, region, skipSsl);
         } catch (Exception e) {
-            System.err.println("Error destroying agent: " + e.getMessage());
+            CliSupport.fail("Error destroying agent: " + e.getMessage());
         }
     }
 }

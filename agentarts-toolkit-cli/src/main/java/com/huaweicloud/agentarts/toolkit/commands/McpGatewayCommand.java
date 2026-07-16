@@ -89,9 +89,13 @@ public class McpGatewayCommand implements Runnable {
     @Command(name = "delete-mcp-gateway", description = "Delete an MCP gateway")
     static class DeleteGateway implements Runnable {
         @Parameters(index = "0", description = "Gateway ID") String gatewayId;
+        @Option(names = {"-f", "--force"}, description = "Delete without confirmation") boolean force;
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
+            if (!CliSupport.confirmDestructiveAction("delete MCP gateway '" + gatewayId + "'", force)) {
+                return;
+            }
             try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
                 RequestResult result = client.deleteMcpGateway(gatewayId);
                 if (!result.isSuccess()) {
@@ -215,9 +219,13 @@ public class McpGatewayCommand implements Runnable {
     static class DeleteTarget implements Runnable {
         @Parameters(index = "0", description = "Gateway ID") String gatewayId;
         @Parameters(index = "1", description = "Target ID") String targetId;
+        @Option(names = {"-f", "--force"}, description = "Delete without confirmation") boolean force;
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
 
         @Override public void run() {
+            if (!CliSupport.confirmDestructiveAction("delete MCP gateway target '" + targetId + "'", force)) {
+                return;
+            }
             try (MCPGatewayClient client = new MCPGatewayClient(!skipSsl)) {
                 RequestResult result = client.deleteMcpGatewayTarget(gatewayId, targetId);
                 if (!result.isSuccess()) {
