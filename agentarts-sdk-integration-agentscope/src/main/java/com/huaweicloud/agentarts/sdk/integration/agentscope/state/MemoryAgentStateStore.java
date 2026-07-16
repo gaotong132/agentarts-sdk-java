@@ -2,11 +2,16 @@ package com.huaweicloud.agentarts.sdk.integration.agentscope.state;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.memory.MemoryClient;
 import com.huaweicloud.agentarts.sdk.memory.model.*;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.state.State;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -39,6 +44,7 @@ public class MemoryAgentStateStore implements AgentStateStore {
 
     /** 本地缓存: logicalKey → Memory Session ID，避免重复创建 Session。 */
     private final Map<String, String> sessionCache = new ConcurrentHashMap<>();
+    private final Set<String> locallyDeletedKeys = ConcurrentHashMap.newKeySet();
 
     /** 本地缓存: logicalKey → 已知的 session 存在状态（用于 exists/listSessionIds）。 */
     public MemoryAgentStateStore(MemoryClient memoryClient, String spaceId) {
@@ -73,6 +79,7 @@ public class MemoryAgentStateStore implements AgentStateStore {
             String content = SINGLE_PREFIX + className + ":" + json;
             TextMessage msg = new TextMessage("system", content);
             memoryClient.addMessages(spaceId, memSessionId, List.of(msg), null, null, false);
+            locallyDeletedKeys.remove(buildLogicalKey(userId, sessionId, key));
         } catch (Exception e) {
             throw new AgentStateStoreException("Failed to save AgentScope state", e);
         }
@@ -96,6 +103,7 @@ public class MemoryAgentStateStore implements AgentStateStore {
                 messages.add(new TextMessage("system", LIST_PREFIX + className + ":" + json));
             }
             memoryClient.addMessages(spaceId, memSessionId, messages, null, null, false);
+            locallyDeletedKeys.remove(buildLogicalKey(userId, sessionId, key));
         } catch (Exception e) {
             throw new AgentStateStoreException("Failed to save AgentScope state list", e);
         }
@@ -105,8 +113,9 @@ public class MemoryAgentStateStore implements AgentStateStore {
     public <T extends State> Optional<T> get(String userId, String sessionId, String key, Class<T> type) {
         Objects.requireNonNull(type, "type");
         String logicalKey = buildLogicalKey(userId, sessionId, key);
-        String memSessionId = sessionCache.get(logicalKey);
-        if (memSessionId == null) return Optional.empty();
+        if (locallyDeletedKeys.contains(logicalKey)) return Optional.empty();
+        String memSessionId = sessionCache.getOrDefault(
+                logicalKey, deterministicSessionId(userId, sessionId, key));
 
         try {
             List<MessageInfo> msgs = memoryClient.getLastKMessages(memSessionId, 1, spaceId);
@@ -135,8 +144,9 @@ public class MemoryAgentStateStore implements AgentStateStore {
     public <T extends State> List<T> getList(String userId, String sessionId, String key, Class<T> itemType) {
         Objects.requireNonNull(itemType, "itemType");
         String logicalKey = buildLogicalKey(userId, sessionId, key);
-        String memSessionId = sessionCache.get(logicalKey);
-        if (memSessionId == null) return List.of();
+        if (locallyDeletedKeys.contains(logicalKey)) return List.of();
+        String memSessionId = sessionCache.getOrDefault(
+                logicalKey, deterministicSessionId(userId, sessionId, key));
 
         try {
             // 获取消息总数
@@ -189,6 +199,9 @@ public class MemoryAgentStateStore implements AgentStateStore {
     @Override
     public void delete(String userId, String sessionId) {
         String prefix = normalizeUserId(userId) + "|" + sessionId + "|";
+        sessionCache.keySet().stream()
+                .filter(k -> k.startsWith(prefix))
+                .forEach(locallyDeletedKeys::add);
         sessionCache.keySet().removeIf(k -> k.startsWith(prefix));
         // Memory API 无 deleteSession，数据会在 Space TTL 过期后自动清理
     }
@@ -197,6 +210,7 @@ public class MemoryAgentStateStore implements AgentStateStore {
     public void delete(String userId, String sessionId, String key) {
         String logicalKey = buildLogicalKey(userId, sessionId, key);
         sessionCache.remove(logicalKey);
+        locallyDeletedKeys.add(logicalKey);
     }
 
     @Override
@@ -233,19 +247,45 @@ public class MemoryAgentStateStore implements AgentStateStore {
     private String getOrCreateMemorySession(String userId, String sessionId, String key) {
         String logicalKey = buildLogicalKey(userId, sessionId, key);
         return sessionCache.computeIfAbsent(logicalKey, k -> {
+            String deterministicId = deterministicSessionId(userId, sessionId, key);
             try {
-                // 传 null 让服务端自动生成 UUID 格式的 session ID
                 SessionInfo session = memoryClient.createMemorySession(
-                        spaceId, null, normalizeUserId(userId), null);
+                        spaceId, deterministicId, normalizeUserId(userId), null);
                 if (session != null && session.getId() != null) {
                     return session.getId();
                 }
+            } catch (APIException e) {
+                if (e.getStatusCode() == 409) {
+                    return deterministicId;
+                }
+                throw new AgentStateStoreException("Failed to create AgentArts Memory session", e);
             } catch (Exception e) {
                 throw new AgentStateStoreException("Failed to create AgentArts Memory session", e);
             }
             throw new AgentStateStoreException(
                     "AgentArts Memory did not return a session identifier");
         });
+    }
+
+    private String deterministicSessionId(String userId, String sessionId, String key) {
+        String canonical = lengthPrefixed(spaceId)
+                + lengthPrefixed(normalizeUserId(userId))
+                + lengthPrefixed(sessionId)
+                + lengthPrefixed(key);
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.getBytes(StandardCharsets.UTF_8));
+            digest[6] = (byte) ((digest[6] & 0x0f) | 0x50);
+            digest[8] = (byte) ((digest[8] & 0x3f) | 0x80);
+            ByteBuffer bytes = ByteBuffer.wrap(digest);
+            return new UUID(bytes.getLong(), bytes.getLong()).toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
+    }
+
+    private static String lengthPrefixed(String value) {
+        return value.length() + ":" + value;
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.huaweicloud.agentarts.sdk.integration.agentscope;
 
+import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.message.MessageConverter;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.runtime.AgentscopeRuntimeHost;
@@ -208,6 +209,28 @@ class IntegrationModuleTest {
                     () -> store.save("user1", " ", "key1", new TestState("value")));
             assertThrows(IllegalArgumentException.class,
                     () -> store.save("user1", "session1", "", new TestState("value")));
+        }
+
+        @Test
+        void stateCanBeReadAfterStoreRestart() {
+            store.save("user1", "session1", "key1", new TestState("persisted"));
+
+            MemoryAgentStateStore restarted = new MemoryAgentStateStore(fakeClient, "space-123");
+            Optional<TestState> restored = restarted.get(
+                    "user1", "session1", "key1", TestState.class);
+
+            assertEquals("persisted", restored.orElseThrow().value);
+        }
+
+        @Test
+        void deterministicSessionConflictAllowsSubsequentWrites() {
+            store.save("user1", "session1", "key1", new TestState("first"));
+            MemoryAgentStateStore restarted = new MemoryAgentStateStore(fakeClient, "space-123");
+
+            restarted.save("user1", "session1", "key1", new TestState("second"));
+
+            assertEquals("second", restarted.get(
+                    "user1", "session1", "key1", TestState.class).orElseThrow().value);
         }
     }
 
@@ -565,6 +588,7 @@ class IntegrationModuleTest {
 
         /** In-memory message storage: memSessionId → list of MessageInfo */
         final Map<String, List<MessageInfo>> messageStore = new ConcurrentHashMap<>();
+        final Set<String> createdSessions = ConcurrentHashMap.newKeySet();
 
         FakeMemoryClient() {
             super("cn-southwest-2", "fake-test-key");
@@ -578,6 +602,9 @@ class IntegrationModuleTest {
             sessionCreated = true;
             // If id is null, generate a UUID (matching real Memory API behavior)
             String sessionId = (id != null) ? id : java.util.UUID.randomUUID().toString();
+            if (!createdSessions.add(sessionId)) {
+                throw new APIException(409, "session_exists", "session already exists");
+            }
             String json = "{\"id\":\"" + sessionId + "\",\"space_id\":\"" + spaceId + "\"}";
             try {
                 return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, SessionInfo.class);
