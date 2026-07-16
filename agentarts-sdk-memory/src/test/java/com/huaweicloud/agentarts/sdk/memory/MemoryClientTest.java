@@ -172,6 +172,21 @@ class MemoryClientTest {
     }
 
     @Test
+    void rejectsEmptyAndUnsupportedMessagesBeforeTransport() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> client.addMessages("space", "session", List.of()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> client.addMessages("space", "session", List.of("unsupported")));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> client.addMessages("space", "session", java.util.Arrays.asList((Object) null)));
+
+        verifyNoInteractions(dataPlane);
+    }
+
+    @Test
     void failsClosedForUnsuccessfulDeletes() {
         when(dataPlane.delete("/spaces/space/memories/memory"))
                 .thenReturn(Mono.just(RequestResult.builder()

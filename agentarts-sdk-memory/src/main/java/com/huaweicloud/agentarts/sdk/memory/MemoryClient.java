@@ -337,6 +337,9 @@ public class MemoryClient implements AutoCloseable {
                                              List<?> messages,
                                              Long timestamp, String idempotencyKey,
                                              boolean isForceExtract) {
+        if (messages == null || messages.isEmpty()) {
+            throw new IllegalArgumentException("messages must not be null or empty");
+        }
         List<Map<String, Object>> msgDicts = new ArrayList<>();
         for (Object msg : messages) {
             if (msg instanceof TextMessage tm) {
@@ -345,10 +348,9 @@ public class MemoryClient implements AutoCloseable {
                 msgDicts.add(tcm.toDict());
             } else if (msg instanceof ToolResultMessage trm) {
                 msgDicts.add(trm.toDict());
-            } else if (msg instanceof Map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> m = (Map<String, Object>) msg;
-                msgDicts.add(m);
+            } else {
+                String type = msg == null ? "null" : msg.getClass().getName();
+                throw new IllegalArgumentException("Unsupported message type: " + type);
             }
         }
 
