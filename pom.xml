@@ -345,6 +345,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
                     <configuration>
+                        <argLine>@{argLine} -Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
                         <forkedProcessTimeoutInSeconds>${test.fork.timeout.seconds}</forkedProcessTimeoutInSeconds>
                         <systemPropertyVariables>
                             <junit.jupiter.execution.timeout.default>${test.timeout.default}</junit.jupiter.execution.timeout.default>
