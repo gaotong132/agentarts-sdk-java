@@ -184,6 +184,10 @@ class ToolsModuleTest {
             // Python: absolute path must start with /home/user
             assertThrows(IllegalArgumentException.class,
                     () -> client.uploadFile("/etc/passwd", "content", "desc"));
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.uploadFile("../escape.txt", "content", "desc"));
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.uploadFile("/home/user-adjacent/file", "content", "desc"));
         }
 
         @Test
@@ -191,6 +195,10 @@ class ToolsModuleTest {
             // Python: path must start with /home/user
             assertThrows(IllegalArgumentException.class,
                     () -> client.downloadFile("/etc/passwd"));
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.downloadFile("/home/user/../../etc/passwd"));
+            assertThrows(IllegalArgumentException.class,
+                    () -> client.downloadFile("/home/user-adjacent/file"));
         }
 
         @Test

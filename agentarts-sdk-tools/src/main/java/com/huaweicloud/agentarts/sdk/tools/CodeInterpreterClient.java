@@ -359,8 +359,8 @@ public class CodeInterpreterClient implements AutoCloseable {
      */
     @SuppressWarnings("unchecked")
     public Object downloadFile(String path) {
-        validateDownloadPath(path);
-        Map<String, Object> result = invoke("read_files", Map.of("paths", List.of(path)));
+        String resolvedPath = validateDownloadPath(path);
+        Map<String, Object> result = invoke("read_files", Map.of("paths", List.of(resolvedPath)));
         if (result == null) return null;
 
         // Parse response: result.result.content[0]
@@ -387,10 +387,11 @@ public class CodeInterpreterClient implements AutoCloseable {
      */
     @SuppressWarnings("unchecked")
     public Map<String, Object> downloadFiles(List<String> paths) {
+        List<String> resolvedPaths = new ArrayList<>(paths.size());
         for (String path : paths) {
-            validateDownloadPath(path);
+            resolvedPaths.add(validateDownloadPath(path));
         }
-        Map<String, Object> result = invoke("read_files", Map.of("paths", paths));
+        Map<String, Object> result = invoke("read_files", Map.of("paths", resolvedPaths));
         if (result == null) return Map.of();
 
         Map<String, Object> files = new LinkedHashMap<>();
@@ -458,22 +459,39 @@ public class CodeInterpreterClient implements AutoCloseable {
      * absolute paths must start with DEFAULT_PATH.
      */
     private String resolvePath(String path) {
-        if (!path.startsWith("/")) {
-            return DEFAULT_PATH + "/" + path;
+        Objects.requireNonNull(path, "path must not be null");
+        if (path.isBlank() || path.chars().anyMatch(c -> c < 0x20)) {
+            throw new IllegalArgumentException("Path must not be blank or contain control characters");
         }
-        if (!path.startsWith(DEFAULT_PATH)) {
+        String absolutePath = path.startsWith("/") ? path : DEFAULT_PATH + "/" + path;
+        Deque<String> segments = new ArrayDeque<>();
+        for (String segment : absolutePath.split("/")) {
+            if (segment.isEmpty() || ".".equals(segment)) {
+                continue;
+            }
+            if ("..".equals(segment)) {
+                if (!segments.isEmpty()) {
+                    segments.removeLast();
+                }
+            } else {
+                segments.addLast(segment);
+            }
+        }
+        String normalized = "/" + String.join("/", segments);
+        if (!normalized.equals(DEFAULT_PATH) && !normalized.startsWith(DEFAULT_PATH + "/")) {
             throw new IllegalArgumentException("Invalid path. Path must start with " + DEFAULT_PATH);
         }
-        return path;
+        return normalized;
     }
 
     /**
      * Validate download path: must start with DEFAULT_PATH.
      */
-    private void validateDownloadPath(String path) {
-        if (!path.startsWith(DEFAULT_PATH)) {
+    private String validateDownloadPath(String path) {
+        if (path == null || !path.startsWith("/")) {
             throw new IllegalArgumentException("Invalid path. Path must start with " + DEFAULT_PATH);
         }
+        return resolvePath(path);
     }
 
     /**

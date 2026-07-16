@@ -108,7 +108,7 @@ class CodeInterpreterClientTest {
 
         assertEquals(true, client.executeCode("print(1)").get("ok"));
         assertEquals(true, client.executeCommand("python -V").get("ok"));
-        assertEquals(true, client.uploadFile("notes.txt", "content", "ignored").get("ok"));
+        assertEquals(true, client.uploadFile("nested/../notes.txt", "content", "ignored").get("ok"));
         assertEquals(true, client.uploadFiles(List.of(
                 Map.of("path", "/home/user/a.txt", "content", "a"))).get("ok"));
         assertEquals(true, client.installPackages(List.of("requests==2.32.0"), true).get("ok"));
