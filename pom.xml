@@ -67,7 +67,7 @@
         <!-- CLI -->
         <picocli.version>4.7.6</picocli.version>
         <freemarker.version>2.3.34</freemarker.version>
-        <docker-java.version>3.4.1</docker-java.version>
+        <docker-java.version>3.7.1</docker-java.version>
 
         <!-- Spring Boot (optional, for starter) -->
         <spring-boot.version>3.3.5</spring-boot.version>

@@ -23,7 +23,7 @@
         <agentscope.version>2.0.0-RC4</agentscope.version>
         <picocli.version>4.7.6</picocli.version>
         <freemarker.version>2.3.34</freemarker.version>
-        <docker-java.version>3.4.1</docker-java.version>
+        <docker-java.version>3.7.1</docker-java.version>
         <junit-bom.version>6.0.2</junit-bom.version>
         <mockito-bom.version>5.23.0</mockito-bom.version>
     </properties>
