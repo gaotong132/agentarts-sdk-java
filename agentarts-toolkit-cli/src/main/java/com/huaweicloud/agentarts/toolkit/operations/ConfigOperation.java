@@ -13,6 +13,15 @@ import com.huaweicloud.agentarts.toolkit.commands.CliSupport;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.EnumSet;
 import java.util.Map;
 
 /**
@@ -80,20 +89,19 @@ public class ConfigOperation {
             return config;
         }
         try {
-            return YAML_MAPPER.readValue(file, AgentArtsConfigList.class);
+            AgentArtsConfigList config = YAML_MAPPER.readValue(file, AgentArtsConfigList.class);
+            if (config == null) {
+                throw new IOException("Configuration file is empty");
+            }
+            return config;
         } catch (IOException e) {
-            System.err.println("Error loading config: " + e.getMessage());
-            return new AgentArtsConfigList();
+            throw new IllegalStateException("Unable to load CLI configuration", e);
         }
     }
 
     /** Save agent configuration to {@code .agentarts_config.yaml}. */
     public static void saveConfig(AgentArtsConfigList config) {
-        try {
-            YAML_MAPPER.writerWithDefaultPrettyPrinter().writeValue(configFile(), config);
-        } catch (IOException e) {
-            System.err.println("Error saving config: " + e.getMessage());
-        }
+        saveAtomically(config);
     }
 
     /**
@@ -262,19 +270,64 @@ public class ConfigOperation {
         }
         try {
             JsonNode tree = YAML_MAPPER.readTree(file);
-            return tree == null ? YAML_MAPPER.createObjectNode() : tree;
+            if (tree == null) {
+                throw new IOException("Configuration file is empty");
+            }
+            return tree;
         } catch (IOException e) {
-            System.err.println("Error loading config: " + e.getMessage());
-            return YAML_MAPPER.createObjectNode();
+            throw new IllegalStateException("Unable to load CLI configuration", e);
         }
     }
 
     /** Save a raw {@link JsonNode} tree back to the config file. */
     private static void saveConfigTree(JsonNode tree) {
+        saveAtomically(tree);
+    }
+
+    /** Serialize to a restricted temporary file and atomically replace the config. */
+    private static void saveAtomically(Object value) {
+        Path target = configFile().toPath().toAbsolutePath().normalize();
+        Path parent = target.getParent();
+        Path temporary = null;
         try {
-            YAML_MAPPER.writerWithDefaultPrettyPrinter().writeValue(configFile(), tree);
+            if (parent == null) {
+                throw new IOException("Configuration path has no parent directory");
+            }
+            Files.createDirectories(parent);
+            temporary = Files.createTempFile(parent, ".agentarts-config-", ".tmp");
+            restrictOwnerAccess(temporary);
+            YAML_MAPPER.writerWithDefaultPrettyPrinter().writeValue(temporary.toFile(), value);
+            try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.WRITE)) {
+                channel.force(true);
+            }
+            try {
+                Files.move(temporary, target,
+                        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
         } catch (IOException e) {
-            System.err.println("Error saving config: " + e.getMessage());
+            throw new IllegalStateException("Unable to save CLI configuration", e);
+        } finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                } catch (IOException ignored) {
+                    // Best-effort cleanup after a failed write. The file contains
+                    // only the new serialized config and already has owner-only
+                    // permissions on POSIX file systems.
+                }
+            }
+        }
+    }
+
+    private static void restrictOwnerAccess(Path path) throws IOException {
+        PosixFileAttributeView view = Files.getFileAttributeView(
+                path, PosixFileAttributeView.class);
+        if (view != null) {
+            view.setPermissions(EnumSet.of(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE));
         }
     }
 

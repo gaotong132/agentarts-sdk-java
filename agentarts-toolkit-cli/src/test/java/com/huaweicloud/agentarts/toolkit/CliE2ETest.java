@@ -1,5 +1,6 @@
 package com.huaweicloud.agentarts.toolkit;
 
+import com.huaweicloud.agentarts.toolkit.commands.CliSupport;
 import com.huaweicloud.agentarts.toolkit.operations.ConfigOperation;
 import com.huaweicloud.agentarts.toolkit.operations.InitOperation;
 import com.huaweicloud.agentarts.toolkit.template.TemplateManager;
@@ -146,7 +147,7 @@ class CliE2ETest {
             // Redirect ConfigOperation's config file to the temp dir — the Java
             // analog of the Python tests' monkeypatch.chdir(tmp_project).
             ConfigOperation.setConfigFileOverride(configFile.toFile());
-            cli = new CommandLine(new AgentArtsCli());
+            cli = CliSupport.withCleanExit(new CommandLine(new AgentArtsCli()));
             // ConfigOperation writes through System.out/err (not picocli's
             // PrintWriter), so capture the System streams directly.
             outBuf = new ByteArrayOutputStream();
@@ -323,6 +324,23 @@ class CliE2ETest {
             cli.execute("config", "get", "base.region", "-a", "agent-1");
             assertTrue(stdout().contains("cn-north-4"),
                     "config get base.region should return the persisted region");
+        }
+
+        @Test
+        void malformedConfigFailsClosedWithoutOverwritingFile() throws IOException {
+            String malformed = "agents: [unterminated";
+            Files.writeString(configFile, malformed, StandardCharsets.UTF_8);
+
+            int exit = cli.execute("config", "list");
+
+            assertNotEquals(0, exit, "malformed configuration must fail the command");
+            assertEquals(malformed, Files.readString(configFile, StandardCharsets.UTF_8),
+                    "a failed read must never replace the user's configuration");
+            try (DirectoryStream<Path> leftovers = Files.newDirectoryStream(
+                    tempDir, ".agentarts-config-*.tmp")) {
+                assertFalse(leftovers.iterator().hasNext(),
+                        "atomic configuration writes must not leave temporary files behind");
+            }
         }
     }
 
