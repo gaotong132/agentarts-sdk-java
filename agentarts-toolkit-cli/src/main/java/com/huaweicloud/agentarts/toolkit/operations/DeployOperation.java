@@ -57,6 +57,12 @@ public class DeployOperation {
             throw new IllegalArgumentException("mode must be 'cloud' or 'local', got: " + mode);
         }
         String tag = (imageTag == null || imageTag.isBlank()) ? "latest" : imageTag;
+        if (!tag.matches("[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")) {
+            throw new IllegalArgumentException("Docker image tag is invalid: " + tag);
+        }
+        if (localPort != null && (localPort < 1 || localPort > 65535)) {
+            throw new IllegalArgumentException("local port must be between 1 and 65535");
+        }
         boolean verifySsl = !skipSsl;
 
         // Resolve the project dir against the live `user.dir` system property
@@ -74,6 +80,9 @@ public class DeployOperation {
         AgentArtsConfig agentCfg = configList.getAgent(agentKey);
         if (agentCfg == null) {
             throw new IllegalStateException("Agent '" + agentKey + "' not found in .agentarts_config.yaml");
+        }
+        if (agentCfg.getBase() == null) {
+            throw new IllegalStateException("Agent '" + agentKey + "' is missing its base configuration");
         }
 
         String actualAgentName = agentCfg.getBase().getName() != null
@@ -238,8 +247,8 @@ public class DeployOperation {
     }
 
     @SuppressWarnings("unchecked")
-    private static CreateAgentRequest buildCreateRequest(String agentName, String swrImage,
-                                                          RuntimeConfig runtimeCfg, String description) {
+    static CreateAgentRequest buildCreateRequest(String agentName, String swrImage,
+                                                  RuntimeConfig runtimeCfg, String description) {
         // artifact_source: config map (with url overridden) or default {url, commands:[]}
         Map<String, Object> artifactSource = runtimeCfg.getArtifactSource() != null
                 ? new LinkedHashMap<>(runtimeCfg.getArtifactSource()) : new LinkedHashMap<>();
@@ -315,7 +324,7 @@ public class DeployOperation {
         return req;
     }
 
-    private static String resolveAgentKey(AgentArtsConfigList configList, String agentName) {
+    static String resolveAgentKey(AgentArtsConfigList configList, String agentName) {
         if (agentName != null && !agentName.isBlank()) {
             if (configList.getAgent(agentName) != null) {
                 return agentName;

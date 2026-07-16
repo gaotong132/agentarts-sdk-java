@@ -88,7 +88,7 @@ public class DevOperation {
         runDevServer(port, host, reload, configPath, null, envVars);
     }
 
-    private static File resolveConfigFile(String configPath, String projectPath) {
+    static File resolveConfigFile(String configPath, String projectPath) {
         File file;
         if (configPath != null && !configPath.isEmpty()) {
             file = new File(configPath);
@@ -101,7 +101,7 @@ public class DevOperation {
     }
 
     @SuppressWarnings("unchecked")
-    private static String resolveEntrypoint(File configFile) {
+    static String resolveEntrypoint(File configFile) {
         if (configFile == null) return null;
         try {
             Map<String, Object> root = YAML_MAPPER.readValue(configFile, Map.class);
@@ -130,7 +130,7 @@ public class DevOperation {
      * a clear warning is printed and a default echo entrypoint is used so the dev server is
      * still usable.
      */
-    private static AgentArtsRuntimeApp buildApp(String entrypointClassName, String projectPath) {
+    static AgentArtsRuntimeApp buildApp(String entrypointClassName, String projectPath) {
         if (entrypointClassName != null) {
             ClassLoader loader = buildProjectClassLoader(projectPath);
             try {
@@ -175,7 +175,7 @@ public class DevOperation {
      * the SDK classes the Agent depends on. Returns the CLI's loader unchanged when
      * no project output directory exists.
      */
-    private static ClassLoader buildProjectClassLoader(String projectPath) {
+    static ClassLoader buildProjectClassLoader(String projectPath) {
         Path base = (projectPath != null && !projectPath.isEmpty())
                 ? Path.of(projectPath) : Path.of(".");
         List<URL> urls = new ArrayList<>();
