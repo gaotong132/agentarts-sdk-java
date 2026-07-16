@@ -39,6 +39,7 @@ public class MemoryAgentStateStore implements AgentStateStore {
     private static final String INDEX_USER = "__agentscope_index__";
     private static final String INDEX_SESSION = "__agentscope_index__";
     private static final String INDEX_KEY = "__agentscope_index_v1__";
+    private static final int MESSAGE_PAGE_SIZE = 100;
 
     private final MemoryClient memoryClient;
     private final String spaceId;
@@ -105,7 +106,7 @@ public class MemoryAgentStateStore implements AgentStateStore {
                 String className = item.getClass().getName();
                 messages.add(new TextMessage("system", LIST_PREFIX + className + ":" + json));
             }
-            memoryClient.addMessages(spaceId, memSessionId, messages, null, null, false);
+            appendMessagesInBatches(memSessionId, messages);
             appendIndex("upsert", userId, sessionId, key);
         } catch (Exception e) {
             throw new AgentStateStoreException("Failed to save AgentScope state list", e);
@@ -157,13 +158,10 @@ public class MemoryAgentStateStore implements AgentStateStore {
 
         try {
             // 获取消息总数
-            MessageListResponse first = memoryClient.listMessages(spaceId, memSessionId, 1, 0);
-            int total = first.getTotal();
-            if (total == 0) return List.of();
+            List<MessageInfo> allMsgs = listAllMessages(memSessionId);
+            if (allMsgs.isEmpty()) return List.of();
 
             // 获取全部消息
-            List<MessageInfo> allMsgs = memoryClient.getLastKMessages(memSessionId, total, spaceId);
-            if (allMsgs == null || allMsgs.isEmpty()) return List.of();
             String lastText = extractText(allMsgs.get(allMsgs.size() - 1));
             if (lastText != null && lastText.startsWith(DELETE_PREFIX)) return List.of();
 
@@ -192,6 +190,10 @@ public class MemoryAgentStateStore implements AgentStateStore {
                         result.add(mapper.readValue(json, itemType));
                     }
                 }
+            }
+            if (result.size() != batchCount) {
+                throw new AgentStateStoreException(
+                        "AgentScope state list contains an incomplete message batch");
             }
             return result;
         } catch (APIException e) {
@@ -315,12 +317,8 @@ public class MemoryAgentStateStore implements AgentStateStore {
         String indexSessionId = deterministicSessionId(
                 INDEX_USER, INDEX_SESSION, INDEX_KEY);
         try {
-            MessageListResponse first = memoryClient.listMessages(
-                    spaceId, indexSessionId, 1, 0);
-            int total = first.getTotal();
-            if (total == 0) return new IndexSnapshot();
-            List<MessageInfo> messages = memoryClient.getLastKMessages(
-                    indexSessionId, total, spaceId);
+            List<MessageInfo> messages = listAllMessages(indexSessionId);
+            if (messages.isEmpty()) return new IndexSnapshot();
             IndexSnapshot snapshot = new IndexSnapshot();
             for (MessageInfo message : messages) {
                 String text = extractText(message);
@@ -360,6 +358,46 @@ public class MemoryAgentStateStore implements AgentStateStore {
                     "AgentScope state index is missing field: " + field);
         }
         return value.asText();
+    }
+
+    private void appendMessagesInBatches(String memorySessionId, List<TextMessage> messages) {
+        for (int start = 0; start < messages.size(); start += MESSAGE_PAGE_SIZE) {
+            int end = Math.min(messages.size(), start + MESSAGE_PAGE_SIZE);
+            memoryClient.addMessages(
+                    spaceId,
+                    memorySessionId,
+                    messages.subList(start, end),
+                    null,
+                    null,
+                    false);
+        }
+    }
+
+    private List<MessageInfo> listAllMessages(String memorySessionId) {
+        List<MessageInfo> result = new ArrayList<>();
+        int offset = 0;
+        int expectedTotal = Integer.MAX_VALUE;
+        while (offset < expectedTotal) {
+            MessageListResponse page = memoryClient.listMessages(
+                    spaceId, memorySessionId, MESSAGE_PAGE_SIZE, offset);
+            if (page == null) {
+                throw new AgentStateStoreException(
+                        "AgentArts Memory returned an empty message page response");
+            }
+            if (offset == 0) {
+                expectedTotal = Math.max(0, page.getTotal());
+                if (expectedTotal == 0) return List.of();
+            }
+            List<MessageInfo> items = page.getItems();
+            if (items == null || items.isEmpty()) {
+                throw new AgentStateStoreException(
+                        "AgentArts Memory pagination ended before the advertised total");
+            }
+            int remaining = expectedTotal - result.size();
+            result.addAll(items.size() <= remaining ? items : items.subList(0, remaining));
+            offset += items.size();
+        }
+        return result;
     }
 
     private String deterministicSessionId(String userId, String sessionId, String key) {

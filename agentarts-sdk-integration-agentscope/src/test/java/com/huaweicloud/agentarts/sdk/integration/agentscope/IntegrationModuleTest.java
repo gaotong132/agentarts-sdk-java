@@ -90,6 +90,22 @@ class IntegrationModuleTest {
         }
 
         @Test
+        void savesAndLoadsListsLargerThanOneMessageBatch() {
+            List<TestState> states = new ArrayList<>();
+            for (int i = 0; i < 205; i++) {
+                states.add(new TestState("value-" + i));
+            }
+
+            store.save("user1", "session1", "large-list", states);
+            List<TestState> restored = store.getList(
+                    "user1", "session1", "large-list", TestState.class);
+
+            assertEquals(205, restored.size());
+            assertEquals("value-0", restored.get(0).value);
+            assertEquals("value-204", restored.get(204).value);
+        }
+
+        @Test
         void saveListDoesFullReplacement() {
             store.save("user1", "session1", "items", List.of(new TestState("old1"), new TestState("old2")));
             store.save("user1", "session1", "items", List.of(new TestState("new1")));
@@ -150,6 +166,18 @@ class IntegrationModuleTest {
             assertTrue(ids.contains("s1"));
             assertTrue(ids.contains("s2"));
             assertTrue(ids.contains("s3"));
+        }
+
+        @Test
+        void paginatesLongLivedStateIndexAndRejectsTruncatedPages() {
+            for (int i = 0; i < 125; i++) {
+                store.save("user1", "session-" + i, "key", new TestState("value"));
+            }
+
+            assertEquals(125, store.listSessionIds("user1").size());
+
+            fakeClient.truncatePages = true;
+            assertThrows(AgentStateStoreException.class, () -> store.listSessionIds("user1"));
         }
 
         @Test
@@ -699,6 +727,7 @@ class IntegrationModuleTest {
         boolean failSessionCreation = false;
         boolean failWrites = false;
         boolean failReads = false;
+        boolean truncatePages = false;
 
         /** In-memory message storage: memSessionId → list of MessageInfo */
         final Map<String, List<MessageInfo>> messageStore = new ConcurrentHashMap<>();
@@ -733,6 +762,9 @@ class IntegrationModuleTest {
             if (failWrites) {
                 throw new IllegalStateException("simulated write failure");
             }
+            if (messages.size() > 100) {
+                throw new IllegalArgumentException("simulated service batch limit");
+            }
             messagesAdded = true;
             List<MessageInfo> stored = messageStore.computeIfAbsent(sessionId, k -> new ArrayList<>());
             int seq = stored.size();
@@ -763,6 +795,9 @@ class IntegrationModuleTest {
             if (failReads) {
                 throw new IllegalStateException("simulated read failure");
             }
+            if (k > 100) {
+                throw new IllegalArgumentException("simulated service page limit");
+            }
             List<MessageInfo> all = messageStore.getOrDefault(sessionId, List.of());
             int start = Math.max(0, all.size() - k);
             return new ArrayList<>(all.subList(start, all.size()));
@@ -770,12 +805,27 @@ class IntegrationModuleTest {
 
         @Override
         public MessageListResponse listMessages(String spaceId, String sessionId, int limit, int offset) {
+            if (failReads) {
+                throw new IllegalStateException("simulated read failure");
+            }
+            if (limit > 100) {
+                throw new IllegalArgumentException("simulated service page limit");
+            }
             List<MessageInfo> all = messageStore.getOrDefault(sessionId, List.of());
             int end = Math.min(all.size(), offset + limit);
             List<MessageInfo> page = (offset < all.size()) ? all.subList(offset, end) : List.of();
-            String json = "{\"items\":[],\"total\":" + all.size() + "}";
+            if (truncatePages && offset >= 100) {
+                page = List.of();
+            }
             try {
-                return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, MessageListResponse.class);
+                com.fasterxml.jackson.databind.ObjectMapper mapper =
+                        new com.fasterxml.jackson.databind.ObjectMapper();
+                com.fasterxml.jackson.databind.node.ObjectNode response = mapper.createObjectNode();
+                response.set("items", mapper.valueToTree(page));
+                response.put("total", all.size());
+                response.put("limit", limit);
+                response.put("offset", offset);
+                return mapper.treeToValue(response, MessageListResponse.class);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
