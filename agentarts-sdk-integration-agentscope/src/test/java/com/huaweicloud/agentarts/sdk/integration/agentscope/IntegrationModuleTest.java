@@ -17,8 +17,11 @@ import com.huaweicloud.agentarts.sdk.runtime.AgentArtsRuntimeApp;
 import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.TextBlock;
+import io.agentscope.core.message.ImageBlock;
+import io.agentscope.core.message.ThinkingBlock;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
+import io.agentscope.core.message.URLSource;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.state.State;
 import io.agentscope.core.tool.AgentTool;
@@ -691,6 +694,40 @@ class IntegrationModuleTest {
             ToolResultBlock restored = MessageConverter.toToolResultBlock(memoryMessage);
 
             assertEquals(io.agentscope.core.message.ToolResultState.ERROR, restored.getState());
+        }
+
+        @Test
+        void toolResultRoundTripPreservesUrlAsset() {
+            ImageBlock image = ImageBlock.builder()
+                    .source(URLSource.builder().url("https://example.invalid/image.png").build())
+                    .build();
+            ToolResultBlock source = ToolResultBlock.of(
+                            "call-id",
+                            "image-tool",
+                            List.of(TextBlock.builder().text("caption").build(), image))
+                    .withState(io.agentscope.core.message.ToolResultState.SUCCESS);
+
+            ToolResultMessage memory = MessageConverter.toToolResultMessage(source);
+            ToolResultBlock restored = MessageConverter.toToolResultBlock(memory);
+
+            assertNotNull(memory.getAssetRef());
+            assertEquals(2, restored.getOutput().size());
+            assertInstanceOf(ImageBlock.class, restored.getOutput().get(1));
+            ImageBlock restoredImage = (ImageBlock) restored.getOutput().get(1);
+            assertEquals(
+                    "https://example.invalid/image.png",
+                    ((URLSource) restoredImage.getSource()).getUrl());
+        }
+
+        @Test
+        void rejectsUnsupportedToolResultBlocksInsteadOfDroppingThem() {
+            ThinkingBlock thinking = ThinkingBlock.builder().thinking("internal").build();
+            ToolResultBlock source = ToolResultBlock.of("call-id", "tool", thinking)
+                    .withState(io.agentscope.core.message.ToolResultState.SUCCESS);
+
+            assertThrows(
+                    MessageConversionException.class,
+                    () -> MessageConverter.toToolResultMessage(source));
         }
 
         @Test
