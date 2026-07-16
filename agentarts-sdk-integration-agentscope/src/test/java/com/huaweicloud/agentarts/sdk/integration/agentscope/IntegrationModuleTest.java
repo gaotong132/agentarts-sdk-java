@@ -232,6 +232,58 @@ class IntegrationModuleTest {
             assertEquals("second", restarted.get(
                     "user1", "session1", "key1", TestState.class).orElseThrow().value);
         }
+
+        @Test
+        void indexCanBeReadAfterStoreRestart() {
+            store.save("user1", "session1", "key1", new TestState("persisted"));
+            store.save("user1", "session2", "key1", new TestState("persisted"));
+
+            MemoryAgentStateStore restarted = new MemoryAgentStateStore(fakeClient, "space-123");
+
+            assertTrue(restarted.exists("user1", "session1"));
+            assertEquals(Set.of("session1", "session2"), restarted.listSessionIds("user1"));
+        }
+
+        @Test
+        void keyDeletionSurvivesStoreRestart() {
+            store.save("user1", "session1", "key1", new TestState("persisted"));
+            store.delete("user1", "session1", "key1");
+
+            MemoryAgentStateStore restarted = new MemoryAgentStateStore(fakeClient, "space-123");
+
+            assertTrue(restarted.get(
+                    "user1", "session1", "key1", TestState.class).isEmpty());
+            assertFalse(restarted.exists("user1", "session1"));
+        }
+
+        @Test
+        void sessionDeletionSurvivesStoreRestart() {
+            store.save("user1", "session1", "key1", new TestState("one"));
+            store.save("user1", "session1", "key2", new TestState("two"));
+            store.delete("user1", "session1");
+
+            MemoryAgentStateStore restarted = new MemoryAgentStateStore(fakeClient, "space-123");
+
+            assertTrue(restarted.get(
+                    "user1", "session1", "key1", TestState.class).isEmpty());
+            assertTrue(restarted.get(
+                    "user1", "session1", "key2", TestState.class).isEmpty());
+            assertFalse(restarted.exists("user1", "session1"));
+            assertTrue(restarted.listSessionIds("user1").isEmpty());
+        }
+
+        @Test
+        void saveAfterDeleteRestoresIndexAndState() {
+            store.save("user1", "session1", "key1", new TestState("before"));
+            store.delete("user1", "session1", "key1");
+            store.save("user1", "session1", "key1", new TestState("after"));
+
+            MemoryAgentStateStore restarted = new MemoryAgentStateStore(fakeClient, "space-123");
+
+            assertEquals("after", restarted.get(
+                    "user1", "session1", "key1", TestState.class).orElseThrow().value);
+            assertTrue(restarted.exists("user1", "session1"));
+        }
     }
 
     // ========================

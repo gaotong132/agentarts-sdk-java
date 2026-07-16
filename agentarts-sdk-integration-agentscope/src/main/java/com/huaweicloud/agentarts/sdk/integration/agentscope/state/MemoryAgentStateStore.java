@@ -1,6 +1,7 @@
 package com.huaweicloud.agentarts.sdk.integration.agentscope.state;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.huaweicloud.agentarts.sdk.core.APIException;
 import com.huaweicloud.agentarts.sdk.memory.MemoryClient;
@@ -14,7 +15,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 /**
  * AgentStateStore 实现，通过 AgentArts Memory 数据面 API 持久化 agentscope State。
@@ -34,7 +34,11 @@ public class MemoryAgentStateStore implements AgentStateStore {
     private static final String SINGLE_PREFIX = "__S__:";
     private static final String LIST_PREFIX = "__L__:";
     private static final String LIST_BATCH = "__LB__:";
-    private static final String SESSION_PREFIX = "__as_";
+    private static final String DELETE_PREFIX = "__D__:";
+    private static final String INDEX_PREFIX = "__I__:";
+    private static final String INDEX_USER = "__agentscope_index__";
+    private static final String INDEX_SESSION = "__agentscope_index__";
+    private static final String INDEX_KEY = "__agentscope_index_v1__";
 
     private final MemoryClient memoryClient;
     private final String spaceId;
@@ -44,7 +48,6 @@ public class MemoryAgentStateStore implements AgentStateStore {
 
     /** 本地缓存: logicalKey → Memory Session ID，避免重复创建 Session。 */
     private final Map<String, String> sessionCache = new ConcurrentHashMap<>();
-    private final Set<String> locallyDeletedKeys = ConcurrentHashMap.newKeySet();
 
     /** 本地缓存: logicalKey → 已知的 session 存在状态（用于 exists/listSessionIds）。 */
     public MemoryAgentStateStore(MemoryClient memoryClient, String spaceId) {
@@ -79,7 +82,7 @@ public class MemoryAgentStateStore implements AgentStateStore {
             String content = SINGLE_PREFIX + className + ":" + json;
             TextMessage msg = new TextMessage("system", content);
             memoryClient.addMessages(spaceId, memSessionId, List.of(msg), null, null, false);
-            locallyDeletedKeys.remove(buildLogicalKey(userId, sessionId, key));
+            appendIndex("upsert", userId, sessionId, key);
         } catch (Exception e) {
             throw new AgentStateStoreException("Failed to save AgentScope state", e);
         }
@@ -103,7 +106,7 @@ public class MemoryAgentStateStore implements AgentStateStore {
                 messages.add(new TextMessage("system", LIST_PREFIX + className + ":" + json));
             }
             memoryClient.addMessages(spaceId, memSessionId, messages, null, null, false);
-            locallyDeletedKeys.remove(buildLogicalKey(userId, sessionId, key));
+            appendIndex("upsert", userId, sessionId, key);
         } catch (Exception e) {
             throw new AgentStateStoreException("Failed to save AgentScope state list", e);
         }
@@ -113,7 +116,6 @@ public class MemoryAgentStateStore implements AgentStateStore {
     public <T extends State> Optional<T> get(String userId, String sessionId, String key, Class<T> type) {
         Objects.requireNonNull(type, "type");
         String logicalKey = buildLogicalKey(userId, sessionId, key);
-        if (locallyDeletedKeys.contains(logicalKey)) return Optional.empty();
         String memSessionId = sessionCache.getOrDefault(
                 logicalKey, deterministicSessionId(userId, sessionId, key));
 
@@ -124,6 +126,9 @@ public class MemoryAgentStateStore implements AgentStateStore {
             // 从最后一条消息开始查找 __S__: 前缀的消息
             for (int i = msgs.size() - 1; i >= 0; i--) {
                 String text = extractText(msgs.get(i));
+                if (text != null && text.startsWith(DELETE_PREFIX)) {
+                    return Optional.empty();
+                }
                 if (text != null && text.startsWith(SINGLE_PREFIX)) {
                     String body = text.substring(SINGLE_PREFIX.length());
                     int colonIdx = body.indexOf(':');
@@ -134,6 +139,9 @@ public class MemoryAgentStateStore implements AgentStateStore {
                     }
                 }
             }
+        } catch (APIException e) {
+            if (e.getStatusCode() == 404) return Optional.empty();
+            throw new AgentStateStoreException("Failed to load AgentScope state", e);
         } catch (Exception e) {
             throw new AgentStateStoreException("Failed to load AgentScope state", e);
         }
@@ -144,7 +152,6 @@ public class MemoryAgentStateStore implements AgentStateStore {
     public <T extends State> List<T> getList(String userId, String sessionId, String key, Class<T> itemType) {
         Objects.requireNonNull(itemType, "itemType");
         String logicalKey = buildLogicalKey(userId, sessionId, key);
-        if (locallyDeletedKeys.contains(logicalKey)) return List.of();
         String memSessionId = sessionCache.getOrDefault(
                 logicalKey, deterministicSessionId(userId, sessionId, key));
 
@@ -157,6 +164,8 @@ public class MemoryAgentStateStore implements AgentStateStore {
             // 获取全部消息
             List<MessageInfo> allMsgs = memoryClient.getLastKMessages(memSessionId, total, spaceId);
             if (allMsgs == null || allMsgs.isEmpty()) return List.of();
+            String lastText = extractText(allMsgs.get(allMsgs.size() - 1));
+            if (lastText != null && lastText.startsWith(DELETE_PREFIX)) return List.of();
 
             // 从末尾找到最后一个 __LB__: 批次标记，只读取该批次的 __L__: 消息
             int batchStart = -1;
@@ -185,6 +194,9 @@ public class MemoryAgentStateStore implements AgentStateStore {
                 }
             }
             return result;
+        } catch (APIException e) {
+            if (e.getStatusCode() == 404) return List.of();
+            throw new AgentStateStoreException("Failed to load AgentScope state list", e);
         } catch (Exception e) {
             throw new AgentStateStoreException("Failed to load AgentScope state list", e);
         }
@@ -192,40 +204,33 @@ public class MemoryAgentStateStore implements AgentStateStore {
 
     @Override
     public boolean exists(String userId, String sessionId) {
-        String prefix = normalizeUserId(userId) + "|" + sessionId + "|";
-        return sessionCache.keySet().stream().anyMatch(k -> k.startsWith(prefix));
+        validateSessionId(sessionId);
+        return !readIndex().keys(normalizeUserId(userId), sessionId).isEmpty();
     }
 
     @Override
     public void delete(String userId, String sessionId) {
-        String prefix = normalizeUserId(userId) + "|" + sessionId + "|";
-        sessionCache.keySet().stream()
-                .filter(k -> k.startsWith(prefix))
-                .forEach(locallyDeletedKeys::add);
-        sessionCache.keySet().removeIf(k -> k.startsWith(prefix));
-        // Memory API 无 deleteSession，数据会在 Space TTL 过期后自动清理
+        validateSessionId(sessionId);
+        String normalizedUserId = normalizeUserId(userId);
+        Set<String> keys = readIndex().keys(normalizedUserId, sessionId);
+        for (String key : keys) {
+            appendTombstone(userId, sessionId, key);
+            sessionCache.remove(buildLogicalKey(userId, sessionId, key));
+        }
+        appendIndex("delete_session", userId, sessionId, null);
     }
 
     @Override
     public void delete(String userId, String sessionId, String key) {
         String logicalKey = buildLogicalKey(userId, sessionId, key);
+        appendTombstone(userId, sessionId, key);
+        appendIndex("delete_key", userId, sessionId, key);
         sessionCache.remove(logicalKey);
-        locallyDeletedKeys.add(logicalKey);
     }
 
     @Override
     public Set<String> listSessionIds(String userId) {
-        String normUser = normalizeUserId(userId);
-        String prefix = normUser + "|";
-        return sessionCache.keySet().stream()
-                .filter(k -> k.startsWith(prefix))
-                .map(k -> {
-                    // 提取 sessionId 部分: normUser|sessionId|key → sessionId
-                    String rest = k.substring(prefix.length());
-                    int pipeIdx = rest.indexOf('|');
-                    return pipeIdx > 0 ? rest.substring(0, pipeIdx) : rest;
-                })
-                .collect(Collectors.toSet());
+        return readIndex().sessionIds(normalizeUserId(userId));
     }
 
     @Override
@@ -267,6 +272,96 @@ public class MemoryAgentStateStore implements AgentStateStore {
         });
     }
 
+    private void appendTombstone(String userId, String sessionId, String key) {
+        String memorySessionId = getOrCreateMemorySession(userId, sessionId, key);
+        try {
+            memoryClient.addMessages(
+                    spaceId,
+                    memorySessionId,
+                    List.of(new TextMessage("system", DELETE_PREFIX + "deleted")),
+                    null,
+                    null,
+                    false);
+        } catch (Exception e) {
+            throw new AgentStateStoreException("Failed to delete AgentScope state", e);
+        }
+    }
+
+    private void appendIndex(
+            String operation, String userId, String sessionId, String key) {
+        validateSessionId(sessionId);
+        String indexSessionId = getOrCreateMemorySession(
+                INDEX_USER, INDEX_SESSION, INDEX_KEY);
+        try {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("operation", operation);
+            entry.put("user_id", normalizeUserId(userId));
+            entry.put("session_id", sessionId);
+            if (key != null) entry.put("key", key);
+            String content = INDEX_PREFIX + mapper.writeValueAsString(entry);
+            memoryClient.addMessages(
+                    spaceId,
+                    indexSessionId,
+                    List.of(new TextMessage("system", content)),
+                    null,
+                    null,
+                    false);
+        } catch (Exception e) {
+            throw new AgentStateStoreException("Failed to update AgentScope state index", e);
+        }
+    }
+
+    private IndexSnapshot readIndex() {
+        String indexSessionId = deterministicSessionId(
+                INDEX_USER, INDEX_SESSION, INDEX_KEY);
+        try {
+            MessageListResponse first = memoryClient.listMessages(
+                    spaceId, indexSessionId, 1, 0);
+            int total = first.getTotal();
+            if (total == 0) return new IndexSnapshot();
+            List<MessageInfo> messages = memoryClient.getLastKMessages(
+                    indexSessionId, total, spaceId);
+            IndexSnapshot snapshot = new IndexSnapshot();
+            for (MessageInfo message : messages) {
+                String text = extractText(message);
+                if (text == null || !text.startsWith(INDEX_PREFIX)) continue;
+                JsonNode entry = mapper.readTree(text.substring(INDEX_PREFIX.length()));
+                String operation = requiredIndexText(entry, "operation");
+                String indexedUserId = requiredIndexText(entry, "user_id");
+                String indexedSessionId = requiredIndexText(entry, "session_id");
+                if ("upsert".equals(operation)) {
+                    snapshot.upsert(indexedUserId, indexedSessionId,
+                            requiredIndexText(entry, "key"));
+                } else if ("delete_key".equals(operation)) {
+                    snapshot.deleteKey(indexedUserId, indexedSessionId,
+                            requiredIndexText(entry, "key"));
+                } else if ("delete_session".equals(operation)) {
+                    snapshot.deleteSession(indexedUserId, indexedSessionId);
+                } else {
+                    throw new AgentStateStoreException(
+                            "AgentScope state index contains an unknown operation");
+                }
+            }
+            return snapshot;
+        } catch (APIException e) {
+            if (e.getStatusCode() == 404) return new IndexSnapshot();
+            throw new AgentStateStoreException("Failed to load AgentScope state index", e);
+        } catch (AgentStateStoreException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AgentStateStoreException("Failed to load AgentScope state index", e);
+        }
+    }
+
+    private static String requiredIndexText(JsonNode entry, String field) {
+        JsonNode value = entry.get(field);
+        if (value == null || !value.isTextual() || value.asText().isBlank()) {
+            throw new AgentStateStoreException(
+                    "AgentScope state index is missing field: " + field);
+        }
+        return value.asText();
+    }
+
     private String deterministicSessionId(String userId, String sessionId, String key) {
         String canonical = lengthPrefixed(spaceId)
                 + lengthPrefixed(normalizeUserId(userId))
@@ -288,17 +383,28 @@ public class MemoryAgentStateStore implements AgentStateStore {
         return value.length() + ":" + value;
     }
 
+    private static void validateSessionId(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new IllegalArgumentException("sessionId must not be blank");
+        }
+    }
+
     /**
      * 构建逻辑键: {normalizedUserId}|{sessionId}|{key}
      */
     private String buildLogicalKey(String userId, String sessionId, String key) {
-        if (sessionId == null || sessionId.isBlank()) {
-            throw new IllegalArgumentException("sessionId must not be blank");
-        }
+        validateSessionId(sessionId);
         if (key == null || key.isBlank()) {
             throw new IllegalArgumentException("key must not be blank");
         }
-        return normalizeUserId(userId) + "|" + sessionId + "|" + key;
+        Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
+        return encodeKeyPart(encoder, normalizeUserId(userId)) + "."
+                + encodeKeyPart(encoder, sessionId) + "."
+                + encodeKeyPart(encoder, key);
+    }
+
+    private static String encodeKeyPart(Base64.Encoder encoder, String value) {
+        return encoder.encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
     private String normalizeUserId(String userId) {
@@ -324,5 +430,45 @@ public class MemoryAgentStateStore implements AgentStateStore {
             }
         }
         return sb.isEmpty() ? null : sb.toString();
+    }
+
+    private static final class IndexSnapshot {
+        private final Map<String, Map<String, Set<String>>> keysByUserAndSession = new HashMap<>();
+
+        private void upsert(String userId, String sessionId, String key) {
+            keysByUserAndSession
+                    .computeIfAbsent(userId, ignored -> new HashMap<>())
+                    .computeIfAbsent(sessionId, ignored -> new HashSet<>())
+                    .add(key);
+        }
+
+        private void deleteKey(String userId, String sessionId, String key) {
+            Map<String, Set<String>> sessions = keysByUserAndSession.get(userId);
+            if (sessions == null) return;
+            Set<String> keys = sessions.get(sessionId);
+            if (keys == null) return;
+            keys.remove(key);
+            if (keys.isEmpty()) sessions.remove(sessionId);
+            if (sessions.isEmpty()) keysByUserAndSession.remove(userId);
+        }
+
+        private void deleteSession(String userId, String sessionId) {
+            Map<String, Set<String>> sessions = keysByUserAndSession.get(userId);
+            if (sessions == null) return;
+            sessions.remove(sessionId);
+            if (sessions.isEmpty()) keysByUserAndSession.remove(userId);
+        }
+
+        private Set<String> keys(String userId, String sessionId) {
+            Map<String, Set<String>> sessions = keysByUserAndSession.get(userId);
+            if (sessions == null) return Set.of();
+            Set<String> keys = sessions.get(sessionId);
+            return keys == null ? Set.of() : Set.copyOf(keys);
+        }
+
+        private Set<String> sessionIds(String userId) {
+            Map<String, Set<String>> sessions = keysByUserAndSession.get(userId);
+            return sessions == null ? Set.of() : Set.copyOf(sessions.keySet());
+        }
     }
 }
