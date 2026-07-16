@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * V11-HMAC-SHA256 request signer for AgentArts self-developed endpoints.
@@ -308,12 +309,11 @@ public class V11Signer {
      * Get sorted list of lowercase header names.
      */
     List<String> getSignedHeaders(Map<String, String> headers) {
-        List<String> result = new ArrayList<>();
+        TreeSet<String> uniqueNames = new TreeSet<>();
         for (String key : headers.keySet()) {
-            result.add(key.toLowerCase(Locale.ROOT));
+            uniqueNames.add(key.toLowerCase(Locale.ROOT));
         }
-        Collections.sort(result);
-        return result;
+        return new ArrayList<>(uniqueNames);
     }
 
     // ========================
