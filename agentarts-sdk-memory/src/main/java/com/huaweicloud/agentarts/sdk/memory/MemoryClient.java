@@ -390,48 +390,6 @@ public class MemoryClient implements AutoCloseable {
         }
     }
 
-    private Map<String, Object> parseResultAsMap(RequestResult result) {
-        if (result == null || !result.isSuccess()) {
-            int status = result != null ? result.getStatusCode() : 0;
-            String err = result != null ? result.getError() : "null response";
-            throw new APIException(status, "memory_api", err);
-        }
-        try {
-            JsonNode data = result.getDataAsJson();
-            if (data != null) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> map = MAPPER.treeToValue(data, Map.class);
-                return map;
-            }
-            return Map.of();
-        } catch (Exception e) {
-            throw new APIException(result.getStatusCode(), "memory_api",
-                    "Failed to parse response: " + e.getMessage(), e);
-        }
-    }
-
-    private <T> List<T> parseResultAsList(RequestResult result, Class<T> type) {
-        if (result == null || !result.isSuccess()) {
-            int status = result != null ? result.getStatusCode() : 0;
-            String err = result != null ? result.getError() : "null response";
-            throw new APIException(status, "memory_api", err);
-        }
-        try {
-            JsonNode data = result.getDataAsJson();
-            if (data != null && data.isArray()) {
-                List<T> list = new ArrayList<>();
-                for (JsonNode node : data) {
-                    list.add(MAPPER.treeToValue(node, type));
-                }
-                return list;
-            }
-            return List.of();
-        } catch (Exception e) {
-            throw new APIException(result.getStatusCode(), "memory_api",
-                    "Failed to parse response: " + e.getMessage(), e);
-        }
-    }
-
     @Override
     public synchronized void close() {
         if (controlPlaneClient != null) {
