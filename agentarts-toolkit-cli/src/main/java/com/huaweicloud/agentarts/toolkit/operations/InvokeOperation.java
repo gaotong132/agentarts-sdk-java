@@ -1,17 +1,12 @@
 package com.huaweicloud.agentarts.toolkit.operations;
 
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
+import com.huaweicloud.agentarts.sdk.service.http.RequestResult;
+import com.huaweicloud.agentarts.sdk.service.runtime.LocalRuntimeClient;
 import com.huaweicloud.agentarts.sdk.service.runtime.RuntimeClient;
 import com.huaweicloud.agentarts.toolkit.commands.CliSupport;
-import io.vertx.core.Vertx;
-import io.vertx.core.buffer.Buffer;
-import io.vertx.ext.web.client.WebClient;
-import io.vertx.ext.web.client.WebClientOptions;
 
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Invoke operation: send a JSON payload to a local or cloud agent.
@@ -51,10 +46,18 @@ public class InvokeOperation {
             CliSupport.failCli("Payload must be valid JSON: " + e.getMessage());
             return;
         }
+        if (timeout <= 0) {
+            CliSupport.failCli("timeout must be greater than zero");
+        }
+        String normalizedCustomPath = normalizeCustomPath(customPath);
 
         if ("local".equals(mode)) {
             int p = port != null ? port : 8080;
-            invokeLocal(normalized, p, sessionId, timeout);
+            if (p < 1 || p > 65535) {
+                CliSupport.failCli("port must be between 1 and 65535");
+            }
+            invokeLocal(normalized, p, sessionId, bearerToken, endpoint,
+                    timeout, userId, normalizedCustomPath);
             return;
         }
         if (!"cloud".equals(mode)) {
@@ -62,47 +65,60 @@ public class InvokeOperation {
             return;
         }
         invokeCloud(normalized, agentName, region, endpoint, sessionId, bearerToken,
-                timeout, skipSsl, userId, customPath);
+                timeout, skipSsl, userId, normalizedCustomPath);
     }
 
-    private static void invokeLocal(String payload, int port, String sessionId, int timeout) throws Exception {
-        Vertx vertx = Vertx.vertx();
-        WebClient client = WebClient.create(vertx, new WebClientOptions()
-                .setConnectTimeout(timeout * 1000));
-
-        CountDownLatch latch = new CountDownLatch(1);
-        client.post(port, "localhost", "/invocations")
-                .putHeader("Content-Type", "application/json")
-                .putHeader("x-hw-agentarts-session-id", sessionId != null ? sessionId : "")
-                .sendBuffer(Buffer.buffer(payload))
-                .onComplete(ar -> {
-                    if (ar.succeeded()) {
-                        System.out.println(ar.result().bodyAsString());
-                    } else {
-                        System.err.println("Error: " + ar.cause().getMessage());
-                    }
-                    latch.countDown();
-                });
-
-        latch.await(timeout, TimeUnit.SECONDS);
-        client.close();
-        vertx.close();
+    private static void invokeLocal(String payload, int port, String sessionId,
+                                    String bearerToken, String endpoint, int timeout,
+                                    String userId, String customPath) {
+        try (LocalRuntimeClient client = new LocalRuntimeClient(port, "localhost", timeout);
+             RequestResult result = client.invokeAgentRaw(
+                     payload, sessionId, bearerToken, endpoint, userId, customPath)) {
+            printInvocationResponse(result);
+        }
     }
 
     private static void invokeCloud(String payload, String agentName, String region,
                                      String endpoint, String sessionId, String bearerToken,
                                      int timeout, boolean skipSsl, String userId,
                                      String customPath) throws Exception {
-        try (RuntimeClient client = RuntimeResolver.resolve(agentName, region, !skipSsl, bearerToken)) {
-            String actualSessionId = (sessionId != null && !sessionId.isBlank())
-                    ? sessionId : UUID.randomUUID().toString();
-            Map<String, Object> result = client.invokeAgent(
-                    agentName, actualSessionId, payload, bearerToken, endpoint,
-                    timeout, userId, customPath);
-            CliSupport.printJson(result);
+        String resolvedAgentName = RuntimeResolver.resolveAgentName(agentName);
+        if (!JsonUtils.isNotBlank(resolvedAgentName)) {
+            CliSupport.failCli("No agent specified and no default agent configured");
+        }
+        String actualSessionId = (sessionId != null && !sessionId.isBlank())
+                ? sessionId : UUID.randomUUID().toString();
+        try (RuntimeClient client = RuntimeResolver.resolve(
+                resolvedAgentName, region, !skipSsl, bearerToken);
+             RequestResult result = client.invokeAgentRaw(
+                     resolvedAgentName, actualSessionId, payload, bearerToken,
+                     endpoint, timeout, userId, customPath)) {
+            printInvocationResponse(result);
         } catch (Exception e) {
             CliSupport.failCli("Failed to invoke cloud agent: " + e.getMessage());
         }
+    }
+
+    private static void printInvocationResponse(RequestResult result) {
+        if (result.isStreaming()) {
+            result.iterLines().doOnNext(System.out::println).blockLast();
+        } else if (result.getDataAsJson() != null) {
+            CliSupport.printJson(result.getDataAsJson());
+        } else if (result.getDataAsString() != null) {
+            System.out.println(result.getDataAsString());
+        } else {
+            CliSupport.failCli("Invocation returned an unsupported binary response");
+        }
+    }
+
+    private static String normalizeCustomPath(String customPath) {
+        if (customPath == null || customPath.isBlank()) return null;
+        String normalized = customPath.trim().replaceAll("^/+|/+$", "");
+        if (normalized.isEmpty()) return null;
+        if (!normalized.matches("[a-zA-Z0-9_./-]+") || normalized.contains("..")) {
+            CliSupport.failCli("custom-path contains invalid or unsafe path characters");
+        }
+        return normalized;
     }
 
     /**

@@ -12,40 +12,25 @@ import com.huaweicloud.agentarts.sdk.service.runtime.model.VersionDetail;
 import java.io.File;
 import java.util.Map;
 
-/**
- * Resolves a configured {@link RuntimeClient} for the data plane from the
- * project's {@code .agentarts_config.yaml}: agent id, auth type, and the
- * agent's {@code access_endpoint} (discovered via the control plane).
- *
- * <p>Mirrors the reference CLI's invoke/runtime resolution: prefer the
- * {@code AGENTARTS_RUNTIME_DATA_ENDPOINT} env var; otherwise look up the agent
- * by id (from config) or name on the control plane and read
- * {@code version_detail.invoke_config.access_endpoint}. IAM agents use V11
- * signing; others require a bearer token and use SDK-HMAC-SHA256.</p>
- */
+/** Resolves a production-ready runtime data-plane client from CLI configuration. */
 public final class RuntimeResolver {
 
     private RuntimeResolver() {}
 
     /**
-     * Resolve a data-plane client for the given agent.
-     *
-     * @param agentName    agent name (uses config default when null)
-     * @param regionHint   region override (uses config/env default when null)
-     * @param verifySsl    whether to verify SSL
-     * @param bearerToken  bearer token (required for non-IAM agents)
-     * @return a configured, open {@link RuntimeClient}
+     * Resolve the authentication mode and data-plane endpoint for an agent.
+     * Unknown/non-IAM authentication fails closed unless a bearer token is supplied.
      */
     public static RuntimeClient resolve(String agentName, String regionHint,
                                          boolean verifySsl, String bearerToken) {
         AgentArtsConfigList config = loadConfigIfExists();
-        String key = (agentName != null && !agentName.isBlank()) ? agentName : config.getDefaultAgent();
-        AgentArtsConfig agentCfg = (key != null) ? config.getAgent(key) : null;
+        String key = JsonUtils.isNotBlank(agentName) ? agentName : config.getDefaultAgent();
+        AgentArtsConfig agentConfig = key != null ? config.getAgent(key) : null;
 
-        String region = resolveRegion(regionHint, agentCfg);
-        String agentId = (agentCfg != null && agentCfg.getRuntime() != null)
-                ? agentCfg.getRuntime().getAgentId() : null;
-        String authType = resolveAuthType(agentCfg);
+        String region = resolveRegion(regionHint, agentConfig);
+        String agentId = agentConfig != null && agentConfig.getRuntime() != null
+                ? agentConfig.getRuntime().getAgentId() : null;
+        String authType = resolveAuthType(agentConfig);
 
         SignMode signMode;
         if (authType != null && "IAM".equalsIgnoreCase(authType)) {
@@ -53,57 +38,55 @@ public final class RuntimeResolver {
         } else if (JsonUtils.isNotBlank(bearerToken)) {
             signMode = SignMode.SDK_HMAC_SHA256;
         } else {
-            // Fall back to V11 (best effort) — the backend will reject if the agent
-            // actually requires a bearer token. This keeps IAM-only agents working
-            // without forcing the caller to pass an empty bearer token.
-            signMode = SignMode.V11_HMAC_SHA256;
+            throw new IllegalArgumentException(
+                    "Bearer token is required for non-IAM or unknown authentication");
         }
 
-        // Data endpoint: env override first, else discover from the control plane.
         String dataEndpoint = Constants.getRuntimeDataPlaneEndpoint();
         if (!JsonUtils.isNotBlank(dataEndpoint)) {
             dataEndpoint = discoverAccessEndpoint(agentName, key, agentId, region, verifySsl);
         }
+        if (!JsonUtils.isNotBlank(dataEndpoint)) {
+            throw new IllegalStateException(
+                    "No runtime data endpoint configured and access endpoint discovery failed");
+        }
 
         RuntimeClient client = new RuntimeClient(region, verifySsl, signMode);
-        if (JsonUtils.isNotBlank(dataEndpoint)) {
-            client.setDataPlaneEndpoint(dataEndpoint);
-        }
+        client.setDataPlaneEndpoint(dataEndpoint);
         return client;
     }
 
-    private static AgentArtsConfigList loadConfigIfExists() {
-        // Only load when a project config is present, so that running a runtime
-        // subcommand outside a project dir does not create an empty config file.
-        // Resolve against the live `user.dir` (see DeployOperation/ConfigOperation
-        // for rationale — relative paths ignore runtime `user.dir` updates).
-        File cfg = new File(System.getProperty("user.dir", "."), ".agentarts_config.yaml");
-        if (!cfg.exists()) {
-            return new AgentArtsConfigList();
-        }
-        return ConfigOperation.loadConfig();
+    /** Resolve an explicit agent name or the configured default without creating a config file. */
+    public static String resolveAgentName(String agentName) {
+        if (JsonUtils.isNotBlank(agentName)) return agentName;
+        return loadConfigIfExists().getDefaultAgent();
     }
 
-    private static String resolveRegion(String regionHint, AgentArtsConfig agentCfg) {
+    private static AgentArtsConfigList loadConfigIfExists() {
+        File file = new File(System.getProperty("user.dir", "."), ".agentarts_config.yaml");
+        return file.exists() ? ConfigOperation.loadConfig() : new AgentArtsConfigList();
+    }
+
+    private static String resolveRegion(String regionHint, AgentArtsConfig agentConfig) {
         if (JsonUtils.isNotBlank(regionHint)) return regionHint;
-        if (agentCfg != null && agentCfg.getBase() != null
-                && JsonUtils.isNotBlank(agentCfg.getBase().getRegion())) {
-            return agentCfg.getBase().getRegion();
+        if (agentConfig != null && agentConfig.getBase() != null
+                && JsonUtils.isNotBlank(agentConfig.getBase().getRegion())) {
+            return agentConfig.getBase().getRegion();
         }
         return Constants.getRegion();
     }
 
-    @SuppressWarnings("unchecked")
-    private static String resolveAuthType(AgentArtsConfig agentCfg) {
-        if (agentCfg == null || agentCfg.getRuntime() == null) return null;
-        Map<String, Object> identity = agentCfg.getRuntime().getIdentityConfiguration();
+    private static String resolveAuthType(AgentArtsConfig agentConfig) {
+        if (agentConfig == null || agentConfig.getRuntime() == null) return null;
+        Map<String, Object> identity = agentConfig.getRuntime().getIdentityConfiguration();
         if (identity == null) return null;
-        Object t = identity.get("authorizer_type");
-        return t != null ? String.valueOf(t) : null;
+        Object value = identity.get("authorizer_type");
+        return value != null ? String.valueOf(value) : null;
     }
 
     private static String discoverAccessEndpoint(String agentName, String configKey,
-                                                  String agentId, String region, boolean verifySsl) {
+                                                  String agentId, String region,
+                                                  boolean verifySsl) {
         try (RuntimeClient control = new RuntimeClient(region, verifySsl)) {
             AgentInfo info = null;
             if (JsonUtils.isNotBlank(agentId)) {
@@ -116,13 +99,11 @@ public final class RuntimeResolver {
                 info = control.findAgentByName(configKey);
             }
             if (info == null) return null;
-            VersionDetail vd = info.getVersionDetail();
-            if (vd == null || vd.getInvokeConfig() == null) return null;
-            Object ae = vd.getInvokeConfig().get("access_endpoint");
-            return ae != null ? String.valueOf(ae) : null;
-        } catch (Exception e) {
-            System.err.println("[runtime] Could not resolve access_endpoint from control plane: "
-                    + e.getMessage());
+            VersionDetail detail = info.getVersionDetail();
+            if (detail == null || detail.getInvokeConfig() == null) return null;
+            Object endpoint = detail.getInvokeConfig().get("access_endpoint");
+            return endpoint != null ? String.valueOf(endpoint) : null;
+        } catch (Exception ignored) {
             return null;
         }
     }

@@ -4,6 +4,7 @@ import com.huaweicloud.agentarts.toolkit.commands.CliSupport;
 import com.huaweicloud.agentarts.toolkit.operations.ConfigOperation;
 import com.huaweicloud.agentarts.toolkit.operations.InitOperation;
 import com.huaweicloud.agentarts.toolkit.template.TemplateManager;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
@@ -11,6 +12,8 @@ import picocli.CommandLine;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.net.InetSocketAddress;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -26,6 +29,106 @@ import static org.junit.jupiter.api.Assertions.*;
  * </ul>
  */
 class CliE2ETest {
+
+    @Nested
+    class InvokeOperationE2E {
+
+        private PrintStream originalOut;
+        private PrintStream originalErr;
+        private ByteArrayOutputStream output;
+
+        @BeforeEach
+        void captureOutput() {
+            originalOut = System.out;
+            originalErr = System.err;
+            output = new ByteArrayOutputStream();
+            System.setOut(new PrintStream(output, true, StandardCharsets.UTF_8));
+            System.setErr(new PrintStream(new ByteArrayOutputStream(), true, StandardCharsets.UTF_8));
+        }
+
+        @AfterEach
+        void restoreOutput() {
+            System.setOut(originalOut);
+            System.setErr(originalErr);
+        }
+
+        @Test
+        void localInvokeThreadsAllOptionsAndPrintsJson() throws Exception {
+            AtomicReference<String> path = new AtomicReference<>();
+            AtomicReference<String> query = new AtomicReference<>();
+            AtomicReference<String> authorization = new AtomicReference<>();
+            AtomicReference<String> session = new AtomicReference<>();
+            AtomicReference<String> user = new AtomicReference<>();
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/", exchange -> {
+                path.set(exchange.getRequestURI().getPath());
+                query.set(exchange.getRequestURI().getRawQuery());
+                authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+                session.set(exchange.getRequestHeaders().getFirst("x-hw-agentarts-session-id"));
+                user.set(exchange.getRequestHeaders().getFirst("X-HW-AgentGateway-User-Id"));
+                byte[] response = "{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, response.length);
+                exchange.getResponseBody().write(response);
+                exchange.close();
+            });
+            server.start();
+
+            try {
+                int exit = CliSupport.withCleanExit(new CommandLine(new AgentArtsCli())).execute(
+                        "invoke", "{}", "--mode", "local",
+                        "--port", String.valueOf(server.getAddress().getPort()),
+                        "--custom-path", "/stream/", "--endpoint", "named endpoint",
+                        "--session", "unit-session", "--bearer-token", "unit-token",
+                        "--user-id", "unit-user");
+                assertEquals(0, exit);
+                assertEquals("/invocations/stream", path.get());
+                assertEquals("endpoint=named%20endpoint", query.get());
+                assertEquals("Bearer unit-token", authorization.get());
+                assertEquals("unit-session", session.get());
+                assertEquals("unit-user", user.get());
+                assertTrue(output.toString(StandardCharsets.UTF_8).contains("\"ok\" : true"));
+            } finally {
+                server.stop(0);
+            }
+        }
+
+        @Test
+        void localInvokeStreamsResponseLines() throws Exception {
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/invocations", exchange -> {
+                byte[] response = "data: one\n\ndata: two\n".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+                exchange.sendResponseHeaders(200, response.length);
+                exchange.getResponseBody().write(response);
+                exchange.close();
+            });
+            server.start();
+
+            try {
+                int exit = CliSupport.withCleanExit(new CommandLine(new AgentArtsCli())).execute(
+                        "invoke", "{}", "--mode", "local",
+                        "--port", String.valueOf(server.getAddress().getPort()));
+                assertEquals(0, exit);
+                String text = output.toString(StandardCharsets.UTF_8);
+                assertTrue(text.contains("data: one"));
+                assertTrue(text.contains("data: two"));
+            } finally {
+                server.stop(0);
+            }
+        }
+
+        @Test
+        void unsafeLocalInvokeOptionsFailBeforeNetwork() {
+            CommandLine cli = CliSupport.withCleanExit(new CommandLine(new AgentArtsCli()));
+            assertNotEquals(0, cli.execute(
+                    "invoke", "{}", "--mode", "local", "--custom-path", "../admin"));
+            assertNotEquals(0, cli.execute(
+                    "invoke", "{}", "--mode", "local", "--timeout", "0"));
+            assertNotEquals(0, cli.execute(
+                    "invoke", "{}", "--mode", "local", "--port", "65536"));
+        }
+    }
 
     // ============================================================
     // Init Operation E2E

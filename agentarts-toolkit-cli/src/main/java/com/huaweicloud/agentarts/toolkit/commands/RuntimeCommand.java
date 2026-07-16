@@ -166,8 +166,6 @@ public class RuntimeCommand implements Runnable {
             }
         }
 
-        // NOTE: --endpoint and --user-id are inherited from the picocli option set but
-        // uploadFiles does not currently thread --endpoint through; left as TODO.
         @Option(names = {"-e", "--endpoint"}, description = "Endpoint name")
         String endpoint;
         @Option(names = {"-u", "--user-id"}, description = "User ID for OAuth2 outbound")
@@ -217,43 +215,43 @@ public class RuntimeCommand implements Runnable {
                 RequestResult result = client.downloadFiles(
                         agentName, sessionId, remotePath, recursive,
                         resolvedBearerToken, endpoint, userId, timeout);
-                if (!result.isSuccess()) {
-                    CliSupport.fail("Failed to download files (HTTP "
-                            + result.getStatusCode() + "): " + result.getError());
-                }
-                // Resolve the local output path.
-                String filename = remotePath.contains("/")
-                        ? remotePath.substring(remotePath.lastIndexOf('/') + 1)
-                        : remotePath;
-                if (filename.isEmpty()) filename = "downloaded";
-                String out = (outputPath != null && !outputPath.isEmpty()) ? outputPath : filename;
+                try (result) {
+                    if (!result.isSuccess()) {
+                        CliSupport.fail("Failed to download files (HTTP "
+                                + result.getStatusCode() + "): " + result.getError());
+                    }
+                    String filename = remotePath.contains("/")
+                            ? remotePath.substring(remotePath.lastIndexOf('/') + 1)
+                            : remotePath;
+                    if (filename.isEmpty()) filename = "downloaded";
+                    String out = outputPath != null && !outputPath.isEmpty() ? outputPath : filename;
 
-                // TODO: the Java BaseHttpClient materializes the response body as a UTF-8
-                // string, which corrupts binary content (e.g. tar archives from --recursive).
-                // Writing the string bytes back is a best-effort until the client exposes a
-                // raw byte/stream download path.
-                byte[] bytes = result.getDataAsString() != null
-                        ? result.getDataAsString().getBytes(java.nio.charset.StandardCharsets.UTF_8)
-                        : new byte[0];
-                try {
-                    Files.write(Path.of(out), bytes);
-                } catch (Exception e) {
-                    CliSupport.fail("Failed to write output file " + out + ": " + e.getMessage());
+                    byte[] bytes = result.getDataAsBytes();
+                    if (bytes == null && result.getDataAsString() != null) {
+                        bytes = result.getDataAsString()
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    }
+                    if (bytes == null) {
+                        CliSupport.fail("Download returned no file content");
+                    }
+                    try {
+                        Files.write(Path.of(out), bytes);
+                    } catch (Exception e) {
+                        CliSupport.fail("Failed to write output file " + out + ": " + e.getMessage());
+                    }
+                    Map<String, Object> outMap = new LinkedHashMap<>();
+                    outMap.put("saved_path", out);
+                    outMap.put("size", bytes.length);
+                    outMap.put("content_type", result.getHeaders().get("Content-Type"));
+                    outMap.put("path", remotePath);
+                    CliSupport.printJson(outMap);
                 }
-                Map<String, Object> outMap = new LinkedHashMap<>();
-                outMap.put("saved_path", out);
-                outMap.put("size", bytes.length);
-                outMap.put("content_type", result.getHeaders().get("Content-Type"));
-                outMap.put("path", remotePath);
-                CliSupport.printJson(outMap);
             } catch (Exception e) {
                 if (e instanceof CliSupport.CliFailure) throw (CliSupport.CliFailure) e;
                 CliSupport.fail("Failed to download files: " + e.getMessage());
             }
         }
 
-        // NOTE: --endpoint and --user-id are part of the option set; downloadFiles does not
-        // currently thread --endpoint through; left as TODO.
         @Option(names = {"-e", "--endpoint"}, description = "Endpoint name")
         String endpoint;
         @Option(names = {"-u", "--user-id"}, description = "User ID for OAuth2 outbound")
