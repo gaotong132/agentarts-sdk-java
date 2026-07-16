@@ -331,6 +331,7 @@ class RuntimeModelTest {
     // ============================================================
 
     @Nested
+    @SuppressWarnings("deprecation")
     class ExecCommandRequestTests {
 
         @Test
@@ -358,6 +359,7 @@ class RuntimeModelTest {
             assertTrue(json.contains("\"command\""));
             assertTrue(json.contains("\"echo\""));
             assertTrue(json.contains("\"hello\""));
+            assertFalse(json.contains("\"chunked\""));
         }
 
         @Test
@@ -366,7 +368,8 @@ class RuntimeModelTest {
             ExecCommandRequest req = JsonUtils.MAPPER.readValue(json, ExecCommandRequest.class);
             assertEquals(2, req.getCommand().size());
             assertEquals("python", req.getCommand().get(0));
-            assertTrue(req.isChunked());
+            assertFalse(req.isChunked(),
+                    "chunked is a protocol header and must be ignored in JSON");
         }
 
         @Test

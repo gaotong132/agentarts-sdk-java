@@ -32,6 +32,7 @@ class RuntimeClientTest {
 
     @Nested
     @DisplayName("RuntimeClient API methods")
+    @SuppressWarnings("deprecation")
     class ApiMethodTests {
 
         @Test
