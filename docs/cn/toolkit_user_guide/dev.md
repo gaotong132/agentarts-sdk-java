@@ -13,7 +13,7 @@ agentarts dev [选项]
 | 参数 | 缩写 | 说明 | 默认值 |
 |------|------|------|--------|
 | `--port` | `-p` | 服务器端口 | `8080` |
-| `--host` | `-h` | 绑定地址 | `0.0.0.0` |
+| `--host` | `-H` | 绑定地址 | `0.0.0.0` |
 | `--reload` | | 启用热重载 | `false` |
 | `--config` | `-c` | 配置文件路径 | `.agentarts_config.yaml` |
 | `--path` | | 项目路径（含 `.agentarts_config.yaml`） | 当前目录 |
@@ -31,8 +31,8 @@ agentarts dev --port 3000
 # 启用热重载
 agentarts dev --reload
 
-# 设置环境变量
-agentarts dev --env OPENAI_API_KEY=sk-xxx --env MODEL_NAME=gpt-4o
+# 设置非敏感环境变量
+agentarts dev --env LOG_LEVEL=DEBUG --env MODEL_NAME=gpt-4o
 
 # 简写参数
 agentarts dev -p 3000 -e KEY1=value1 -e KEY2=value2
@@ -43,11 +43,11 @@ agentarts dev --config /path/to/config.yaml
 
 ## 工作原理
 
-`dev` 从 `.agentarts_config.yaml` 读取 `base.entrypoint`，把项目的 `target/classes`（及 `target/dependency/*.jar`）挂到类路径上，加载该类并调用其 `public static AgentArtsRuntimeApp createApp()` 工厂方法（与 Python 的 `create_app` 契约一致）。`agentarts init` 生成的 `Agent.java` 已自带 `createApp()`。
+`dev` 从 `.agentarts_config.yaml` 读取 `base.entrypoint`，先用 Maven 编译项目并生成运行时类路径，再在受管子 JVM 中加载入口类并调用 `public static AgentArtsRuntimeApp createApp()`。子进程继承真实环境变量，退出、重载和 CLI 中断时都会执行进程树清理。
 
-因此**改完代码需先 `mvn compile`**，`dev` 才能加载到新的 `target/classes`。
+启用 `--reload` 后，源码、资源、POM、已编译类和配置发生变化会触发去抖动重编译与子进程重启；编译失败时保留当前健康进程。单次构建最长 10 分钟，避免开发命令永久挂起。
 
-若入口类未编译、不在类路径、或没有 `createApp()` 工厂，`dev` 会打印警告并回退到内置 echo（`{"response": <message>}`），保证服务器仍可用——但此时跑的是 echo，不是你的 Agent。看到 `{"response":"..."}` 而非你代码的返回字段时，先检查是否编译、`createApp()` 是否存在、`entrypoint` 是否指向正确的类。
+若入口类不存在、签名不正确、工厂返回 `null` 或子进程异常退出，`dev` 会返回非零状态并保留原因，不会静默回退到 echo Agent。
 
 ## 端点
 
@@ -87,7 +87,8 @@ curl.exe --% -X POST http://localhost:8080/invocations -H "Content-Type: applica
 
 ## 环境变量优先级
 
-1. `--env` 命令行参数（通过 `System.setProperty` 注入，最高优先级）
-2. 系统环境变量
+1. `--env` 命令行参数（最高优先级）
+2. `.agentarts_config.yaml` 中当前 Agent 的环境变量
+3. 启动 CLI 的系统环境变量
 
-> `dev` 命令从配置文件读取 entrypoint 与端口等，但当前不自动应用配置文件中的 `runtime.environment_variables`；如需注入环境变量，请用 `--env` 或系统环境变量。
+> 不要通过 `--env` 传递密钥：命令行可能进入 shell 历史或进程列表。敏感值应在启动 CLI 前注入当前进程环境，或由 CI Secret 管理。

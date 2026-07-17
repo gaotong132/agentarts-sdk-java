@@ -41,7 +41,7 @@ agentarts-toolkit-cli/target/agentarts-toolkit-cli-0.1.0-SNAPSHOT.jar           
 agentarts-toolkit-cli/target/agentarts-toolkit-cli-0.1.0-SNAPSHOT-standalone.jar # 自包含 fat jar，CLI 运行用
 ```
 
-`-standalone` 为自包含 fat jar，picocli 与 SDK 依赖均已打入，`java -jar` 无需额外 classpath。该产物由 `maven-shade-plugin` 以 classified 附加产物方式生成，thin 主 jar 保留给依赖本模块的其它模块（如 `agentarts-sdk-tests`）。
+`-standalone` 为自包含 fat jar，picocli 与 SDK 运行依赖均已打入，`java -jar` 无需额外 classpath。构建使用依赖最小化并保留服务加载元数据；thin 主 jar 继续供其它模块依赖。
 
 ## 3. 调用方式
 
@@ -120,10 +120,12 @@ mvn -pl agentarts-toolkit-cli exec:java `
 
 ```bash
 agentarts --version     # AgentArts CLI 0.1.0
-agentarts --help        # 列出 9 个顶层命令：init / config / dev / deploy / invoke / destroy / runtime / mcp-gateway / memory
+agentarts --help        # 9 个顶层命令
+agentarts gateway --help
+agentarts runtime exec-command --help
 ```
 
-输出版本号与命令列表即安装成功。
+所有层级的用户命令都支持 `-h/--help` 和 `-V/--version`。输出版本号与命令列表即安装成功。
 
 ### 4.1 Windows PowerShell 引号注意事项（重要）
 
@@ -146,7 +148,7 @@ Windows PowerShell 5.1 下，命令里带 JSON 字面量（如 `'{"message":"Hel
 
 ## 5. 云命令的额外前置
 
-`init` / `config` / `dev` 为纯本地命令，无需凭证。涉及云的命令（`deploy` / `invoke --mode cloud` / `destroy` / `runtime *` / `mcp-gateway *` / `memory *`）需设置 AK/SK：
+`init` / `config` / `dev` 为纯本地命令，无需凭证。涉及云的命令（`deploy` / `invoke --mode cloud` / `destroy` / `runtime *` / `gateway *` / `memory *`）需设置 AK/SK：
 
 ```bash
 export HUAWEICLOUD_SDK_AK="your-access-key"
@@ -162,10 +164,7 @@ $env:HUAWEICLOUD_SDK_AK = "your-access-key"
 $env:HUAWEICLOUD_SDK_SK = "your-secret-key"
 $env:HUAWEICLOUD_SDK_REGION = "cn-southwest-2"   # 可选，默认 cn-southwest-2
 
-# 持久化（写入用户环境变量，新开终端生效）
-setx HUAWEICLOUD_SDK_AK "your-access-key"
-setx HUAWEICLOUD_SDK_SK "your-secret-key"
-setx HUAWEICLOUD_SDK_REGION "cn-southwest-2"
+# 不建议用 setx 持久化 AK/SK；CI 中应使用受保护的 Secret。
 ```
 
 Windows cmd.exe：
@@ -176,7 +175,7 @@ set HUAWEICLOUD_SDK_SK=your-secret-key
 set HUAWEICLOUD_SDK_REGION=cn-southwest-2
 ```
 
-凭证仅通过环境变量注入，不得写入配置文件或提交仓库。数据面 Memory 与 Code Interpreter 另需各自的 API Key 环境变量，详见对应子命令文档。
+凭证仅通过当前进程环境或 CI Secret 注入，不得写入配置文件、命令参数、日志或提交仓库；疑似暴露后立即轮换。数据面 Memory 与 Code Interpreter 另需各自的 API Key 环境变量。
 
 ## 6. 子命令文档
 
@@ -189,6 +188,7 @@ set HUAWEICLOUD_SDK_REGION=cn-southwest-2
 | `invoke` | [invoke.md](invoke.md) |
 | `destroy` | [destroy.md](destroy.md) |
 | `runtime` | [runtime_cli.md](runtime_cli.md) |
-| `mcp-gateway` | [mcp_gateway_cli.md](mcp_gateway_cli.md) |
+| `gateway`（兼容 `mcp-gateway`） | [mcp_gateway_cli.md](mcp_gateway_cli.md) |
+| `memory` | [README 中的 Memory CLI 索引](../../../README.md#cli-工具指南中文) |
 
 典型流程：`init` → `config` → `dev`（本地验证）→ `deploy`（云端）→ `invoke`。

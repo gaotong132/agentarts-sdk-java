@@ -1,6 +1,8 @@
 # agentarts destroy — 销毁 Agent
 
-`destroy` 命令从华为云删除已部署的 Agent 及其关联资源。
+`destroy` 命令从华为云删除已部署的 Agent。
+
+> `destroy` 是幂等的：目标 Agent 已不存在时返回成功；认证、权限、限流和服务端错误仍返回非零退出码。
 
 ## 用法
 
@@ -12,7 +14,7 @@ agentarts destroy [选项]
 
 | 参数 | 缩写 | 说明 | 默认值 |
 |------|------|------|--------|
-| `--agent` | `-a` | Agent 名称 | 交互式选择 |
+| `--agent` | `-a` | Agent 名称 | 配置中的默认 Agent |
 | `--region` | `-r` | 华为云区域 | 配置文件值 |
 | `--yes` | `-y` | 跳过确认提示 | `false` |
 | `--skip-ssl-verification` | `-k` | 跳过 SSL 证书验证 | `false` |
@@ -38,9 +40,7 @@ agentarts destroy -a my-agent -r cn-southwest-2 -y
 
 ## 删除的资源
 
-- AgentArts Runtime 实例
-- Agent 端点配置
-- 关联的运行时资源
+CLI 按名称解析 Agent 并调用 Runtime 控制面的 Agent 删除接口。服务端是否级联清理端点或运行时内部资源，以云服务契约为准；CLI 不会伪造级联删除成功。
 
 ## 未删除的资源
 
@@ -49,6 +49,7 @@ agentarts destroy -a my-agent -r cn-southwest-2 -y
 - SWR 镜像
 - IAM 代理
 - 配置文件（`.agentarts_config.yaml`）
+- CLI 不会显式删除的其他外部资源
 
 ## 删除前检查
 
@@ -94,3 +95,4 @@ cleanup:
 1. **删除操作不可逆**，请确认后再执行
 2. 建议使用 `--yes` 仅用于自动化场景
 3. 删除后如需重新部署，执行 `agentarts deploy`
+4. 生产环境保持 SSL 验证开启，并在删除后核对 SWR、IAM 和计费资源清单

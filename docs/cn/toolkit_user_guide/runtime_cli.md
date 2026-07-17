@@ -78,6 +78,8 @@ agentarts --% runtime invoke -a my-agent -s session-123 --timeout 120 "{\"messag
 
 `command` 为位置参数（需引号，整条命令作为一个参数），不是 `--command` 选项：
 
+命令使用服务端 `Command-Type: chunked` 协议，CLI 消费原始 NDJSON 响应并逐行输出，不会先把完整结果聚合到内存。`--timeout` 同时约束 HTTP 调用和流消费。
+
 ```bash
 # 基本命令执行
 agentarts runtime exec-command -a my-agent -s session-123 "ls -la"
@@ -97,6 +99,8 @@ agentarts runtime exec-command -a my-agent -s session-123 `
 ```
 
 ## upload-files — 上传文件
+
+单文件最大 64 MiB、单次总量最大 128 MiB；读取前校验普通文件和大小，超限会在网络调用前失败。远程路径与动态资源 ID 经过路径段编码，`..` 等不安全自定义路径会被拒绝。
 
 ```bash
 # 上传文件到默认目录 (/home/user/)

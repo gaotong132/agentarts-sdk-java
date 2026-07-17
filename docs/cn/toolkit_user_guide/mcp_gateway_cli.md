@@ -1,6 +1,11 @@
-# agentarts mcp-gateway — MCP 网关管理
+# agentarts gateway / mcp-gateway — MCP 网关管理
 
-`mcp-gateway` 命令提供 MCP 网关和目标的 CRUD 管理功能。
+`gateway` 是与 Python CLI 对齐的名称，`mcp-gateway` 继续作为兼容名称。简短子命令与原 Java 长名称指向同一实现，例如 `gateway create` 等价于 `mcp-gateway create-mcp-gateway`。
+
+| 简短名称 | 兼容名称 |
+|---|---|
+| `create` / `update` / `delete` / `get` / `list` | `*-mcp-gateway` / `list-mcp-gateways` |
+| `create-target` / `update-target` / `delete-target` / `get-target` / `list-targets` | `*-mcp-gateway-target` / `list-mcp-gateway-targets` |
 
 > 下方多行示例使用 bash 的反斜杠 `\` 续行。Windows PowerShell 下续行符改为反引号 `` ` ``，或写成一行。每处多行示例后均附 PowerShell 版本。
 >
@@ -143,6 +148,8 @@ agentarts mcp-gateway list-mcp-gateway-targets gw-123 --limit 10 --offset 0
 1. **先创建网关，再创建目标** — 目标必须关联到一个网关
 2. **使用有意义的名称** — 便于后续查找和管理
 3. **定期清理不用的网关和目标** — 避免资源浪费
+4. **自动化删除显式使用 `--force`** — 交互终端默认确认；无 TTY 且未传 `--force` 时命令失败，不会误删
+5. **IAM agency 创建是幂等的** — 已存在的 agency/策略绑定会复用；403、5xx 和非冲突错误会原样失败
 
 ## 常见问题
 

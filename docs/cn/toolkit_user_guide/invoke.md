@@ -120,3 +120,5 @@ agentarts invoke '{"message":"Hello!"}' -a my-agent
 # 后续调用（使用返回的 session_id）
 agentarts invoke '{"message":"What did I say?"}' -a my-agent --session returned-session-id
 ```
+
+云模式优先使用显式数据面 endpoint，其次读取环境配置，最后通过控制面发现 `access_endpoint`。鉴权、网络和服务端发现失败会保留原始原因并返回非零退出码，不会被误报为“Agent 不存在”。流式响应按到达顺序逐行输出，并受 `--timeout` 约束。

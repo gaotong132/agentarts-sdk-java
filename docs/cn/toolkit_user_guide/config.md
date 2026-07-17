@@ -91,7 +91,7 @@ agentarts config remove my-agent
 ## config set-env — 设置环境变量
 
 ```bash
-agentarts config set-env OPENAI_API_KEY sk-xxx
+agentarts config set-env LOG_LEVEL INFO
 agentarts config set-env MODEL_NAME gpt-4o --agent my-agent
 ```
 
@@ -105,7 +105,7 @@ agentarts config list-env --agent my-agent
 ## config remove-env — 删除环境变量
 
 ```bash
-agentarts config remove-env OPENAI_API_KEY
+agentarts config remove-env LOG_LEVEL
 agentarts config remove-env MODEL_NAME --agent my-agent
 ```
 
@@ -134,6 +134,8 @@ agents:
         port: 8080
         url_match_type: ACCURATE_MATCH
       environment_variables:
-        OPENAI_API_KEY: sk-xxx
+        LOG_LEVEL: INFO
         MODEL_NAME: gpt-4o
 ```
+
+配置更新采用临时文件加原子替换，避免中途失败留下半写文件；`get`/`list-env` 对环境变量值统一显示 `[REDACTED]`。配置文件仍不是 Secret 存储：AK/SK、API Key、OAuth2 Secret 等敏感值不得通过 `set-env` 持久化，应由进程环境或 CI Secret 注入。

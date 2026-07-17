@@ -26,7 +26,7 @@ agentarts init [选项]
 | `basic` | 基础 Java 处理器 |
 | `agentscope` | agentscope-java ReActAgent 集成 |
 
-> Dockerfile 在所有模板下都会生成（`docker/Dockerfile.tpl`），无需单独的 `docker` 模板。
+> `langgraph`、`langchain`、`google-adk` 属于 Python framework 模板，不在 Java SDK 的对齐范围。未知模板会在写文件前失败。Dockerfile 在所有 Java 模板下都会生成，无需单独的 `docker` 模板。
 
 ## 示例
 
@@ -43,6 +43,8 @@ agentarts init --name my-agent --template agentscope --region cn-southwest-2 --s
 ```
 
 > `agentarts init` 不带 `--name` 时进入交互模式：在终端提示输入项目名。若输入为空或按 Ctrl-D，命令以非零退出码结束且不创建任何文件。非交互环境（管道输入、CI、IDE 测试桩等无 TTY）下不会提示，直接报 `--name is required`，需显式传 `-n`。
+
+生成过程先写入同级临时目录，全部成功后再移动到目标位置；目标目录已存在时拒绝覆盖，失败会清理临时内容，避免留下半生成项目。
 
 ## 生成的项目结构
 
