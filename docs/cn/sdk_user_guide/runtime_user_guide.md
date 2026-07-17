@@ -2,6 +2,8 @@
 
 AgentArts Runtime SDK 提供基于 Vert.x 的轻量级 HTTP/WebSocket/SSE 服务器，以及管理云端 Agent 的客户端，用于将 Agent 逻辑包装为标准服务端点并管理其全生命周期。
 
+> 生产入口应使用 `runUntilShutdown(...)`，以便 JVM shutdown/中断时停止 HTTP server、关闭自有 Vert.x，并按逆序释放注册的资源。`run(...)` 适用于由外部生命周期管理器控制的嵌入场景。
+
 ## 概述
 
 运行时 SDK 包含五个核心组件：
@@ -40,8 +42,8 @@ app.setEntrypoint((Map<String, Object> payload) -> {
 // 注册健康检查
 app.setPingHandler(() -> PingStatus.HEALTHY);
 
-// 启动服务器
-app.run(8080);
+// 阻塞运行，并在退出时释放资源
+app.runUntilShutdown(8080);
 ```
 
 ### 使用 RequestContext
@@ -105,7 +107,15 @@ app.run(8080);
 
 // 使用默认端口（8080）
 app.run();
+
+// 独立进程推荐：阻塞到中断/JVM shutdown
+app.runUntilShutdown(8080, "0.0.0.0");
+
+// 将客户端等资源交给 Runtime 管理，stop() 时逆序关闭
+app.registerManagedResource(closeableClient);
 ```
+
+默认请求体上限为 10 MiB，可在启动前通过 `setMaxRequestBodyBytes(...)` 下调或按业务评估后调整；超过限制返回 413。不要对公网服务设置无限请求体。
 
 ## 装饰器模式（注解）
 
@@ -393,14 +403,15 @@ Map<String, Object> result = client.invokeAgent(
 // 执行命令
 Map<String, Object> cmdResult = client.execCommand("my-agent", sessionId, "echo hello");
 
-// 执行命令（完整参数：命令列表 + chunked 传输）
-Map<String, Object> cmdResult = client.execCommand(
-    "my-agent", sessionId,
-    List.of("ls", "-la"),  // 命令参数列表
-    true,                  // chunked 传输
-    null, null, null, 900
-);
+// chunked 模式返回 NDJSON 流，必须使用 raw API 并关闭响应
+try (RequestResult stream = client.execCommandRaw(
+        "my-agent", sessionId, List.of("ls", "-la"),
+        true, null, null, null, 900)) {
+    stream.iterLines().doOnNext(System.out::println).blockLast();
+}
 ```
+
+`execCommand(..., chunked=true, ...)` 不会把流式响应强行缓冲为 `Map`，而是明确报错并提示使用 `execCommandRaw`。`RequestResult` 的流只能消费一次；取消、未消费或异常退出时都应关闭。
 
 ### 数据面：文件操作
 
@@ -425,9 +436,15 @@ Map<String, Object> uploadResult = client.uploadFiles(
 );
 
 // 下载文件
-RequestResult downloadResult = client.downloadFiles("my-agent", sessionId, "/home/user/test.txt");
-if (downloadResult.isSuccess()) {
-    // 处理下载结果
+try (RequestResult downloadResult = client.downloadFiles(
+        "my-agent", sessionId, "/home/user/test.txt")) {
+    if (downloadResult.isStreaming()) {
+        downloadResult.iterBytes()
+                .doOnNext(chunk -> System.out.println("received " + chunk.length + " bytes"))
+                .blockLast();
+    } else {
+        byte[] content = downloadResult.getDataAsBytes();
+    }
 }
 
 // 下载文件（完整参数：递归下载）
@@ -475,6 +492,7 @@ client.stopSession("my-agent", sessionId);
 | 数据面 | `invokeAgent(name, sid, payload, token, endpoint, timeout, userId, customPath)` | 调用 Agent（完整参数） |
 | 数据面 | `execCommand(name, sessionId, command)` | 执行命令 |
 | 数据面 | `execCommand(name, sid, cmdList, chunked, token, endpoint, userId, timeout)` | 执行命令（完整参数） |
+| 数据面 | `execCommandRaw(...)` | 执行命令并保留 chunked NDJSON 流；调用方负责关闭结果 |
 | 数据面 | `uploadFiles(name, sessionId, files)` | 上传文件 |
 | 数据面 | `uploadFiles(name, sid, files, path, uid, gid, mode, token, ep, userId, timeout)` | 上传文件（完整参数） |
 | 数据面 | `downloadFiles(name, sessionId, path)` | 下载文件 |

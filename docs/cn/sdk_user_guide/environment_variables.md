@@ -2,9 +2,11 @@
 
 本文档详细说明 AgentArts Java SDK 支持的所有环境变量，包括用途、默认值和优先级规则。
 
+> 生产安全：SDK 只从进程环境读取这些值，不会自动加载 `.env`，也不会把环境变量当作 JVM `-D` 系统属性。密钥应由 Secret Manager、容器 Secret 或 CI secret store 注入；不要提交 `.env`，不要把密钥放在命令行参数中。
+
 ## 华为云认证
 
-### AK/SK 认证（必需）
+### AK/SK 认证（控制面必需）
 
 | 变量名 | 说明 | 示例 |
 |--------|------|------|
@@ -104,6 +106,8 @@ $env:AGENTARTS_CONTROL_ENDPOINT = "https://agentarts.cn-southwest-2.myhuaweiclou
 | `AGENTARTS_MEMORY_DATA_ENDPOINT` | Memory 数据面端点 |
 | `AGENTARTS_CODEINTERPRETER_DATA_ENDPOINT` | 代码解释器数据面端点 |
 
+数据面凭证分别使用 `HUAWEICLOUD_SDK_MEMORY_API_KEY` 和 `HUAWEICLOUD_SDK_CODE_INTERPRETER_API_KEY`。它们与控制面 AK/SK 用途不同，不应互相替代。
+
 ```bash
 export AGENTARTS_RUNTIME_DATA_ENDPOINT="https://your-runtime-endpoint.com"
 export AGENTARTS_MEMORY_DATA_ENDPOINT="https://memory.cn-southwest-2.huaweicloud-agentarts.com"
@@ -131,34 +135,14 @@ $env:AGENTARTS_CODEINTERPRETER_DATA_ENDPOINT = "https://your-ci-endpoint.com"
 | `AGENTARTS_LOG_LEVEL` | 日志级别（DEBUG/INFO/WARNING/ERROR） | `INFO` |
 | `AGENTARTS_BIND_IP` | 运行时绑定 IP | `0.0.0.0` |
 
-## 配置文件
+## 生产注入方式
 
-### 基础配置（.env）
+- 本地开发：只在当前终端进程设置环境变量，退出终端后失效。
+- Kubernetes：使用 Secret 并以 `env.valueFrom.secretKeyRef` 注入。
+- CI/CD：使用平台的 masked/protected secret，并关闭命令回显。
+- 长期运行：优先使用可轮换的临时凭证；发生疑似泄漏时立即轮换并审计访问日志。
 
-```bash
-# .env 基础配置
-HUAWEICLOUD_SDK_AK=your-access-key
-HUAWEICLOUD_SDK_SK=your-secret-key
-HUAWEICLOUD_SDK_REGION=cn-southwest-2
-```
-
-### 完整配置（.env）
-
-```bash
-# .env 完整配置
-HUAWEICLOUD_SDK_AK=your-access-key
-HUAWEICLOUD_SDK_SK=your-secret-key
-HUAWEICLOUD_SDK_REGION=cn-southwest-2
-HUAWEICLOUD_SDK_PROJECT_ID=your-project-id
-
-AGENTARTS_CONTROL_ENDPOINT=https://agentarts.cn-southwest-2.myhuaweicloud.com
-AGENTARTS_RUNTIME_DATA_ENDPOINT=https://your-runtime-endpoint.com
-AGENTARTS_MEMORY_DATA_ENDPOINT=https://memory.cn-southwest-2.huaweicloud-agentarts.com
-AGENTARTS_CODEINTERPRETER_DATA_ENDPOINT=https://your-ci-endpoint.com
-
-AGENTARTS_LOG_LEVEL=DEBUG
-AGENTARTS_BIND_IP=0.0.0.0
-```
+如果团队使用 `.env` 工具，应由应用或启动器显式加载，且文件必须加入 `.gitignore`、限制文件权限并避免进入镜像层；SDK 本身不会读取该文件。
 
 ## Java SDK 常量对照表
 
@@ -191,11 +175,7 @@ $env:HUAWEICLOUD_SDK_SK = "your-sk"
 java -jar your-app.jar
 ```
 
-或通过 JVM 参数传递：
-
-```bash
-java -DHUAWEICLOUD_SDK_AK=your-ak -DHUAWEICLOUD_SDK_SK=your-sk -jar your-app.jar
-```
+不要改用 JVM `-D` 参数：SDK 不从系统属性读取凭证，而且命令行可能被进程列表和构建日志采集。
 
 ### 区域选择
 

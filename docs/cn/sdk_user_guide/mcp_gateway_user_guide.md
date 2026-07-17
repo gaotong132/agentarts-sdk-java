@@ -2,6 +2,8 @@
 
 AgentArts MCP Gateway SDK 提供 MCP 网关和目标的管理能力，始终使用 AK/SK 签名认证。
 
+> 生产行为：客户端保留服务端 HTTP 状态和错误体，不把 401/403/5xx 转成空结果；创建默认 IAM agency 时仅将“已存在”的 409 视为幂等成功。
+
 ## 概述
 
 MCP Gateway 是 Model Context Protocol 的服务端网关，用于管理 MCP 工具的路由和调用。SDK 提供完整的网关和目标 CRUD 操作。
@@ -93,7 +95,7 @@ RequestResult result = client.deleteMcpGateway("gateway-id");
 ```java
 RequestResult result = client.getMcpGateway("gateway-id");
 if (result.isSuccess()) {
-    Map<String, Object> data = (Map<String, Object>) result.getData();
+    JsonNode data = result.getDataAsJson();
 }
 ```
 
@@ -158,7 +160,7 @@ RequestResult result = client.listMcpGatewayTargets("gateway-id", 10, 0);
 |------|------|------|
 | `isSuccess()` | boolean | 请求是否成功（2xx 状态码） |
 | `getStatusCode()` | int | HTTP 状态码 |
-| `getData()` | Object | 响应数据（JSON 解析后的 Map 或 JsonNode） |
+| `getData()` | Object | JSON 响应为 `JsonNode`，文本为 `String`，二进制为 `byte[]` |
 | `getError()` | String | 错误信息（失败时） |
 | `getHeaders()` | Map | 响应头 |
 
@@ -169,13 +171,23 @@ RequestResult result = client.createMcpGateway("my-gw", "desc");
 if (!result.isSuccess()) {
     System.err.println("Error " + result.getStatusCode() + ": " + result.getError());
 } else {
-    Map<String, Object> data = (Map<String, Object>) result.getData();
-    String gatewayId = (String) data.get("id");
+    JsonNode data = result.getDataAsJson();
+    String gatewayId = data.path("id").asText();
 }
 ```
+
+调用方应把非 2xx 当作失败，并记录状态码、request ID 和脱敏后的错误摘要。不要记录签名头、AK/SK、credential provider 返回值或完整响应头。
+
+## IAM agency 与分页
+
+未显式传入 `agencyName` 时，SDK 会确保默认 agency 和系统策略存在：创建成功后读取嵌套的 agency ID；遇到 409 时按名称分页查找并复用；策略已绑定的 409 同样按幂等成功处理。401、403、429 和 5xx 会继续向上抛出。
+
+IAM marker 分页会检测重复 marker，避免后端异常导致无限循环。业务列表 API 仍由调用方根据 `limit`/`offset` 分页，不应假定单页包含全部网关或目标。
 
 ## 最佳实践
 
 1. **使用 try-with-resources** 确保客户端资源正确释放
 2. **检查 `isSuccess()`** 在访问 `getData()` 之前
 3. **处理 403 错误** — 可能表示租户未开通 MCP Gateway 服务
+4. **复用客户端** — 每个进程复用少量客户端，并在关闭时调用 `close()`
+5. **设置唯一名称和清理策略** — 自动化创建的网关/目标应携带运行标识，并在失败路径清理

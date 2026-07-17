@@ -2,6 +2,8 @@
 
 AgentArts Memory SDK 提供对话记忆管理能力，支持空间管理、会话管理、消息存储和记忆搜索。
 
+> 生产建议：复用并关闭客户端；API Key 由环境或 Secret Manager 注入，不写入源码。同步与异步客户端共享相同的控制面/数据面契约。
+
 ## 概述
 
 Memory SDK 采用**双平面架构**：
@@ -52,7 +54,7 @@ import com.huaweicloud.agentarts.sdk.memory.MemoryClient;
 import com.huaweicloud.agentarts.sdk.memory.model.*;
 import java.util.List;
 
-try (MemoryClient client = new MemoryClient("cn-southwest-2", "your-api-key")) {
+try (MemoryClient client = new MemoryClient()) {
     // 创建空间（控制平面）
     SpaceInfo space = client.createSpace("my-space", 168, "测试空间");
 
@@ -85,7 +87,7 @@ import com.huaweicloud.agentarts.sdk.memory.model.*;
 import java.util.List;
 
 try (MemorySession session = MemorySession.of(
-        "space-123", "user-456", null, "cn-southwest-2", "your-api-key")) {
+        "space-123", "user-456", null, "cn-southwest-2", null)) {
     // 添加消息
     session.addMessages(List.of(new TextMessage("user", "Hello!")));
 
@@ -99,6 +101,26 @@ try (MemorySession session = MemorySession.of(
     MemoryListResponse memories = session.listMemories();
 }
 ```
+
+### 异步模式
+
+`AsyncMemoryClient` 与 `AsyncMemorySession` 的数据面方法返回 cold Reactor `Mono`：创建对象不会发请求，订阅时才使用非阻塞 HTTP transport。不要在 event-loop 线程调用 `.block()`。
+
+```java
+import com.huaweicloud.agentarts.sdk.memory.AsyncMemorySession;
+import com.huaweicloud.agentarts.sdk.memory.model.TextMessage;
+import java.util.List;
+
+try (AsyncMemorySession session = AsyncMemorySession.of("space-123", "user-456")) {
+    session.initialize()
+            .then(session.addMessages(List.of(new TextMessage("user", "Hello"))))
+            .then(session.getLastKMessages(10))
+            .doOnNext(messages -> System.out.println("count=" + messages.size()))
+            .block(); // 仅用于命令行示例；服务端应返回/组合 Mono
+}
+```
+
+包装外部 `MemoryClient` 构造的 session 不拥有该客户端；`of(...)` 创建的 session 会在关闭时释放内部客户端。失败的懒初始化可重试，并发订阅共享同一次初始化请求。
 
 ## API 参考
 
@@ -274,7 +296,7 @@ MemorySession session = MemorySession.of(
     "user-456",     // actorId
     null,           // sessionId（null 自动创建）
     "cn-southwest-2",  // regionName
-    "your-api-key"  // apiKey
+    null             // apiKey；null 时从环境读取
 );
 
 // 预绑定的 API 调用
@@ -343,8 +365,8 @@ session.close();
 try {
     SpaceInfo space = client.createSpace("my-space");
 } catch (RuntimeException e) {
-    // API 调用失败，包含错误信息
-    System.err.println("Error: " + e.getMessage());
+    // 记录状态/请求标识和脱敏摘要，不记录请求体或凭证
+    System.err.println("Memory request failed: " + e.getMessage());
 }
 ```
 

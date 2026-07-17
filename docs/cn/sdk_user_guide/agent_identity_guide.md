@@ -2,6 +2,8 @@
 
 AgentArts Agent Identity SDK 提供工作负载身份管理、凭证提供者管理和访问令牌获取能力。
 
+> 生产要求：凭证获取失败会向调用方抛出异常，不会以空字符串继续执行；日志不得输出 API Key、OAuth2 token、STS secret 或 workload access token。
+
 ## 概述
 
 Agent Identity SDK 支持三种凭证获取方式：
@@ -56,40 +58,27 @@ String apiKey = client.getResourceApiKeyValue("my-api-key-provider", token);
 
 Java SDK 提供与 Python `@require_*` 等价的注解：
 
+注解只有通过 `AuthInterceptor` 创建的 JDK 动态代理调用时才会生效；直接调用实现类不会拦截。注解应声明在接口方法上：
+
 ```java
-import com.huaweicloud.agentarts.sdk.core.annotation.RequireAccessToken;
 import com.huaweicloud.agentarts.sdk.core.annotation.RequireApiKey;
-import com.huaweicloud.agentarts.sdk.core.annotation.RequireStsToken;
-import com.huaweicloud.sdk.agentidentity.v1.model.GetResourceStsTokenResponseBodyCredentials;
+import com.huaweicloud.agentarts.sdk.identity.auth.AuthInterceptor;
 
-// OAuth2 USER_FEDERATION 流程
-@RequireAccessToken(providerName = "my-oauth2-provider",
-        authFlow = RequireAccessToken.AuthFlow.USER_FEDERATION)
-public void handleOAuth2(String accessToken) {
-    // accessToken 自动注入
+interface ProtectedService {
+    @RequireApiKey(providerName = "my-api-key-provider", into = "apiKey")
+    String call(String payload, String apiKey);
 }
 
-// OAuth2 M2M 流程
-@RequireAccessToken(providerName = "my-m2m-provider",
-        authFlow = RequireAccessToken.AuthFlow.M2M)
-public void handleM2M(String accessToken) {
-    // accessToken 自动注入
-}
-
-// API Key
-@RequireApiKey(providerName = "my-api-key-provider")
-public void handleApiKey(String apiKey) {
-    // apiKey 自动注入
-}
-
-// STS Token
-@RequireStsToken(providerName = "my-sts-provider", agencySessionName = "my-session")
-public void handleSts(GetResourceStsTokenResponseBodyCredentials stsCredentials) {
-    // stsCredentials.getAccessKeyId()
-    // stsCredentials.getSecretAccessKey()
-    // stsCredentials.getSecurityToken()
-}
+ProtectedService target = (payload, apiKey) -> {
+    // 使用注入的 apiKey 调用目标服务；不得记录该值
+    return payload;
+};
+ProtectedService service = AuthInterceptor.wrap(
+        target, ProtectedService.class, new IdentityClient());
+String result = service.call("request", null);
 ```
+
+`@RequireAccessToken` 同时支持 `M2M` 与 `USER_FEDERATION`，`@RequireStsToken` 注入 `GetResourceStsTokenResponseBodyCredentials`。一个方法最多声明一个 `@Require*` 注解；代理会优先按 `into` 参数名定位，消费方建议使用 `javac -parameters`，否则必须保证凭证类型在参数中唯一。
 
 ## API 参考
 
@@ -142,6 +131,8 @@ IdentityClient client = new IdentityClient();  // 使用默认区域
 |------|------|
 | `ensureLocalAuthToken(workloadName)` | 确保本地 `.agent_identity.json` 中有有效的令牌 |
 
+`.agent_identity.json` 采用临时文件 + 原子替换写入，并在支持 POSIX 权限的平台限制为 owner 读写。它仍属于敏感本地状态：不要提交、复制到镜像或在日志中打印。
+
 ## AgentArtsRuntimeContext
 
 在运行时上下文中管理身份信息：
@@ -164,3 +155,5 @@ AgentArtsRuntimeContext.clear();
 ## 完整示例
 
 参见 `agentarts-sdk-examples` 模块和 E2E 测试中的 `AuthDecoratorsTest`。
+
+真实鉴权验收必须检查目标测试实际执行而非 assumption 跳过：AK/SK 只读、API Key、STS 和 OAuth2 是独立路径，其中任一路径成功都不能替代其他路径的验证。

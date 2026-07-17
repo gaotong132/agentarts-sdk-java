@@ -2,6 +2,8 @@
 
 AgentArts Code Interpreter SDK 提供代码沙箱执行能力，支持代码执行、命令执行、文件上传/下载和包安装。
 
+> Code Interpreter 会执行不受信任代码并产生计费。生产环境应使用预置实例、最小权限凭证、显式会话超时和 `CodeSession`/`close()` 生命周期管理；不要把来自公网的任意代码或 shell 命令直接透传。
+
 ## 概述
 
 Code Interpreter SDK 采用**双平面架构**：
@@ -63,10 +65,10 @@ try (CodeSession session = CodeSession.start("cn-southwest-2", "my-ci-name", "my
     Map<String, Object> cmdResult = client.executeCommand("echo hello");
 
     // 上传文件
-    client.uploadFile("/tmp/test.txt", "file content", "description");
+    client.uploadFile("/home/user/test.txt", "file content", "description");
 
     // 下载文件
-    Object content = client.downloadFile("/tmp/test.txt");
+    Object content = client.downloadFile("/home/user/test.txt");
 }
 // 退出 try 块时自动调用 stopSession()
 ```
@@ -116,6 +118,8 @@ CodeInterpreterClient client = new CodeInterpreterClient(region, dataEndpoint, a
 | `dataEndpoint` | 数据面端点 URL | 自动检测 |
 | `authType` | 认证类型：`"API_KEY"` 或 `"IAM"` | `"API_KEY"` |
 | `verifySsl` | 是否验证 SSL | `true` |
+
+生产环境必须保持 `verifySsl=true`。关闭证书验证仅用于隔离的本地诊断，不能作为证书问题的长期规避方案。
 
 ### 控制平面：代码解释器管理
 
@@ -235,6 +239,8 @@ Object content = client.downloadFile("/home/user/test.txt");
 Map<String, Object> result = client.downloadFiles(List.of("/home/user/a.txt", "/home/user/b.txt"));
 ```
 
+文件路径被限制在沙箱默认目录 `/home/user` 下：相对路径会在该目录解析，绝对路径必须位于该目录内，包含控制字符或规范化后越界的 `..` 路径会被拒绝。HTTP 客户端默认将单次请求体和响应体分别限制为 64 MiB；大文件应拆分，并同时遵守服务端配额。
+
 ### 数据平面：环境管理
 
 #### installPackages — 安装包
@@ -265,6 +271,8 @@ try (CodeSession session = CodeSession.start(region, ciName, sessionName, authTy
     // ...
 }
 ```
+
+`CodeSession.close()` 会尽力停止远端 session，并始终关闭底层客户端；停止失败会抛给调用方。手工管理时应在 `finally` 中执行 `stopSession()` 和 `close()`，避免沙箱继续占用和计费。
 
 ## 完整示例
 
