@@ -6,8 +6,8 @@ import com.huaweicloud.agentarts.sdk.core.Constants;
 import com.huaweicloud.agentarts.sdk.core.PingStatus;
 import com.huaweicloud.agentarts.sdk.core.signer.V11Signer;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.message.MessageConverter;
+import com.huaweicloud.agentarts.sdk.integration.agentscope.runtime.AgentscopeRequestContext;
 import com.huaweicloud.agentarts.sdk.integration.agentscope.runtime.AgentscopeRuntimeHost;
-import com.huaweicloud.agentarts.sdk.integration.agentscope.state.MemoryAgentStateStore;
 import com.huaweicloud.agentarts.sdk.memory.MemoryClient;
 import com.huaweicloud.agentarts.sdk.memory.model.TextMessage;
 import com.huaweicloud.agentarts.sdk.memory.model.ToolCallMessage;
@@ -15,10 +15,10 @@ import com.huaweicloud.agentarts.sdk.memory.model.ToolResultMessage;
 import com.huaweicloud.agentarts.sdk.runtime.AgentArtsRuntimeApp;
 import com.huaweicloud.agentarts.sdk.runtime.context.AgentArtsRuntimeContext;
 import com.huaweicloud.agentarts.sdk.runtime.context.RequestContext;
-import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
+import io.agentscope.core.session.InMemorySession;
 import io.agentscope.core.state.State;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
@@ -297,16 +297,18 @@ class CrossModuleIntegrationTest {
 
         @Test
         void stateStoreAndMessageConverterShareModels() {
-            // Use InMemoryAgentStateStore for cross-module integration testing
+            // Use the stable AgentScope Session API for cross-module integration testing
             // (MemoryAgentStateStore requires real API credentials, tested separately)
-            io.agentscope.core.state.InMemoryAgentStateStore store =
-                    new io.agentscope.core.state.InMemoryAgentStateStore();
+            InMemorySession store = new InMemorySession();
+            AgentscopeRequestContext context = new AgentscopeRequestContext(
+                    "session-1", "user-1", "request-1", null);
 
             // Save and retrieve using agentscope State interface
             TestAgentState state = new TestAgentState("agent-1", 42);
-            store.save("user-1", "session-1", "agent_state", state);
+            store.save(context.sessionKey(), "agent_state", state);
 
-            Optional<TestAgentState> retrieved = store.get("user-1", "session-1", "agent_state", TestAgentState.class);
+            Optional<TestAgentState> retrieved = store.get(
+                    context.sessionKey(), "agent_state", TestAgentState.class);
             assertTrue(retrieved.isPresent());
             assertEquals("agent-1", retrieved.get().agentId);
             assertEquals(42, retrieved.get().step);
@@ -455,12 +457,12 @@ class CrossModuleIntegrationTest {
         void bridgeContextPropagatesRequestIdAndToken() {
             RequestContext rc = new RequestContext("req-bridge-1", "sess-bridge-1", "user-bridge-1", "token-bridge-1");
 
-            RuntimeContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
+            AgentscopeRequestContext ctx = AgentscopeRuntimeHost.bridgeContext(rc);
 
-            assertEquals("sess-bridge-1", ctx.getSessionId());
-            assertEquals("user-bridge-1", ctx.getUserId());
-            assertEquals("req-bridge-1", ctx.get("requestId"));
-            assertEquals("token-bridge-1", ctx.get("workloadAccessToken"));
+            assertEquals("sess-bridge-1", ctx.sessionId());
+            assertEquals("user-bridge-1", ctx.userId());
+            assertEquals("req-bridge-1", ctx.requestId());
+            assertEquals("token-bridge-1", ctx.workloadAccessToken());
         }
     }
 
