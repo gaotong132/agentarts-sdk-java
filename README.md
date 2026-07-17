@@ -351,8 +351,7 @@ mvn clean verify
 # Unit tests only (core modules)
 mvn test -pl agentarts-sdk-core,agentarts-sdk-service,agentarts-sdk-runtime
 
-# E2E tests (read-only tier, requires AK/SK)
-export HUAWEICLOUD_SDK_AK=<your-ak> HUAWEICLOUD_SDK_SK=<your-sk>
+# E2E tests (read-only tier; AK/SK must already be injected by a secret store)
 mvn test -pl agentarts-sdk-tests
 
 # E2E tests (full lifecycle, creates real cloud resources, auto-cleaned)
@@ -372,7 +371,7 @@ mvn test -pl agentarts-sdk-tests -Dtest=CliDeployedRuntimeE2ETest
 
 ## Testing
 
-The test suite spans three layers. The latest clean local verification executed 806 tests with 0 failures and 0 errors in 164.9 seconds; two billable suites were skipped because their explicit prerequisites were absent. Counts are evidence for that run only, not a cloud-authentication attestation.
+The test suite spans three layers. The latest clean local verification executed 807 tests with 0 failures and 0 errors in 203.8 seconds; two billable suites were skipped because their explicit prerequisites were absent. Counts are evidence for that run only, not a cloud-authentication attestation.
 
 | Layer | Description |
 |---|---|
@@ -425,7 +424,7 @@ The Java SDK is aligned with the pinned Python SDK for core, service, Runtime, I
 | CLI Commands | 9 top-level + 8 config + 6 runtime + 10 mcp-gateway + 6 memory subcommands |
 | agentscope Integration | AgentScope `Session`, bounded per-session executor, request context bridge, AgentTool adapters, MessageConverter |
 | Spring Boot Starter | AutoConfiguration, ConfigurationProperties, HealthIndicator |
-| Verification | 806 tests in the latest clean local run; cloud lifecycle/billable execution remains explicitly opt-in |
+| Verification | 807 tests in the latest clean local run; cloud lifecycle/billable execution remains explicitly opt-in |
 
 ## Python SDK Reference
 
