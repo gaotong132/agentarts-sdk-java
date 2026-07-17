@@ -9,10 +9,9 @@ import java.util.Map;
 /**
  * Test fixture loaded by {@code agentarts dev} to verify the
  * {@code public static AgentArtsRuntimeApp createApp()} factory contract that the
- * scaffolded {@code Agent.java} templates expose. Lives on the test classpath so
- * {@link com.huaweicloud.agentarts.toolkit.operations.DevOperation} can resolve it
- * via its URLClassLoader parent (the same surefire classloader) without having to
- * compile a project inside the test.
+ * scaffolded {@code Agent.java} templates expose. The E2E test copies this compiled
+ * fixture into the temporary project's {@code target/classes}, avoiding any
+ * dependency on a stale SDK snapshot in the local Maven repository.
  */
 public class DevTestAgent {
 

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.huaweicloud.agentarts.sdk.core.util.JsonUtils;
 import com.huaweicloud.agentarts.toolkit.AgentArtsCli;
 import com.huaweicloud.agentarts.toolkit.operations.ConfigOperation;
+import com.huaweicloud.agentarts.toolkit.operations.DevOperation;
 import com.huaweicloud.agentarts.toolkit.operations.InitOperation;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,6 +17,7 @@ import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.HttpURLConnection;
+import java.net.ServerSocket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -305,6 +307,8 @@ class CliLocalE2ETest {
         //    contract as the scaffolded Agent). The fixture is on the test classpath,
         //    so DevOperation resolves it without compiling the project.
         rewriteEntrypoint(project, DevTestAgent.class.getName());
+        prepareClasspathOnlyProject(project);
+        copyFixtureClass(project, DevTestAgent.class);
 
         try (DevHandle dev = startDev(project)) {
             // 3. POST /invocations on the dev server and assert the REAL entrypoint ran.
@@ -315,26 +319,45 @@ class CliLocalE2ETest {
         }
     }
 
-    /** When the configured entrypoint class cannot be loaded (not compiled / not on
-     *  classpath), {@code dev} must stay usable via the default echo entrypoint AND
-     *  print a clear warning — silent fallback was the original bug. */
+    /** Missing entrypoints fail closed instead of silently starting an echo agent. */
     @Test
-    @DisplayName("dev server falls back to echo with a warning when the entrypoint class is missing")
-    void test_dev_server_echo_fallback_when_class_missing(@TempDir Path tmp) throws Exception {
+    @DisplayName("dev server fails closed when the configured entrypoint class is missing")
+    void test_dev_server_rejects_missing_entrypoint(@TempDir Path tmp) throws Exception {
         InitOperation.initProject("basic", "myagent", tmp.toString(),
                 "cn-southwest-2", null, null);
         Path project = tmp.resolve("myagent");
-        // Leave entrypoint as the scaffolded com.example.Agent — not compiled, not on
-        // the test classpath -> DevOperation prints a warning and uses the echo fallback.
-        try (DevHandle dev = startDev(project)) {
-            JsonNode resp = postInvocation(dev.port, "{\"message\":\"fallback hi\"}");
-            assertTrue(resp.has("response"), "fallback should echo under 'response'; got: " + resp);
-            assertEquals("fallback hi", resp.get("response").asText(),
-                    "dev server should echo the message under 'response' when the agent class is missing");
-            // The fallback must be announced, not silent.
-            assertTrue(dev.stderr.contains("not found on project classpath")
-                            || dev.stderr.contains("default echo entrypoint"),
-                    "dev should warn on echo fallback; stderr=" + dev.stderr);
+        prepareClasspathOnlyProject(project);
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> DevOperation.runDevServer(findAvailablePort(), "127.0.0.1",
+                        false, null, project.toString(), new String[0]));
+        assertTrue(failure.getMessage().contains("exited with code"));
+    }
+
+    /**
+     * Exercise the dev-server runtime path without resolving a previously installed
+     * SDK snapshot from the local Maven repository. Template compilation is covered
+     * independently by the CLI module's generated-source contract tests.
+     */
+    private static void prepareClasspathOnlyProject(Path project) throws IOException {
+        Files.delete(project.resolve("pom.xml"));
+        Files.createDirectories(project.resolve("target/classes"));
+    }
+
+    private static void copyFixtureClass(Path project, Class<?> fixture) throws IOException {
+        String resource = fixture.getName().replace('.', '/') + ".class";
+        Path destination = project.resolve("target/classes").resolve(resource);
+        Files.createDirectories(destination.getParent());
+        try (var input = fixture.getClassLoader().getResourceAsStream(resource)) {
+            if (input == null) {
+                throw new IOException("Test fixture class not found: " + resource);
+            }
+            Files.copy(input, destination);
+        }
+    }
+
+    private static int findAvailablePort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
         }
     }
 
@@ -376,6 +399,7 @@ class CliLocalE2ETest {
      *  server alive until closed. */
     private DevHandle startDev(Path project) throws Exception {
         CommandLine devCli = new CommandLine(new AgentArtsCli());
+        int port = findAvailablePort();
         ByteArrayOutputStream outBuf = new ByteArrayOutputStream();
         ByteArrayOutputStream errBuf = new ByteArrayOutputStream();
         PrintStream capturedOut = new PrintStream(outBuf, true, StandardCharsets.UTF_8);
@@ -386,32 +410,16 @@ class CliLocalE2ETest {
         System.setErr(capturedErr);
 
         Thread devThread = new Thread(() -> devCli.execute("dev",
-                "--port", "0",
+                "--port", Integer.toString(port),
                 "--host", "127.0.0.1",
                 "--path", project.toString()));
         devThread.setDaemon(true);
         devThread.start();
 
-        int port = -1;
-        String prefix = "DEV_SERVER_LISTENING on port ";
-        try {
-            for (int i = 0; i < 80 && port < 0; i++) {
-                String soFar = outBuf.toString(StandardCharsets.UTF_8);
-                int idx = soFar.indexOf(prefix);
-                if (idx >= 0) {
-                    String rest = soFar.substring(idx + prefix.length()).trim();
-                    try { port = Integer.parseInt(rest.split("\\s+")[0]); }
-                    catch (NumberFormatException ignored) { }
-                }
-                if (port < 0) Thread.sleep(250);
-            }
-        } finally {
-            capturedOut.flush();
-            capturedErr.flush();
-        }
+        capturedOut.flush();
+        capturedErr.flush();
         String outStr = outBuf.toString(StandardCharsets.UTF_8);
         String errStr = errBuf.toString(StandardCharsets.UTF_8);
-        assertTrue(port > 0, "dev server did not announce port. stdout=" + outStr + " err=" + errStr);
 
         // Poll /ping until healthy.
         boolean pingOk = false;
@@ -456,20 +464,17 @@ class CliLocalE2ETest {
     }
 
     // ---------------------------------------------------------------
-    // Template coverage gap (Python: basic, langgraph, langchain, google-adk)
+    // Unsupported framework templates fail early with a stable argument error.
     // ---------------------------------------------------------------
 
-    /** The Python suite parametrizes init over {@code [basic, langgraph,
-     *  langchain, google-adk]}. The Java toolkit only ships {@code basic} and
-     *  {@code agentscope} templates (see
+    /** The Java toolkit intentionally ships {@code basic} and {@code agentscope}
+     *  templates (see
      *  {@code agentarts-toolkit-cli/src/main/resources/templates/}). These
-     *  three tests document the gap: init with an unsupported template throws
-     *  because {@link com.huaweicloud.agentarts.toolkit.template.TemplateManager}
-     *  cannot load the missing {@code Agent.java.tpl}. */
+     *  tests verify excluded framework templates fail before writing files. */
     @Test
     @DisplayName("langgraph template is not supported (throws)")
     void test_langgraph_template_not_supported(@TempDir Path tmp) {
-        assertThrows(IOException.class, () ->
+        assertThrows(IllegalArgumentException.class, () ->
                 InitOperation.initProject("langgraph", "x", tmp.toString(),
                         "cn-southwest-2", null, null));
     }
@@ -477,7 +482,7 @@ class CliLocalE2ETest {
     @Test
     @DisplayName("langchain template is not supported (throws)")
     void test_langchain_template_not_supported(@TempDir Path tmp) {
-        assertThrows(IOException.class, () ->
+        assertThrows(IllegalArgumentException.class, () ->
                 InitOperation.initProject("langchain", "x", tmp.toString(),
                         "cn-southwest-2", null, null));
     }
@@ -485,7 +490,7 @@ class CliLocalE2ETest {
     @Test
     @DisplayName("google-adk template is not supported (throws)")
     void test_google_adk_template_not_supported(@TempDir Path tmp) {
-        assertThrows(IOException.class, () ->
+        assertThrows(IllegalArgumentException.class, () ->
                 InitOperation.initProject("google-adk", "x", tmp.toString(),
                         "cn-southwest-2", null, null));
     }
