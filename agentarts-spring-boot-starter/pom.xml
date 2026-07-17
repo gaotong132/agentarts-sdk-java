@@ -25,6 +25,7 @@
             <groupId>com.huaweicloud.agentarts</groupId>
             <artifactId>agentarts-sdk-runtime</artifactId>
         </dependency>
+        <!-- Keep the starter's curated SDK surface for compatibility. -->
         <dependency>
             <groupId>com.huaweicloud.agentarts</groupId>
             <artifactId>agentarts-sdk-identity</artifactId>
@@ -38,6 +39,10 @@
         <!-- Spring Boot -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>
         <dependency>
@@ -46,13 +51,12 @@
             <optional>true</optional>
         </dependency>
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-actuator-autoconfigure</artifactId>
-            <optional>true</optional>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework</groupId>
-            <artifactId>spring-context</artifactId>
+            <artifactId>spring-beans</artifactId>
         </dependency>
     </dependencies>
 </project>

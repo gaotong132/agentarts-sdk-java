@@ -63,10 +63,10 @@
 
         <!-- agentscope (provided/optional) -->
         <agentscope.version>1.0.12</agentscope.version>
+        <mcp-sdk.version>0.17.0</mcp-sdk.version>
 
         <!-- CLI -->
         <picocli.version>4.7.6</picocli.version>
-        <freemarker.version>2.3.34</freemarker.version>
 
         <!-- Spring Boot (optional, for starter) -->
         <spring-boot.version>3.5.16</spring-boot.version>
@@ -241,6 +241,11 @@
                 <artifactId>agentscope-core</artifactId>
                 <version>${agentscope.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.modelcontextprotocol.sdk</groupId>
+                <artifactId>mcp-core</artifactId>
+                <version>${mcp-sdk.version}</version>
+            </dependency>
 
             <!-- ==================== -->
             <!-- YAML -->
@@ -263,11 +268,6 @@
                 <groupId>info.picocli</groupId>
                 <artifactId>picocli</artifactId>
                 <version>${picocli.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.freemarker</groupId>
-                <artifactId>freemarker</artifactId>
-                <version>${freemarker.version}</version>
             </dependency>
             <!-- ==================== -->
             <!-- Spring Boot (optional, for starter) -->
