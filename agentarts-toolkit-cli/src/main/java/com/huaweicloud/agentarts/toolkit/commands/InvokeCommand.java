@@ -11,7 +11,8 @@ import picocli.CommandLine.Parameters;
  * <p>CLI command: invoke a deployed agent.
  * Registered at both top-level and under 'runtime' subcommand.</p>
  */
-@Command(name = "invoke", description = "Invoke agent with JSON payload")
+@Command(name = "invoke", mixinStandardHelpOptions = true,
+        description = "Invoke agent with JSON payload")
 public class InvokeCommand implements Runnable {
 
     @Parameters(index = "0", description = "JSON payload (e.g., '{\"message\": \"hello\"}')")

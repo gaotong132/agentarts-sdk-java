@@ -21,6 +21,7 @@ import java.util.Map;
  */
 @Command(
     name = "memory",
+    mixinStandardHelpOptions = true,
     description = "Memory space management",
     subcommands = {
         MemoryCommand.Create.class,
@@ -81,7 +82,7 @@ public class MemoryCommand implements Runnable {
         }
     }
 
-    @Command(name = "create", description = "Create a Memory Space")
+    @Command(name = "create", mixinStandardHelpOptions = true, description = "Create a Memory Space")
     static class Create implements Runnable {
         @Parameters(index = "0", description = "Space name (1-128 chars)") String name;
         @Option(names = {"-t", "--ttl"}, description = "Message TTL in hours (1-8760)", defaultValue = "168") int ttl;
@@ -137,7 +138,7 @@ public class MemoryCommand implements Runnable {
         }
     }
 
-    @Command(name = "get", description = "Get Space details")
+    @Command(name = "get", mixinStandardHelpOptions = true, description = "Get Space details")
     static class Get implements Runnable {
         @Parameters(index = "0", description = "Space ID") String spaceId;
         @Option(names = {"-r", "--region"}) String region;
@@ -162,7 +163,7 @@ public class MemoryCommand implements Runnable {
         }
     }
 
-    @Command(name = "list", description = "List Memory Spaces")
+    @Command(name = "list", mixinStandardHelpOptions = true, description = "List Memory Spaces")
     static class List implements Runnable {
         @Option(names = {"-l", "--limit"}, defaultValue = "20") int limit;
         @Option(names = "--offset", defaultValue = "0") int offset;
@@ -193,7 +194,7 @@ public class MemoryCommand implements Runnable {
         }
     }
 
-    @Command(name = "update", description = "Update a Memory Space")
+    @Command(name = "update", mixinStandardHelpOptions = true, description = "Update a Memory Space")
     static class Update implements Runnable {
         @Parameters(index = "0", description = "Space ID") String spaceId;
         @Option(names = {"-t", "--ttl"}) Integer ttl;
@@ -239,7 +240,7 @@ public class MemoryCommand implements Runnable {
         }
     }
 
-    @Command(name = "delete", description = "Delete a Memory Space")
+    @Command(name = "delete", mixinStandardHelpOptions = true, description = "Delete a Memory Space")
     static class Delete implements Runnable {
         @Parameters(index = "0", description = "Space ID") String spaceId;
         @Option(names = {"-r", "--region"}) String region;
@@ -261,7 +262,7 @@ public class MemoryCommand implements Runnable {
         }
     }
 
-    @Command(name = "status", description = "Check Space status")
+    @Command(name = "status", mixinStandardHelpOptions = true, description = "Check Space status")
     static class Status implements Runnable {
         @Parameters(index = "0", description = "Space ID") String spaceId;
         @Option(names = {"-r", "--region"}) String region;

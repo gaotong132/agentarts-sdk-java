@@ -14,7 +14,8 @@ import java.util.concurrent.Callable;
  * project name (all other options default sensibly); in a non-interactive
  * context it errors with exit code 2.</p>
  */
-@Command(name = "init", description = "Initialize a new AgentArts project")
+@Command(name = "init", mixinStandardHelpOptions = true,
+        description = "Initialize a new AgentArts project")
 public class InitCommand implements Callable<Integer> {
 
     @Option(names = {"-n", "--name"}, description = "Project name")

@@ -25,6 +25,7 @@ import java.util.Map;
  */
 @Command(
     name = "runtime",
+    mixinStandardHelpOptions = true,
     description = "Cloud runtime operations",
     subcommands = {
         RuntimeCommand.RuntimeInvokeCommand.class,
@@ -45,10 +46,10 @@ public class RuntimeCommand implements Runnable {
         System.out.println("Use 'agentarts runtime --help' for available subcommands.");
     }
 
-    @Command(name = "invoke", description = "Invoke agent via runtime")
+    @Command(name = "invoke", mixinStandardHelpOptions = true, description = "Invoke agent via runtime")
     static class RuntimeInvokeCommand extends InvokeCommand {}
 
-    @Command(name = "exec-command", description = "Execute command with streaming response")
+    @Command(name = "exec-command", mixinStandardHelpOptions = true, description = "Execute command with streaming response")
     static class ExecCommandCommand implements Runnable {
         @Parameters(index = "0", description = "Command to execute (e.g., 'ls -la')")
         String command;
@@ -115,7 +116,7 @@ public class RuntimeCommand implements Runnable {
         }
     }
 
-    @Command(name = "upload-files", description = "Upload files to runtime")
+    @Command(name = "upload-files", mixinStandardHelpOptions = true, description = "Upload files to runtime")
     static class UploadFilesCommand implements Runnable {
         @Option(names = {"-a", "--agent"}, description = "Agent name", required = true)
         String agentName;
@@ -188,7 +189,7 @@ public class RuntimeCommand implements Runnable {
         String userId;
     }
 
-    @Command(name = "download-files", description = "Download files from runtime")
+    @Command(name = "download-files", mixinStandardHelpOptions = true, description = "Download files from runtime")
     static class DownloadFilesCommand implements Runnable {
         @Option(names = {"-a", "--agent"}, description = "Agent name", required = true)
         String agentName;
@@ -295,7 +296,7 @@ public class RuntimeCommand implements Runnable {
         String userId;
     }
 
-    @Command(name = "start-session", description = "Start runtime session")
+    @Command(name = "start-session", mixinStandardHelpOptions = true, description = "Start runtime session")
     static class StartSessionCommand implements Runnable {
         @Option(names = {"-a", "--agent"}, description = "Agent name", required = true)
         String agentName;
@@ -334,7 +335,7 @@ public class RuntimeCommand implements Runnable {
         }
     }
 
-    @Command(name = "stop-session", description = "Stop runtime session")
+    @Command(name = "stop-session", mixinStandardHelpOptions = true, description = "Stop runtime session")
     static class StopSessionCommand implements Runnable {
         @Option(names = {"-a", "--agent"}, description = "Agent name", required = true)
         String agentName;

@@ -18,6 +18,7 @@ import java.util.Map;
 @Command(
     name = "mcp-gateway",
     aliases = {"gateway"},
+    mixinStandardHelpOptions = true,
     description = "MCP Gateway management",
     subcommands = {
         McpGatewayCommand.CreateGateway.class,
@@ -38,7 +39,7 @@ public class McpGatewayCommand implements Runnable {
         System.out.println("Use 'agentarts mcp-gateway --help' for available subcommands.");
     }
 
-    @Command(name = "create-mcp-gateway", aliases = {"create"}, description = "Create an MCP gateway")
+    @Command(name = "create-mcp-gateway", aliases = {"create"}, mixinStandardHelpOptions = true, description = "Create an MCP gateway")
     static class CreateGateway implements Runnable {
         @Option(names = {"-n", "--name"}, description = "Gateway name") String name;
         @Option(names = {"-d", "--description"}, description = "Gateway description") String description;
@@ -66,7 +67,7 @@ public class McpGatewayCommand implements Runnable {
         }
     }
 
-    @Command(name = "update-mcp-gateway", aliases = {"update"}, description = "Update an MCP gateway")
+    @Command(name = "update-mcp-gateway", aliases = {"update"}, mixinStandardHelpOptions = true, description = "Update an MCP gateway")
     static class UpdateGateway implements Runnable {
         @Parameters(index = "0", description = "Gateway ID") String gatewayId;
         @Option(names = {"-d", "--description"}) String description;
@@ -87,7 +88,7 @@ public class McpGatewayCommand implements Runnable {
         }
     }
 
-    @Command(name = "delete-mcp-gateway", aliases = {"delete"}, description = "Delete an MCP gateway")
+    @Command(name = "delete-mcp-gateway", aliases = {"delete"}, mixinStandardHelpOptions = true, description = "Delete an MCP gateway")
     static class DeleteGateway implements Runnable {
         @Parameters(index = "0", description = "Gateway ID") String gatewayId;
         @Option(names = {"-f", "--force"}, description = "Delete without confirmation") boolean force;
@@ -115,7 +116,7 @@ public class McpGatewayCommand implements Runnable {
         }
     }
 
-    @Command(name = "get-mcp-gateway", aliases = {"get"}, description = "Get MCP gateway details")
+    @Command(name = "get-mcp-gateway", aliases = {"get"}, mixinStandardHelpOptions = true, description = "Get MCP gateway details")
     static class GetGateway implements Runnable {
         @Parameters(index = "0", description = "Gateway ID") String gatewayId;
         @Option(names = {"-k", "--skip-ssl-verification"}) boolean skipSsl;
@@ -135,7 +136,7 @@ public class McpGatewayCommand implements Runnable {
         }
     }
 
-    @Command(name = "list-mcp-gateways", aliases = {"list"}, description = "List MCP gateways")
+    @Command(name = "list-mcp-gateways", aliases = {"list"}, mixinStandardHelpOptions = true, description = "List MCP gateways")
     static class ListGateways implements Runnable {
         @Option(names = "--name") String name;
         @Option(names = "--status") String status;
@@ -160,7 +161,7 @@ public class McpGatewayCommand implements Runnable {
         }
     }
 
-    @Command(name = "create-mcp-gateway-target", aliases = {"create-target"}, description = "Create an MCP gateway target")
+    @Command(name = "create-mcp-gateway-target", aliases = {"create-target"}, mixinStandardHelpOptions = true, description = "Create an MCP gateway target")
     static class CreateTarget implements Runnable {
         @Parameters(index = "0", description = "Gateway ID") String gatewayId;
         @Option(names = {"-n", "--name"}) String name;
@@ -187,7 +188,7 @@ public class McpGatewayCommand implements Runnable {
         }
     }
 
-    @Command(name = "update-mcp-gateway-target", aliases = {"update-target"}, description = "Update an MCP gateway target")
+    @Command(name = "update-mcp-gateway-target", aliases = {"update-target"}, mixinStandardHelpOptions = true, description = "Update an MCP gateway target")
     static class UpdateTarget implements Runnable {
         @Parameters(index = "0", description = "Gateway ID") String gatewayId;
         @Parameters(index = "1", description = "Target ID") String targetId;
@@ -215,7 +216,7 @@ public class McpGatewayCommand implements Runnable {
         }
     }
 
-    @Command(name = "delete-mcp-gateway-target", aliases = {"delete-target"}, description = "Delete an MCP gateway target")
+    @Command(name = "delete-mcp-gateway-target", aliases = {"delete-target"}, mixinStandardHelpOptions = true, description = "Delete an MCP gateway target")
     static class DeleteTarget implements Runnable {
         @Parameters(index = "0", description = "Gateway ID") String gatewayId;
         @Parameters(index = "1", description = "Target ID") String targetId;
@@ -244,7 +245,7 @@ public class McpGatewayCommand implements Runnable {
         }
     }
 
-    @Command(name = "get-mcp-gateway-target", aliases = {"get-target"}, description = "Get MCP gateway target details")
+    @Command(name = "get-mcp-gateway-target", aliases = {"get-target"}, mixinStandardHelpOptions = true, description = "Get MCP gateway target details")
     static class GetTarget implements Runnable {
         @Parameters(index = "0", description = "Gateway ID") String gatewayId;
         @Parameters(index = "1", description = "Target ID") String targetId;
@@ -265,7 +266,7 @@ public class McpGatewayCommand implements Runnable {
         }
     }
 
-    @Command(name = "list-mcp-gateway-targets", aliases = {"list-targets"}, description = "List MCP gateway targets")
+    @Command(name = "list-mcp-gateway-targets", aliases = {"list-targets"}, mixinStandardHelpOptions = true, description = "List MCP gateway targets")
     static class ListTargets implements Runnable {
         @Parameters(index = "0", description = "Gateway ID") String gatewayId;
         @Option(names = "--limit") Integer limit;

@@ -9,13 +9,14 @@ import picocli.CommandLine.Option;
  *
  * <p>CLI command: start local development server.</p>
  */
-@Command(name = "dev", description = "Run local development server")
+@Command(name = "dev", mixinStandardHelpOptions = true,
+        description = "Run local development server")
 public class DevCommand implements Runnable {
 
     @Option(names = {"-p", "--port"}, description = "Server port", defaultValue = "8080")
     int port;
 
-    @Option(names = {"-h", "--host"}, description = "Server host", defaultValue = "0.0.0.0")
+    @Option(names = {"-H", "--host"}, description = "Server host", defaultValue = "0.0.0.0")
     String host;
 
     @Option(names = "--reload", description = "Enable auto-reload")

@@ -11,7 +11,8 @@ import picocli.CommandLine.Option;
  * Flow: docker build → SWR createNamespace/createRepo → createAuthorizationToken →
  * runtime create with V11 signing.</p>
  */
-@Command(name = "deploy", aliases = {"launch"}, description = "Deploy agent to Huawei Cloud")
+@Command(name = "deploy", aliases = {"launch"}, mixinStandardHelpOptions = true,
+        description = "Deploy agent to Huawei Cloud")
 public class DeployCommand implements Runnable {
 
     @Option(names = {"-a", "--agent"}, description = "Agent name (uses default if not specified)")

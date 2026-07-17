@@ -9,7 +9,8 @@ import picocli.CommandLine.Option;
  *
  * <p>CLI command: destroy a deployed agent.</p>
  */
-@Command(name = "destroy", description = "Destroy agent from Huawei Cloud")
+@Command(name = "destroy", mixinStandardHelpOptions = true,
+        description = "Destroy agent from Huawei Cloud")
 public class DestroyCommand implements Runnable {
 
     @Option(names = {"-a", "--agent"}, description = "Agent name to destroy")

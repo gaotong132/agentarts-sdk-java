@@ -15,6 +15,7 @@ import picocli.CommandLine.Parameters;
 @Command(
     name = "config",
     aliases = {"configure"},
+    mixinStandardHelpOptions = true,
     description = "Configuration management",
     subcommands = {
         ConfigCommand.ListCommand.class,
@@ -62,7 +63,7 @@ public class ConfigCommand implements Runnable {
     // Subcommands
     // ========================
 
-    @Command(name = "list", description = "List all configured agents")
+    @Command(name = "list", mixinStandardHelpOptions = true, description = "List all configured agents")
     static class ListCommand implements Runnable {
         @Override
         public void run() {
@@ -70,7 +71,7 @@ public class ConfigCommand implements Runnable {
         }
     }
 
-    @Command(name = "set-default", description = "Set the default agent")
+    @Command(name = "set-default", mixinStandardHelpOptions = true, description = "Set the default agent")
     static class SetDefaultCommand implements Runnable {
         @Parameters(index = "0", description = "Agent name to set as default")
         String agentName;
@@ -81,7 +82,7 @@ public class ConfigCommand implements Runnable {
         }
     }
 
-    @Command(name = "get", description = "Get configuration value or agent details")
+    @Command(name = "get", mixinStandardHelpOptions = true, description = "Get configuration value or agent details")
     static class GetCommand implements Runnable {
         @Parameters(index = "0", defaultValue = "", description = "Config key (dot notation, e.g. base.region)")
         String key;
@@ -99,7 +100,7 @@ public class ConfigCommand implements Runnable {
         }
     }
 
-    @Command(name = "set", description = "Set configuration value")
+    @Command(name = "set", mixinStandardHelpOptions = true, description = "Set configuration value")
     static class SetCommand implements Runnable {
         @Parameters(index = "0", description = "Config key (dot notation)")
         String key;
@@ -123,7 +124,7 @@ public class ConfigCommand implements Runnable {
         }
     }
 
-    @Command(name = "remove", description = "Remove an agent configuration")
+    @Command(name = "remove", mixinStandardHelpOptions = true, description = "Remove an agent configuration")
     static class RemoveCommand implements Runnable {
         @Parameters(index = "0", description = "Agent name to remove")
         String agentName;
@@ -134,7 +135,7 @@ public class ConfigCommand implements Runnable {
         }
     }
 
-    @Command(name = "set-env", description = "Set environment variable for an agent")
+    @Command(name = "set-env", mixinStandardHelpOptions = true, description = "Set environment variable for an agent")
     static class SetEnvCommand implements Runnable {
         @Parameters(index = "0", description = "Environment variable name")
         String key;
@@ -155,7 +156,7 @@ public class ConfigCommand implements Runnable {
         }
     }
 
-    @Command(name = "remove-env", description = "Remove environment variable")
+    @Command(name = "remove-env", mixinStandardHelpOptions = true, description = "Remove environment variable")
     static class RemoveEnvCommand implements Runnable {
         @Parameters(index = "0", description = "Environment variable name to remove")
         String key;
@@ -169,7 +170,7 @@ public class ConfigCommand implements Runnable {
         }
     }
 
-    @Command(name = "list-env", description = "List environment variables")
+    @Command(name = "list-env", mixinStandardHelpOptions = true, description = "List environment variables")
     static class ListEnvCommand implements Runnable {
         @Option(names = {"-a", "--agent"}, description = "Agent name")
         String agent;

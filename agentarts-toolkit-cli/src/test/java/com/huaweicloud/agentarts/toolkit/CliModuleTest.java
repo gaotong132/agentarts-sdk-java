@@ -9,7 +9,7 @@ import picocli.CommandLine;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -136,6 +136,26 @@ class CliModuleTest {
             assertNotNull(subs.get("update"));
             assertNotNull(subs.get("delete"));
             assertNotNull(subs.get("status"));
+        }
+
+        @Test
+        void everyUserCommandProvidesStandardHelpOptions() {
+            Set<CommandLine> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+            Deque<CommandLine> pending = new ArrayDeque<>();
+            pending.add(cli);
+            while (!pending.isEmpty()) {
+                CommandLine command = pending.removeFirst();
+                if (!visited.add(command)) {
+                    continue;
+                }
+                if (!(command.getCommand() instanceof CommandLine.HelpCommand)) {
+                    assertNotNull(command.getCommandSpec().findOption("--help"),
+                            () -> "--help missing for " + command.getCommandName());
+                    assertNotNull(command.getCommandSpec().findOption("--version"),
+                            () -> "--version missing for " + command.getCommandName());
+                }
+                pending.addAll(new HashSet<>(command.getSubcommands().values()));
+            }
         }
     }
 
