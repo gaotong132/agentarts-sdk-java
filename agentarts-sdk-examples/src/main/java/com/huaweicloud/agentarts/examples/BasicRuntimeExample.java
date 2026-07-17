@@ -81,6 +81,6 @@ public class BasicRuntimeExample {
         System.out.println("Starting BasicRuntimeExample on port " + port + "...");
         System.out.println("  Health check:  GET  http://localhost:" + port + "/ping");
         System.out.println("  Invocation:    POST http://localhost:" + port + "/invocations");
-        app.run(port);
+        app.runUntilShutdown(port);
     }
 }

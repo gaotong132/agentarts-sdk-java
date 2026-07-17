@@ -68,7 +68,7 @@ public final class AgentScopeIntegrationExample {
     }
 
     private static Session createSession() {
-        String memoryKey = System.getenv("AGENTARTS_MEMORY_API_KEY");
+        String memoryKey = System.getenv("HUAWEICLOUD_SDK_MEMORY_API_KEY");
         String spaceId = System.getenv("AGENTARTS_MEMORY_SPACE_ID");
         if (isConfigured(memoryKey) && isConfigured(spaceId)) {
             String region = System.getenv().getOrDefault(
@@ -77,7 +77,7 @@ public final class AgentScopeIntegrationExample {
         }
         if (isConfigured(memoryKey) || isConfigured(spaceId)) {
             throw new IllegalStateException(
-                    "AGENTARTS_MEMORY_API_KEY and AGENTARTS_MEMORY_SPACE_ID must be configured together");
+                    "HUAWEICLOUD_SDK_MEMORY_API_KEY and AGENTARTS_MEMORY_SPACE_ID must be configured together");
         }
         return new InMemorySession();
     }

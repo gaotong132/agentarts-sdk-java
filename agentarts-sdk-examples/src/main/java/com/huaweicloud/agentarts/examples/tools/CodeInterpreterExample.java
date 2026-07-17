@@ -93,6 +93,6 @@ public class CodeInterpreterExample {
         System.out.println("Starting Code Interpreter Example...");
         System.out.println("  POST /invocations - Execute code or command");
         System.out.println("  GET  /ping         - Health check");
-        app.run(8080);
+        app.runUntilShutdown(8080);
     }
 }

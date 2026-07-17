@@ -58,6 +58,7 @@ public class MemoryUsageExample {
     @SuppressWarnings("unchecked")
     public static void main(String[] args) {
         String spaceId = System.getenv("AGENTARTS_MEMORY_SPACE_ID");
+        app.registerManagedResource(memoryClient);
 
         app.setEntrypoint((Map<String, Object> payload) -> {
             String message = (String) payload.getOrDefault("message", "");
@@ -123,6 +124,6 @@ public class MemoryUsageExample {
         System.out.println("Starting Agent with Memory Example...");
         System.out.println("  POST /invocations - Invoke the agent");
         System.out.println("  GET  /ping         - Health check");
-        app.run(8080);
+        app.runUntilShutdown(8080);
     }
 }
