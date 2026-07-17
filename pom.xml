@@ -477,6 +477,11 @@
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-javadoc-plugin</artifactId>
                         <version>${maven-javadoc-plugin.version}</version>
+                        <configuration>
+                            <!-- The dependency-only all module has no element-list; automatic
+                                 reactor links otherwise emit a misleading release warning. -->
+                            <detectOfflineLinks>false</detectOfflineLinks>
+                        </configuration>
                         <executions>
                             <execution>
                                 <id>attach-javadocs</id>
